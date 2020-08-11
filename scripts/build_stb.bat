@@ -9,10 +9,15 @@ if not exist .\build mkdir build
 pushd build 
 
 copy ..\src\Thirdparty\stb_image_write.h stb_image_write.c
+copy ..\src\Thirdparty\stb_sprintf.h stb_sprintf.c
 
 clang-cl -DSTB_IMAGE_WRITE_IMPLEMENTATION=1 -c -O2 -EHsc -nologo stb_image_write.c
+clang-cl -DSTB_SPRINTF_IMPLEMENTATION=1 -c -O2 -EHsc -nologo stb_sprintf.c
+
 lib -nologo -out:stb_image_write.lib stb_image_write.obj
+lib -nologo -out:stb_sprintf.lib stb_sprintf.obj
 
 del stb_image_write.c
+del stb_sprintf.c
 
 popd 
