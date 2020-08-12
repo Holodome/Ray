@@ -8,6 +8,8 @@
 #include "RayMath.h"
 #include "Random.h"
 
+#include "Sys.h"
+
 typedef struct 
 {
     Vec3 origin;

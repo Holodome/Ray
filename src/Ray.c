@@ -1,11 +1,9 @@
 #include "Ray.h"
 
-#include <intrin.h>
-#include <windows.h>
-
 #include "Thirdparty/stb_image_write.h"
 
 #include "RayMath.c"
+#include "Sys.c"
 
 Vec3
 ray_point_at(Ray ray, f32 param)
@@ -59,19 +57,12 @@ linear_to_srgb(f32 l)
     return s;
 }
 
-static u64
-interlocked_add64(volatile u64 *value, u64 addend)
-{
-    u64 result = _InterlockedExchangeAdd64((volatile long long *)value, addend);
-    return result;
-}
-
 static bool
 render_tile(RenderWorkQueue *queue)
 {
-    u32 rays_per_pixel = 1024;
+    u32 rays_per_pixel = 32;
 
-    u32 work_order_index = interlocked_add64(&queue->next_work_order_index, 1);
+    u32 work_order_index = atomic_add64(&queue->next_work_order_index, 1);
     if (work_order_index >= queue->work_order_count)
     {
         return false;
@@ -246,7 +237,7 @@ render_tile(RenderWorkQueue *queue)
                 }
 
                 color = vec4_add(color, vec4_muls(ray_cast_color, contrib));
-                interlocked_add64(&queue->bounces_computed, bounces_computed);
+                atomic_add64(&queue->bounces_computed, bounces_computed);
             }
 
             color = vec4_muls(vec4(linear_to_srgb(color.x), linear_to_srgb(color.y), linear_to_srgb(color.z), 1), 255.0f);
@@ -255,43 +246,25 @@ render_tile(RenderWorkQueue *queue)
         }
     }
 
-    interlocked_add64(&queue->tile_retired_count, 1);
+    atomic_add64(&queue->tile_retired_count, 1);
 
     return true;
 }
 
-static DWORD WINAPI
-worker_thread(LPVOID param)
+static THREAD_PROC_SIGNATURE(render_thread_proc)
 {
     RenderWorkQueue *queue = param;
 
-    while (render_tile(queue));
-
+    while (render_tile(queue)) {}
+    
+    sys_exit_thread();
     return 0;
-}
-
-static void
-create_thread(void *param)
-{
-    DWORD thread_id;
-    HANDLE thread_handle = CreateThread(0, 0, worker_thread, param, 0, &thread_id);
-    CloseHandle(thread_handle);
-}
-
-static u32
-get_core_count(void)
-{
-    SYSTEM_INFO info ={ 0 };
-    GetSystemInfo(&info);
-    u32 result = info.dwNumberOfProcessors;
-    return result;
 }
 
 int
 main(int argc, char **argv)
 {
     printf("Ray started!\n");
-    srand(time(0));
 
     Material materials[16] ={ 0 };
     materials[0].emit_color    = vec4(0.3f, 0.4f, 0.5f, 1);
@@ -365,11 +338,11 @@ main(int argc, char **argv)
     world.spheres = spheres;
 
     // u32 size = 1024;
-    ImageU32 image = image_u32_make(1280 * 2, 720 * 2);
+    ImageU32 image = image_u32_make(1280, 720);
 
     clock_t start_clock = clock();
 
-    u32 core_count = get_core_count();
+    u32 core_count = sys_get_processor_count();
     u32 tile_width  = image.width / core_count;
     u32 tile_height = tile_width;
     tile_width = tile_height = 64;
@@ -416,13 +389,13 @@ main(int argc, char **argv)
     assert(queue.work_order_count == total_tile_count);
 
     // @NOTE(hl): Memory fence
-    interlocked_add64(&queue.next_work_order_index, 0);
+    atomic_add64(&queue.next_work_order_index, 0);
 
     for (u32 core_index = 1;
         core_index < core_count;
         ++core_index)
     {
-        create_thread(&queue);
+        sys_create_thread(render_thread_proc, &queue);
     }
 
     while (queue.tile_retired_count < total_tile_count)
