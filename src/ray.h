@@ -117,7 +117,7 @@ typedef struct
 	Scene *scene;
     u32 rays_per_pixel;
     u32 max_bounce_count;
-    
+    f32 focus_distance;
     Vec3 camera_pos;
     Vec3 camera_x;
     Vec3 camera_y;
