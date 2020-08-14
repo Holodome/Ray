@@ -1,6 +1,9 @@
+// Contains series of random number generation function
+//
 #if !defined(RANDOM_H)
 
-#include "Common.h"
+#include "common.h"
+#include "ray_math.h"
 
 // @NOTE(hl): Struct holding state of RNG
 // State field can be used to seed the RNG to produce same sequence of numbers.
@@ -15,7 +18,7 @@ typedef struct
 
 // https://en.wikipedia.org/wiki/Xorshift
 inline u32 
-xor_shift32(RandomSeries *series)
+xorshift32(RandomSeries *series)
 {
     u32 x = series->state;
     x ^= x << 13;
@@ -29,7 +32,7 @@ xor_shift32(RandomSeries *series)
 inline f32 
 random_unitlateral(RandomSeries *series)
 {
-    f32 result = (f32)xor_shift32(series) / (f32)U32_MAX;    
+    f32 result = (f32)xorshift32(series) / (f32)U32_MAX;    
     return result;
 }
 
@@ -38,6 +41,27 @@ inline f32
 random_bilateral(RandomSeries *series)
 {
     f32 result = 2.0f * random_unitlateral(series) - 1.0f;
+    return result;
+}
+
+// Generates random number in given range
+inline f32 
+random_range(RandomSeries *series, f32 min, f32 max)
+{
+	f32 rand_value = random_unitlateral(series);
+	f32 result = lerp(min, max, rand_value);
+	return result;
+}
+
+// Returns Vec3 where each component is a random number in range -1-1
+inline Vec3
+random_unit_sphere(RandomSeries *series)
+{
+    Vec3 result = {
+        .x = random_bilateral(series),
+        .y = random_bilateral(series),
+        .z = random_bilateral(series)
+    };
     return result;
 }
 

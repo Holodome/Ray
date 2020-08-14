@@ -49,7 +49,7 @@ const imm IMM_MAX = INTPTR_MAX;
 #define array_size(a) (sizeof(a) / sizeof(*(a)))
 
 // @NOTE(hl): stb_sprintf is way faster than any built-in snprintf function
-#include "Thirdparty/stb_sprintf.h"
+#include "thirdparty/stb_sprintf.h"
 
 #define format_string(dest, size, ...)               stbsp_snprintf(dest, size, __VA_ARGS__)
 #define format_string_list(dest, size, format, args) stbsp_vsnprintf(dest, size, format, args)

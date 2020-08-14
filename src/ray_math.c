@@ -1,4 +1,4 @@
-#include "RayMath.h"
+#include "ray_math.h"
 
 inline f32
 reciprocal32(f32 a)
@@ -410,4 +410,176 @@ rgba_pack_4x8(Vec4 a)
                    (round32(byte_normalized.z) << 16) |
                    (round32(byte_normalized.w) << 24));
     return result;
+}
+
+
+
+inline Mat4x4 
+mat4x4(void)
+{
+	Mat4x4 result = { 0 };
+	return result;
+}
+
+inline Mat4x4 
+mat4x4d(f32 d)
+{
+	Mat4x4 result = 
+    {{
+			{d, 0, 0, 0},
+			{0, d, 0, 0},
+			{0, 0, d, 0},
+			{0, 0, 0, d},
+	}};
+	return result;
+}
+
+
+inline Mat4x4 
+mat4x4_identity(void)
+{
+	return mat4x4d(1.0f);
+}
+
+inline Mat4x4
+mat4x4_translate(Vec3 t) {
+	Mat4x4 result = mat4x4_identity();
+    result.v[0].xyz = t;
+	return result;
+}
+
+inline Mat4x4
+mat4x4_scale(Vec3 s) {
+	Mat4x4 result =
+    {{
+        {s.x,   0,   0,  0},
+        {0,   s.y,   0,  0},
+        {0,     0, s.z,  0},
+        {0,     0,   0,  1},
+    }};
+	return result;
+}
+
+inline Mat4x4
+mat4x4_rotation_x(f32 angle) {
+	const f32 c = cos32(angle);
+	const f32 s = sin32(angle);
+	Mat4x4 r =
+	{{
+		{1, 0, 0, 0},
+		{0, c,-s, 0},
+		{0, s, c, 0},
+		{0, 0, 0, 1}
+	}};
+	return(r);
+}
+
+inline Mat4x4
+mat4x4_rotation_y(f32 angle) {
+	const f32 c = cos32(angle);
+	const f32 s = sin32(angle);
+	Mat4x4 r =
+	{{
+		{ c, 0, s, 0},
+		{ 0, 1, 0, 0},
+		{-s, 0, c, 0},
+		{ 0, 0, 0, 1}
+	}};
+	return(r);
+}
+
+inline Mat4x4
+mat4x4_rotation_z(f32 angle) {
+	const f32 c = cos32(angle);
+	const f32 s = sin32(angle);
+	Mat4x4 r =
+	{{
+		{c,-s, 0, 0},
+		{s, c, 0, 0},
+		{0, 0, 1, 0},
+		{0, 0, 0, 1}
+	}};
+	return(r);
+}
+
+inline Mat4x4
+mat4x4_rotation(f32 angle, Vec3 a) {
+	const f32 c = cos32(angle);
+	const f32 s = sin32(angle);
+	a = vec3_normalize(a);
+
+	const f32 tx = (1.0f - c) * a.x;
+	const f32 ty = (1.0f - c) * a.y;
+	const f32 tz = (1.0f - c) * a.z;
+
+	Mat4x4 r =
+	{{
+		{c + tx * a.x, 		     tx * a.y - s * a.z, tx * a.z - s * a.z, 0},
+		{    ty * a.x,		     ty * a.y + c,       ty * a.z + s * a.x, 0},
+		{    tz * a.x + s * a.x, tz * a.y - s * a.x, tz * a.z + c,       0},
+		{0, 0, 0, 1}
+	}};
+	return(r);
+}
+
+inline Mat4x4 
+mat4x4_orthographic3d(f32 l, f32 r, f32 b, f32 t, f32 n, f32 f)
+{
+    Mat4x4 result =
+	{{
+		{2.0f / (r - l),    0,                   0,                 0},
+		{0,                 2.0f / (t - b),      0,                 0},
+		{0,                 0,                  -2.0f / (f - n),    0},
+		{-(r + l) / (r - l), -(t + b) / (t - b),-(f + n) / (f - n), 1}
+	}};
+	return result;
+}
+
+inline Mat4x4 
+mat4x4_orthographic2d(f32 l, f32 r, f32 b, f32 t)
+{
+    return mat4x4_orthographic3d(l, r, b, t, -1, 1);
+}
+
+inline Mat4x4 
+mat4x4_look_at(Vec3 pos, Vec3 target)
+{
+    Vec3 world_up = {{ 0, 0, 1 }};
+    
+    Vec3 camera_z = vec3_normalize(vec3_sub(target, pos));
+    Vec3 camera_x = vec3_normalize(vec3_cross(world_up, camera_z));
+    Vec3 camera_y = vec3_normalize(vec3_cross(camera_z, camera_x));
+    
+    Mat4x4 result = 
+    {{
+        {camera_x.x, camera_y.x, -camera_z.x, 0}, 
+        {camera_x.y, camera_y.y, -camera_y.y, 0}, 
+        {camera_x.z, camera_y.y, -camera_y.z, 0}, 
+        {-vec3_dot(camera_x, pos), -vec3_dot(camera_y, pos), vec3_dot(camera_z, pos), 1.0f} 
+    }};
+    
+    return result;
+}
+
+inline Mat4x4 
+mat4x4_mul(Mat4x4 a, Mat4x4 b)
+{
+    Mat4x4 result;
+	for(u32 r = 0; 
+        r < 4;
+        ++r)
+    {
+		for(u32 c = 0;
+            c < 4;
+            ++c)
+        {
+			for(u32 i = 0;
+                i < 4;
+                ++i) 
+            {
+				result.e[r][c] += a.e[r][i] * b.e[i][c];
+			}
+		}
+	}
+	return result;
 }
