@@ -43,7 +43,7 @@ TEXTURE_PROC(texture_proc_checkered)
 {
     Vec3 result;
     
-    f32 coef = 1.0f;
+    // f32 coef = 1.0f;
     // f32 sines = sinf(coef * point.x) * sinf(coef * point.y) * sinf(coef * point.z);
     // printf("%f : %f %f %f : %f %f %f\n", sines, coef * point.x, coef * point.y, coef * point.z, sinf(coef * point.x), sinf(coef * point.y), sinf(coef * point.z));
     
@@ -244,6 +244,8 @@ typedef struct
         XZRect xz;
         YZRect yz;
     };
+    
+    f32 rotation_y;
 } Rect;
 
 // World that we are simulating

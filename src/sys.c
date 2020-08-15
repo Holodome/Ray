@@ -37,7 +37,7 @@ sys_exit_thread(void)
 inline u64 
 atomic_add64(volatile u64 *value, u64 addend)
 {
-    u64 result = _InterlockedExchangeAdd64((volatile long long *)value, addend);
+    u64 result = InterlockedExchangeAdd64((volatile long long *)value, addend);
     return result;
 }
 
