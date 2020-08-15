@@ -70,7 +70,7 @@ TEXTURE_PROC(texture_proc_image)
     }
     else 
     {
-        uv.u = clamp(uv.u, 0, 1);
+        uv.u = 1.0f - clamp(uv.u, 0, 1);
         uv.v = 1.0f - clamp(uv.v, 0, 1);
         
         u32 x = round32(uv.u * image->width);
@@ -196,6 +196,56 @@ typedef struct
 // Returns ray from cemera center aimed on position on film
 Ray camera_ray_at(Camera *camera, f32 film_x, f32 film_y, RandomSeries *series);
 
+
+typedef struct 
+{
+    f32 x0;
+    f32 y0;
+    f32 x1;
+    f32 y1;
+    f32 k;
+    u32 mat_index;
+} XYRect; 
+
+typedef struct 
+{
+    f32 x0;
+    f32 z0;
+    f32 x1;
+    f32 z1;
+    f32 k;
+    u32 mat_index;
+} XZRect; 
+
+typedef struct 
+{
+    f32 y0;
+    f32 z0;
+    f32 y1;
+    f32 z1;
+    f32 k;
+    u32 mat_index;
+} YZRect; 
+
+typedef u8 RectType;
+enum
+{
+    RectType_XY,
+    RectType_XZ,
+    RectType_YZ
+};
+
+typedef struct 
+{
+    RectType type;
+    union 
+    {
+        XYRect xy;
+        XZRect xz;
+        YZRect yz;
+    };
+} Rect;
+
 // World that we are simulating
 typedef struct
 {
@@ -212,6 +262,9 @@ typedef struct
     
     u32 moving_sphere_count;
     MovingSphere *moving_spheres;
+    
+    u32 rect_count;
+    Rect *rects;
 } Scene;
 
 // Data that is passed to raycating function
@@ -240,6 +293,35 @@ typedef struct
 } HitRecord;
 
 inline bool has_hit(HitRecord record) { return (record.mat_index != 0); }
+
+typedef u32 HitableType;
+enum 
+{
+    Hitable_Sphere,
+    Hitable_MovingSphere,
+    Hitable_BVHNode
+};
+
+struct Hitable;
+
+typedef struct
+{
+    struct Hitable *left;
+    struct Hitable *right;
+    AABB            box;
+} BVHNode; 
+
+typedef struct Hitable
+{
+    HitableType type;
+    union 
+    {
+        Sphere       sphere;
+        MovingSphere moving_sphere;
+        BVHNode      bvh_node;
+    };
+} Hitable;
+
 
 #define RAY_TRACER_H 1
 #endif

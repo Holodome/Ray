@@ -2,4 +2,5 @@
 
 Tiny raytracer made in C for educational purposes
 
-![Screenshot](screenshots/0-1024rp.jpg)
+![Screenshot1](screenshots/0-1024rp.jpg)
+![Screenshot2](screenshots/1-128.jpg)

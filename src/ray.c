@@ -147,6 +147,28 @@ ray_hit_aabb(AABB aabb, Ray ray, f32 tmin, f32 tmax)
     return result;
 }
 
+void 
+hitable_hit(Hitable *hitable, Ray ray, HitRecord *record)
+{
+    switch(hitable->type)
+    {
+        default: assert(false); break;
+        case Hitable_Sphere:
+        {
+            sphere_hit(hitable->sphere, ray, record);
+        } break;
+        case Hitable_MovingSphere:
+        {
+            moving_sphere_hit(hitable->moving_sphere, ray, record);
+        } break;
+        case Hitable_BVHNode:
+        {
+            
+        } break;
+    }
+}
+
+
 static AABB
 sphere_bounding_box(Sphere sphere, f32 t0, f32 t1)
 {
@@ -172,6 +194,17 @@ moving_sphere_bounding_box(MovingSphere sphere, f32 t0, f32 t1)
     
     AABB result = aabb_join(box0, box1);
     
+    return result;
+}
+
+Vec3 
+ray_surface_normal(Ray ray, Vec3 normal)
+{
+    Vec3 result = normal;
+    if (!(vec3_dot(ray.dir, normal) < 0))
+    {
+        result = vec3_neg(normal);
+    }    
     return result;
 }
 
@@ -233,6 +266,80 @@ cast_sample_rays(CastState *state)
                 MovingSphere sphere = scene->moving_spheres[moving_sphere_index];
                 moving_sphere_hit(sphere, ray, &hit_record);
             }
+            
+            for (u32 rect_index = 0;
+                 rect_index < scene->rect_count;
+                 ++rect_index)
+            {
+                Rect rect_ = scene->rects[rect_index];
+                
+                switch(rect_.type)
+                {
+                    case RectType_XY:
+                    {
+                        XYRect rect = rect_.xy;
+                        f32 t = (rect.k - ray.origin.z) / ray.dir.z;
+                        if ((t > min_hit_distance) && (t < hit_record.distance))
+                        {
+                            f32 x = ray.origin.x + t * ray.dir.x;
+                            f32 y = ray.origin.y + t * ray.dir.y;
+                            if ((rect.x0 < x) && (x < rect.x1) && 
+                                (rect.y0 < y) && (y < rect.y1))
+                            {
+                                hit_record.distance = t;
+                                hit_record.mat_index = rect.mat_index;
+                                hit_record.normal = ray_surface_normal(ray, vec3(0, 0, 1));
+                                // hit_record.normal = vec3(0, 0, 1);
+                                hit_record.hit_point = ray_point_at(ray, t);
+                                hit_record.uv.u = (x - rect.x0) / (rect.x1 - rect.x0);
+                                hit_record.uv.v = (y - rect.y0) / (rect.y1 - rect.y0);
+                            }
+                        }
+                    } break;
+                    case RectType_XZ:
+                    {
+                        XZRect rect = rect_.xz;
+                        f32 t = (rect.k - ray.origin.y) / ray.dir.y;
+                        if ((t > min_hit_distance) && (t < hit_record.distance))
+                        {
+                            f32 x = ray.origin.x + t * ray.dir.x;
+                            f32 z = ray.origin.z + t * ray.dir.z;
+                            if ((rect.x0 < x) && (x < rect.x1) && 
+                                (rect.z0 < z) && (z < rect.z1))
+                            {
+                                hit_record.distance = t;
+                                hit_record.mat_index = rect.mat_index;
+                                hit_record.normal = ray_surface_normal(ray, vec3(0, 1, 0));
+                                // hit_record.normal = vec3(0, 1, 0);
+                                hit_record.hit_point = ray_point_at(ray, t);
+                                hit_record.uv.u = (x - rect.x0) / (rect.x1 - rect.x0);
+                                hit_record.uv.v = (z - rect.z0) / (rect.z1 - rect.z0);
+                            }
+                        }
+                    } break;
+                    case RectType_YZ:
+                    {
+                        YZRect rect = rect_.yz;
+                        f32 t = (rect.k - ray.origin.x) / ray.dir.x;
+                        if ((t > min_hit_distance) && (t < hit_record.distance))
+                        {
+                            f32 y = ray.origin.y + t * ray.dir.y;
+                            f32 z = ray.origin.z + t * ray.dir.z;
+                            if ((rect.y0 < y) && (y < rect.y1) && 
+                                (rect.z0 < z) && (z < rect.z1))
+                            {
+                                hit_record.distance = t;
+                                hit_record.mat_index = rect.mat_index;
+                                hit_record.normal = ray_surface_normal(ray, vec3(1, 0, 0));
+                                // hit_record.normal = vec3(1, 0, 0);
+                                hit_record.hit_point = ray_point_at(ray, t);
+                                hit_record.uv.u = (y - rect.y0) / (rect.y1 - rect.y0);
+                                hit_record.uv.v = (z - rect.z0) / (rect.z1 - rect.z0);
+                            }
+                        }
+                    } break;
+                }
+            }
 
             if (has_hit(hit_record))
             {
@@ -242,8 +349,6 @@ cast_sample_rays(CastState *state)
 
                 // Decide if we want to refract or reflect
                 // Check if refraction_probability != 0 (it is OK to compare floats against constants)
-                // if (0)
-                // @TODO(hl): NOT CLEAR IF THIS IS CORRECT!!!
                 if ((mat.refraction_probability != 0.0f)) //&& (random_unitlateral(&series) <= mat.refraction_probability))
                 {
                     Vec3 reflected = vec3_reflect(ray.dir, hit_record.normal);
@@ -298,8 +403,11 @@ cast_sample_rays(CastState *state)
                     {
                         cos_atten = 0.0f;
                     }
-                    cos_atten = 1.0f;
-                    Vec3 reflect_value = mat.texture.proc(&mat.texture, hit_record.uv, hit_record.hit_point);
+                    Vec3 reflect_value = { 0 };
+                    if (mat.texture.proc)
+                    {
+                        reflect_value = mat.texture.proc(&mat.texture, hit_record.uv, hit_record.hit_point);
+                    }
                     attenuation = vec3_mul(attenuation, vec3_muls(reflect_value, cos_atten));
 
                     Vec3 pure_reflection = vec3_reflect(ray.dir, hit_record.normal);
@@ -345,7 +453,7 @@ render_tile(RenderWorkQueue *queue)
     state.scene = order->scene;
     state.series = order->random_series;
     // @TODO(hl): Settings for these fellas
-    state.rays_per_pixel = 1024;
+    state.rays_per_pixel = 128;
     state.max_bounce_count = 8;
 
     ImageU32 *image = order->image;
@@ -405,7 +513,7 @@ void init_sample_scene(Scene *scene, ImageU32 *image)
     materials[1].texture = texture_checkered(vec3(0.5, 0.5, 0.5), vec3(0.2, 0.3, 0.1));
     materials[2].texture = texture_solid_color(vec3(0.7f, 0.5f, 0.3f));
     materials[2].refraction_probability = 1.0f;
-    materials[3].texture = texture_solid_color(vec3(10.0f, 0.0f, 0.0f));
+    materials[3].emit_color = vec3(15.0f, 15.0f, 15.0f);
     // materials[4].texture = texture_solid_color(vec3(0.2f, 0.8f, 0.2f));
     // materials[4].scatter = 0.7f;
     materials[4].texture = texture_image("e:\\dev\\ray\\data\\earthmap.jpg");
@@ -415,10 +523,10 @@ void init_sample_scene(Scene *scene, ImageU32 *image)
     materials[6].scatter = 0.99f;
     materials[7].texture = texture_solid_color(vec3(0.75f, 0.33f, 0.75f));
 
-    static Plane planes[1] = {0};
-    planes[0].mat_index = 1;
-    planes[0].normal = vec3(0, 0, 1);
-    planes[0].dist = 0;
+    // static Plane planes[1] = {0};
+    // planes[0].mat_index = 1;
+    // planes[0].normal = vec3(0, 0, 1);
+    // planes[0].dist = 0;
 
     static Sphere spheres[5] = {0};
     spheres[0].pos = vec3(-3, 2, 0);
@@ -441,6 +549,10 @@ void init_sample_scene(Scene *scene, ImageU32 *image)
     spheres[4].radius = 1.0f;
     spheres[4].mat_index = 2;
     
+    // spheres[5].pos = vec3(0, 0, -1000);
+    // spheres[5].radius = 1000.0f;
+    // spheres[5].mat_index = 1;
+    
     static MovingSphere moving_spheres[1] = { 0 };
     moving_spheres[0].center0 = vec3(-2, -3, 0);
     moving_spheres[0].center1 = vec3(-2, -3, 1);
@@ -448,6 +560,21 @@ void init_sample_scene(Scene *scene, ImageU32 *image)
     moving_spheres[0].radius = 0.5f;
     moving_spheres[0].time0 = 0;    
     moving_spheres[0].time1 = 1;    
+    
+    static Rect rects[1] = { 0 };
+    rects[0] = (Rect) { 
+        .type = RectType_XY,
+        .xy   = (XYRect) {
+            .x0 = -555,
+            .y0 = -555,
+            .x1 = 555,
+            .y1 = 555,
+            .k = 0,
+            .mat_index = 1 
+        }
+    };
+    scene->rect_count = array_size(rects);
+    scene->rects = rects;
     
     Camera camera;
     camera.time0 = 0;
@@ -483,12 +610,124 @@ void init_sample_scene(Scene *scene, ImageU32 *image)
     scene->materials = materials;
     scene->sphere_count = array_size(spheres);
     scene->spheres = spheres;
-    scene->plane_count = array_size(planes);
-    scene->planes = planes;
+    // scene->plane_count = array_size(planes);
+    // scene->planes = planes;
     scene->moving_sphere_count = array_size(moving_spheres);
     scene->moving_spheres = moving_spheres;
 }
 
+void 
+make_colonel_box(Scene *scene, ImageU32 *image)
+{
+    static Material materials[5] = { 0 };
+    materials[1].texture = texture_solid_color(vec3(0.65f, 0.05f, 0.05f));
+    materials[2].texture = texture_solid_color(vec3(0.73f, 0.73f, 0.73f));
+    materials[3].texture = texture_solid_color(vec3(0.12f, 0.45f, 0.15f));
+    materials[4].emit_color = vec3(15, 15, 15);
+    
+    static Rect rects[6] = { 0 };
+    rects[0] = (Rect) { 
+        .type = RectType_YZ,
+        .yz   = (YZRect) {
+            .y0 = -5,
+            .z0 = -5,
+            .y1 = 5,
+            .z1 = 5,
+            .k = -5,
+            .mat_index = 3  
+        }
+    };
+    rects[1] = (Rect) { 
+        .type = RectType_YZ,
+        .yz   = (YZRect) {
+            .y0 = -5,
+            .z0 = -5,
+            .y1 = 5,
+            .z1 = 5,
+            .k = 5,
+            .mat_index = 1
+        }
+    };
+    rects[2] = (Rect) { 
+        .type = RectType_XY,
+        .xy = (XYRect) {
+            .x0 = -1.5f,
+            .y0 = -1.5f,
+            .x1 = 1.5f,
+            .y1 = 1.5f,
+            .k = 4.99f,
+            .mat_index = 4
+        }
+    };
+    rects[3] = (Rect) { 
+        .type = RectType_XY,
+        .xy   = (XYRect) {
+            .x0 = -5,
+            .y0 = -5,
+            .x1 = 5,
+            .y1 = 5,
+            .k = 5,
+            .mat_index = 2
+        }
+    };
+    rects[4] = (Rect) { 
+        .type = RectType_XY,
+        .xy   = (XYRect) {
+            .x0 = -5,
+            .y0 = -5,
+            .x1 = 5,
+            .y1 = 5,
+            .k = -5,
+            .mat_index = 2 
+        }
+    };
+    rects[5] = (Rect) { 
+        .type = RectType_XZ,
+        .xz   = (XZRect) {
+            .x0 = -5,
+            .z0 = -5,
+            .x1 = 5,
+            .z1 = 5,
+            .k = 5,
+            .mat_index = 2 
+        }
+    };
+     
+     
+    Camera camera;
+    camera.time0 = 0;
+    camera.time1 = 1;
+    // Camera is an orthographic projection with film having size of dest image
+    camera.camera_pos = vec3(0, -17, 2.5f);
+    // @NOTE(hl): Create coordinate system for camera.
+    // These are unit vectors of 3 axes of our coordinate system
+    camera.camera_z = vec3_normalize(camera.camera_pos);
+    camera.camera_x = vec3_normalize(vec3_cross(vec3(0, 0, 1), camera.camera_z));
+    camera.camera_y = vec3_normalize(vec3_cross(camera.camera_z, camera.camera_x));
+    camera.film_center = vec3_sub(camera.camera_pos, camera.camera_z);
+
+    // Apply image aspect ratio
+    camera.film_w = 1.0f;
+    camera.film_h = 1.0f;
+    if (image->width > image->height)
+    {
+        camera.film_h = camera.film_w * (f32)image->height / (f32)image->width;
+    }
+    else if (image->height > image->width)
+    {
+        camera.film_w = camera.film_h * (f32)image->width / (f32)image->height;
+    }
+    camera.half_film_w = camera.film_w * 0.5f;
+    camera.half_film_h = camera.film_h * 0.5f;
+    camera.half_pix_w = reciprocal32(image->width) * 0.5f;
+    camera.half_pix_h = reciprocal32(image->height) * 0.5f;
+    scene->camera = camera;
+
+    scene->material_count = array_size(materials);
+    scene->materials = materials;
+    scene->rect_count = array_size(rects);
+    scene->rects = rects;
+}
 
 #if 0
 void init_random_scene(Scene *scene, ImageU32 *image)
@@ -589,11 +828,12 @@ int main(int argc, char **argv)
     
     // Raycasting output is simply an image
     ImageU32 image = {0};
-    image_u32_init(&image, 1280, 720);
+    image_u32_init(&image, 1280, 1280);
 
     // Initialize scene
     Scene scene = {0};
-    init_sample_scene(&scene, &image);
+    // init_sample_scene(&scene, &image);
+    make_colonel_box(&scene, &image);
 
     // Record time spend on raycasting
     clock_t start_clock = clock();

@@ -36,7 +36,7 @@ image_u32_save(ImageU32 *image, char *filename)
 void 
 image_u32_load(ImageU32 *image, char *filename)
 {
-    image->pixels = stbi_load(filename, &image->width, &image->height, 0, 4);
+    image->pixels = (u32 *)stbi_load(filename, (int *)&image->width, (int *)&image->height, 0, 4);
     if (!image->pixels)
     {
         fprintf(stderr, "[ERROR] Failed to read image '%s'\n", filename);
