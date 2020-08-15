@@ -1,41 +1,15 @@
 #include "ray.h"
 
-#include "thirdparty/stb_image_write.h"
 
 #include "ray_tracer.c"
 #include "ray_math.c"
 #include "sys.c"
+#include "image.c"
 
 Vec3 ray_point_at(Ray ray, f32 param)
 {
     Vec3 result = vec3_add(ray.origin, vec3_muls(ray.dir, param));
     return result;
-}
-
-void image_u32_init(ImageU32 *image, u32 width, u32 height)
-{
-    image->width = width;
-    image->height = height;
-    image->pixels = malloc(sizeof(u32) * width * height);
-}
-
-u32 *image_u32_get_pixel_pointer(ImageU32 *image, u32 x, u32 y)
-{
-    assert((x < image->width) && (y < image->height));
-
-    u32 stride = image->width;
-    u32 *result = image->pixels + stride * y + x;
-    return result;
-}
-
-void image_u32_save(ImageU32 *image, char *filename)
-{
-    stbi_flip_vertically_on_write(true);
-    bool saved = stbi_write_png(filename, image->width, image->height, 4, image->pixels, sizeof(u32) * image->width);
-    if (!saved)
-    {
-        fprintf(stderr, "[ERROR] Failed to save image '%s'\n", filename);
-    }
 }
 
 static f32
@@ -371,7 +345,7 @@ render_tile(RenderWorkQueue *queue)
     state.scene = order->scene;
     state.series = order->random_series;
     // @TODO(hl): Settings for these fellas
-    state.rays_per_pixel = 128;
+    state.rays_per_pixel = 1024;
     state.max_bounce_count = 8;
 
     ImageU32 *image = order->image;
@@ -432,8 +406,9 @@ void init_sample_scene(Scene *scene, ImageU32 *image)
     materials[2].texture = texture_solid_color(vec3(0.7f, 0.5f, 0.3f));
     materials[2].refraction_probability = 1.0f;
     materials[3].texture = texture_solid_color(vec3(10.0f, 0.0f, 0.0f));
-    materials[4].texture = texture_solid_color(vec3(0.2f, 0.8f, 0.2f));
-    materials[4].scatter = 0.7f;
+    // materials[4].texture = texture_solid_color(vec3(0.2f, 0.8f, 0.2f));
+    // materials[4].scatter = 0.7f;
+    materials[4].texture = texture_image("e:\\dev\\ray\\data\\earthmap.jpg");
     materials[5].texture = texture_solid_color(vec3(0.4f, 0.8f, 0.9f));
     materials[5].scatter = 0.85f;
     materials[6].texture = texture_solid_color(vec3(0.95f, 0.95f, 0.95f));
@@ -479,7 +454,7 @@ void init_sample_scene(Scene *scene, ImageU32 *image)
     camera.time1 = 1;
     // Camera is an orthographic projection with film having size of dest image
     camera.camera_pos = vec3(-1.5, -10, 1.5);
-    // camera.camera_pos = vec3_muls(camera.camera_pos, 3.0f);
+    camera.camera_pos = vec3_muls(camera.camera_pos, 1.5f);
     // @NOTE(hl): Create coordinate system for camera.
     // These are unit vectors of 3 axes of our coordinate system
     camera.camera_z = vec3_normalize(camera.camera_pos);

@@ -1,25 +1,9 @@
 #if !defined(RAY_H)
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <time.h>
 
 #include "ray_tracer.h"
 #include "sys.h"
-
-//  Wrapper for 4-component image (little-endian RGBA), where each pixel is represented as u32
-typedef struct
-{
-    u32 width;
-    u32 height;
-    u32 *pixels;
-} ImageU32;
-
-// Allocates pixel buffer
-void image_u32_init(ImageU32 *image, u32 width, u32 height);
-// Saves image with given filename (actually it is always PNG)
-void image_u32_save(ImageU32 *image, char *filename);
-u32 *image_u32_get_pixel_pointer(ImageU32 *image, u32 x, u32 y);
 
 // Single work order from multithreaded rendering system
 typedef struct

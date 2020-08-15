@@ -3,6 +3,7 @@
 #include "common.h"
 #include "ray_math.h"
 #include "random.h"
+#include "image.h"
 
 typedef struct
 {
@@ -28,7 +29,7 @@ typedef struct Texture
     union 
     {
         Vec3 solid_color;
-        
+        ImageU32 image;
         struct 
         {
             Vec3 checkered1;
@@ -36,8 +37,6 @@ typedef struct Texture
         };
     };
 } Texture;
-
-#include <math.h>
 
 TEXTURE_PROC(texture_proc_solid_color) { return texture->solid_color; }
 TEXTURE_PROC(texture_proc_checkered)     
@@ -55,6 +54,43 @@ TEXTURE_PROC(texture_proc_checkered)
     else 
     {
         result = texture->checkered2;
+    }
+    
+    return result;
+}
+TEXTURE_PROC(texture_proc_image)
+{
+    Vec3 result;
+    
+    ImageU32 *image = &texture->image;
+    
+    if (!image->pixels)
+    {
+        result = vec3(1, 0, 1);
+    }
+    else 
+    {
+        uv.u = clamp(uv.u, 0, 1);
+        uv.v = 1.0f - clamp(uv.v, 0, 1);
+        
+        u32 x = round32(uv.u * image->width);
+        u32 y = round32(uv.v * image->height);
+        
+        if (x >= image->width) 
+        {
+            x = image->width - 1;
+        }
+        if (y >= image->height)
+        {
+            y = image->height - 1;
+        }
+        
+        f32 r255 = reciprocal32(255.0f);
+        u8 *pixels = (u8 *)image_u32_get_pixel_pointer(image, x, y);
+        
+        result.x = pixels[0] * r255;
+        result.y = pixels[1] * r255;
+        result.z = pixels[2] * r255;
     }
     
     return result;
@@ -78,6 +114,16 @@ texture_checkered(Vec3 checkered1, Vec3 checkered2)
         .checkered1 = checkered1,
         .checkered2 = checkered2  
     };
+    return result;
+}
+
+inline Texture
+texture_image(char *filename)
+{
+    Texture result = {
+        .proc = texture_proc_image,
+    };
+    image_u32_load(&result.image, filename);
     return result;
 }
 

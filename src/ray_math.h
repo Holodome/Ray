@@ -200,8 +200,8 @@ Vec2
 unit_sphere_get_uv(Vec3 p)
 {
     Vec2 result;
-    f32 phi   = atan232(p.z, p.x);
-    f32 theta = asin32(p.y);
+    f32 phi   = atan232(p.y, p.x);
+    f32 theta = asin32(p.z);
     
     result.u = 1.0f - (phi + PI32) / TWO_PI32;
     result.v = (theta + HALF_PI32) / PI32;

@@ -56,5 +56,8 @@ const imm IMM_MAX = INTPTR_MAX;
 
 #include <assert.h>
 
+#include <stdio.h>
+#include <stdlib.h>
+
 #define COMMON_H 1
 #endif
