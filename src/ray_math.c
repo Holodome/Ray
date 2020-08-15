@@ -64,6 +64,13 @@ cos32(f32 a)
     return result;
 }
 
+inline f32 
+asin32(f32 a)
+{
+    f32 result = __builtin_asinf(a);
+    return result;
+}
+
 inline f32
 atan232(f32 y, f32 x)
 {

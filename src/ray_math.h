@@ -9,6 +9,7 @@
 
 #define max(a, b) ({__typeof__(a) _a = a; __typeof__(b) _b = b; (_a > _b) ? (_a) : (_b); })
 #define min(a, b) ({__typeof__(a) _a = a; __typeof__(b) _b = b; (_a < _b) ? (_a) : (_b); })
+#define swap(a, b) ({__typeof__(a) temp = a; a = b; b = temp; (void)0; })
 
 #if !defined(MATH_H)
 
@@ -18,6 +19,10 @@
 // https://store.steampowered.com/hwsurvey/Steam-Hardware-Software-Survey-Welcome-to-Steam?platform=pc 
 // > Steam says that 100% of its users have SSE
 #include <xmmintrin.h>
+
+#define HALF_PI32 1.57079632679f
+#define PI32      3.14159265359f
+#define TWO_PI32  6.28318530718f
 
 #define bytes(x)     ((u64)x)
 #define kilobytes(x) (bytes(x) << 10)
@@ -37,6 +42,7 @@ inline f32 sqrt32(f32 a);
 inline f32 rsqrt32(f32 a);
 inline f32 sin32(f32 a);
 inline f32 cos32(f32 a);
+inline f32 asin32(f32 a);
 inline f32 atan232(f32 y, f32 x);
 inline f32 tan32(f32 a);
 inline f32 mod32(f32 a, f32 b);
@@ -54,8 +60,22 @@ typedef union
         f32 x;
         f32 y;
     };
+    struct 
+    {
+        f32 u;
+        f32 v;
+    };
     f32 e[2];
 } Vec2;
+
+
+// @NOTE(hl): Define math operators needed to use vectors
+// In C++ we would use operator overloading, but C does not support it, 
+// so we have to go with operator-like functions
+//
+// Lower-case vector name function is 'constructor', that initializes vector from given components
+// Lower-case vector name ending with s constructs vector from single scalar
+// add, sub, div, mul correspond to addition, subtraction, division, multiplication. Multiplication is component-wise (hadamard product), not inner or cross product
 
 inline Vec2 vec2(f32 x, f32 y);
 inline Vec2 vec2s(f32 s);
@@ -153,18 +173,9 @@ inline Mat4x4 mat4x4_orthographic2d(f32 l, f32 r, f32 b, f32 t);
 inline Mat4x4 mat4x4_look_at(Vec3 pos, Vec3 target);
 inline Mat4x4 mat4x4_mul(Mat4x4 a, Mat4x4 b);
 
-// @NOTE(hl): Define math operators needed to use vectors
-// In C++ we would use operator overloading, but C does not support it, 
-// so we have to go with operator-like functions
-//
-// Lower-case vector name function is 'constructor', that initializes vector from given components
-// Lower-case vector name ending with s constructs vector from single scalar
-// add, sub, div, mul correspond to addition, subtraction, division, multiplication. Multiplication is component-wise (hadamard product), not inner or cross product
-
+// @TODO(hl): Refactor this somehow
 inline u32 vec4_normalized_to_u32(Vec4 v);
-
 inline Vec4 linear1_to_srgb255(Vec4 a);
-
 inline u32 rgba_pack_4x8(Vec4 a);
 
 // Reflects given direction vector from given normal
@@ -175,6 +186,7 @@ vec3_reflect(Vec3 v, Vec3 normal)
     return result;
 }
 
+// https://en.wikipedia.org/wiki/Schlick%27s_approximation
 inline f32
 schlick(f32 cosine, f32 ref_idx)
 {
@@ -182,6 +194,41 @@ schlick(f32 cosine, f32 ref_idx)
     r0 = r0 * r0;
     f32 result = r0 + (1.0f - r0) * pow32((1.0f - cosine), 5.0f);
     return result;
+}
+
+Vec2 
+unit_sphere_get_uv(Vec3 p)
+{
+    Vec2 result;
+    f32 phi   = atan232(p.z, p.x);
+    f32 theta = asin32(p.y);
+    
+    result.u = 1.0f - (phi + PI32) / TWO_PI32;
+    result.v = (theta + HALF_PI32) / PI32;
+    
+    return result;    
+}
+
+typedef struct 
+{
+    Vec3 min;
+    Vec3 max;
+} AABB;
+
+AABB 
+aabb_join(AABB a, AABB b)
+{
+    AABB result;
+    
+    result.min.x = min(a.min.x, b.min.x);
+    result.min.x = min(a.min.y, b.min.y);
+    result.min.x = min(a.min.z, b.min.z);
+    
+    result.max.x = max(a.max.x, b.max.x);
+    result.max.x = max(a.max.y, b.max.y);
+    result.max.x = max(a.max.z, b.max.z);
+    
+    return result;    
 }
 
 #define MATH_H 1
