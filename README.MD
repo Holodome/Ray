@@ -1,6 +1,6 @@
 # Ray
 
-Tiny raytracer made in C for educational purposes
+Tiny raytracer made in C11 for educational purposes
 
 ![Screenshot1](screenshots/0-1024rp.jpg)
 ![Screenshot2](screenshots/1-128.jpg)
