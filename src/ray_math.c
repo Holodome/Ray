@@ -137,6 +137,87 @@ abs32(f32 a)
 }
 
 
+inline Vec2
+vec2_neg(Vec2 a)
+{
+    Vec2 result;
+    result.x = -a.x;
+    result.y = -a.y;
+    return result;
+}
+
+inline Vec2
+vec2_add(Vec2 a, Vec2 b)
+{
+    Vec2 result;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    return result;
+}
+
+inline Vec2 
+vec2_sub(Vec2 a, Vec2 b)
+{
+    Vec2 result;
+    result.x = a.x - b.x;
+    result.y = a.y - b.y;
+    return result;
+}
+
+inline Vec2
+vec2_div(Vec2 a, Vec2 b)
+{
+    Vec2 result;
+    result.x = a.x / b.x;
+    result.y = a.y / b.y;
+    return result;
+}
+
+inline Vec2
+vec2_mul(Vec2 a, Vec2 b)
+{
+    Vec2 result;
+    result.x = a.x * b.x;
+    result.y = a.y * b.y;
+    return result;
+}
+
+inline Vec2
+vec2_divs(Vec2 a, f32 b)
+{
+    Vec2 result;
+    result.x = a.x / b;
+    result.y = a.y / b;
+    return result;
+}
+
+inline Vec2
+vec2_muls(Vec2 a, f32 b)
+{
+    Vec2 result;
+    result.x = a.x * b;
+    result.y = a.y * b;
+    return result;
+}
+
+inline Vec2
+vec2(f32 x, f32 y)
+{
+    Vec2 result;
+    result.x = x;
+    result.y = y;
+    return result;
+}
+
+inline Vec2
+vec2s(f32 s)
+{
+    Vec2 result;
+    result.x = s;
+    result.y = s;
+    return result;
+}
+
 inline Vec3 
 vec3_neg(Vec3 a)
 {
@@ -334,7 +415,7 @@ vec3_dot(Vec3 a, Vec3 b)
 }
 
 inline Vec3 
-vec3_cross(Vec3 a, Vec3 b)
+cross(Vec3 a, Vec3 b)
 {
     Vec3 result;
     
@@ -359,13 +440,17 @@ vec3_length(Vec3 a)
     return result;
 }
 
+#if 1 
+
 inline Vec3 
-vec3_normalize_fast(Vec3 a)
+vec3_normalize(Vec3 a)
 {
     f32 coef    = reciprocal32(vec3_length(a));
-    Vec3 result = vec3_mul(a, vec3s(coef));
+    Vec3 result = vec3_muls(a, coef);
     return result;
 }
+
+#else 
 
 inline Vec3 
 vec3_normalize(Vec3 a)
@@ -380,6 +465,8 @@ vec3_normalize(Vec3 a)
     
     return result;
 }
+
+#endif 
 
 inline Vec3
 vec3_lerp(Vec3 a, Vec3 b, f32 t)
@@ -437,7 +524,7 @@ mat4x4d(f32 d)
 			{0, d, 0, 0},
 			{0, 0, d, 0},
 			{0, 0, 0, d},
-	}};
+		}};
 	return result;
 }
 
@@ -459,11 +546,11 @@ inline Mat4x4
 mat4x4_scale(Vec3 s) {
 	Mat4x4 result =
     {{
-        {s.x,   0,   0,  0},
-        {0,   s.y,   0,  0},
-        {0,     0, s.z,  0},
-        {0,     0,   0,  1},
-    }};
+			{s.x,   0,   0,  0},
+			{0,   s.y,   0,  0},
+			{0,     0, s.z,  0},
+			{0,     0,   0,  1},
+		}};
 	return result;
 }
 
@@ -473,11 +560,11 @@ mat4x4_rotation_x(f32 angle) {
 	const f32 s = sin32(angle);
 	Mat4x4 r =
 	{{
-		{1, 0, 0, 0},
-		{0, c,-s, 0},
-		{0, s, c, 0},
-		{0, 0, 0, 1}
-	}};
+			{1, 0, 0, 0},
+			{0, c,-s, 0},
+			{0, s, c, 0},
+			{0, 0, 0, 1}
+		}};
 	return(r);
 }
 
@@ -487,11 +574,11 @@ mat4x4_rotation_y(f32 angle) {
 	const f32 s = sin32(angle);
 	Mat4x4 r =
 	{{
-		{ c, 0, s, 0},
-		{ 0, 1, 0, 0},
-		{-s, 0, c, 0},
-		{ 0, 0, 0, 1}
-	}};
+			{ c, 0, s, 0},
+			{ 0, 1, 0, 0},
+			{-s, 0, c, 0},
+			{ 0, 0, 0, 1}
+		}};
 	return(r);
 }
 
@@ -501,11 +588,11 @@ mat4x4_rotation_z(f32 angle) {
 	const f32 s = sin32(angle);
 	Mat4x4 r =
 	{{
-		{c,-s, 0, 0},
-		{s, c, 0, 0},
-		{0, 0, 1, 0},
-		{0, 0, 0, 1}
-	}};
+			{c,-s, 0, 0},
+			{s, c, 0, 0},
+			{0, 0, 1, 0},
+			{0, 0, 0, 1}
+		}};
 	return(r);
 }
 
@@ -514,18 +601,18 @@ mat4x4_rotation(f32 angle, Vec3 a) {
 	const f32 c = cos32(angle);
 	const f32 s = sin32(angle);
 	a = vec3_normalize(a);
-
+	
 	const f32 tx = (1.0f - c) * a.x;
 	const f32 ty = (1.0f - c) * a.y;
 	const f32 tz = (1.0f - c) * a.z;
-
+	
 	Mat4x4 r =
 	{{
-		{c + tx * a.x, 		     tx * a.y - s * a.z, tx * a.z - s * a.z, 0},
-		{    ty * a.x,		     ty * a.y + c,       ty * a.z + s * a.x, 0},
-		{    tz * a.x + s * a.x, tz * a.y - s * a.x, tz * a.z + c,       0},
-		{0, 0, 0, 1}
-	}};
+			{c + tx * a.x, 		     tx * a.y - s * a.z, tx * a.z - s * a.z, 0},
+			{    ty * a.x,		     ty * a.y + c,       ty * a.z + s * a.x, 0},
+			{    tz * a.x + s * a.x, tz * a.y - s * a.x, tz * a.z + c,       0},
+			{0, 0, 0, 1}
+		}};
 	return(r);
 }
 
@@ -534,18 +621,25 @@ mat4x4_orthographic3d(f32 l, f32 r, f32 b, f32 t, f32 n, f32 f)
 {
     Mat4x4 result =
 	{{
-		{2.0f / (r - l),    0,                   0,                 0},
-		{0,                 2.0f / (t - b),      0,                 0},
-		{0,                 0,                  -2.0f / (f - n),    0},
-		{-(r + l) / (r - l), -(t + b) / (t - b),-(f + n) / (f - n), 1}
-	}};
+			{2.0f / (r - l),    0,                   0,                 0},
+			{0,                 2.0f / (t - b),      0,                 0},
+			{0,                 0,                  -2.0f / (f - n),    0},
+			{-(r + l) / (r - l), -(t + b) / (t - b),-(f + n) / (f - n), 1}
+		}};
 	return result;
 }
 
 inline Mat4x4 
 mat4x4_orthographic2d(f32 l, f32 r, f32 b, f32 t)
 {
-    return mat4x4_orthographic3d(l, r, b, t, -1, 1);
+	Mat4x4 result =
+	{{
+			{2.0f / (r - l),    0,                   0, 0},
+			{0,                 2.0f / (t - b),      0, 0},
+			{0,                 0,                  -1, 0},
+			{-(r + l) / (r - l), -(t + b) / (t - b), 0, 1}
+		}};
+	return result;
 }
 
 inline Mat4x4 
@@ -554,16 +648,16 @@ mat4x4_look_at(Vec3 pos, Vec3 target)
     Vec3 world_up = {{ 0, 0, 1 }};
     
     Vec3 camera_z = vec3_normalize(vec3_sub(target, pos));
-    Vec3 camera_x = vec3_normalize(vec3_cross(world_up, camera_z));
-    Vec3 camera_y = vec3_normalize(vec3_cross(camera_z, camera_x));
+    Vec3 camera_x = vec3_normalize(cross(world_up, camera_z));
+    Vec3 camera_y = vec3_normalize(cross(camera_z, camera_x));
     
     Mat4x4 result = 
     {{
-        {camera_x.x, camera_y.x, -camera_z.x, 0}, 
-        {camera_x.y, camera_y.y, -camera_y.y, 0}, 
-        {camera_x.z, camera_y.y, -camera_y.z, 0}, 
-        {-vec3_dot(camera_x, pos), -vec3_dot(camera_y, pos), vec3_dot(camera_z, pos), 1.0f} 
-    }};
+			{camera_x.x, camera_y.x, -camera_z.x, 0}, 
+			{camera_x.y, camera_y.y, -camera_y.y, 0}, 
+			{camera_x.z, camera_y.y, -camera_y.z, 0}, 
+			{-vec3_dot(camera_x, pos), -vec3_dot(camera_y, pos), vec3_dot(camera_z, pos), 1.0f} 
+		}};
     
     return result;
 }

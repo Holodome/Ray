@@ -66,7 +66,7 @@ typedef Vec3 LaneVec3;
 #define lane_vec3_mul(a, b)   vec3_mul(a, b)
 #define lane_vec3_div(a, b)   vec3_div(a, b)
 #define lane_vec3_dot(a, b)   vec3_dot(a, b)
-#define lane_vec3_cross(a, b) vec3_cross(a, b)
+#define lane_cross(a, b) cross(a, b)
 #define lane_vec3_normalize(a) vec3_normalize(a)
 
 #elif (LANE_WIDTH == 4)

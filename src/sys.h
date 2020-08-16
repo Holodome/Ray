@@ -4,6 +4,9 @@
 #if !defined(SYS_H)
 
 #include "common.h"
+#include "ray_math.h"
+
+#include "key_list.h"
 
 // @NOTE(hl): Detects target OS.
 // Most functions from linux and macos we use are part posix, so we can unify them
@@ -14,32 +17,60 @@
 #define OS_LINUX   0
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
-	#undef  OS_WINDOWS
-    #define OS_WINDOWS 1
+#undef  OS_WINDOWS
+#define OS_WINDOWS 1
 #elif defined(__APPLE__)
-	#include <TargetConditionals.h>
-    static_assert(TARGET_OS_MAC, "Only MacOS build on apple platforms is supported");
-    
-    #undef  OS_POSIX
-    #define OS_POSIX 1
-    #undef  OS_MACOS
-    #define OS_MACOS 1
+#include <TargetConditionals.h>
+static_assert(TARGET_OS_MAC, "Only MacOS build on apple platforms is supported");
+
+#undef  OS_POSIX
+#define OS_POSIX 1
+#undef  OS_MACOS
+#define OS_MACOS 1
 #elif defined(__linux__)
-    #undef  OS_POSIX
-    #define OS_POSIX 1
-    #undef  OS_LINUX 
-    #define OS_LINUX 1
+#undef  OS_POSIX
+#define OS_POSIX 1
+#undef  OS_LINUX 
+#define OS_LINUX 1
 #elif defined(__unix__)
-    #error "!NS"
-    #undef  OS_POSIX
-    #define OS_POSIX 1
+#error "!NS"
+#undef  OS_POSIX
+#define OS_POSIX 1
 #elif defined(_POSIX_VERSION)
-    #error "!NS"
-    #undef  OS_POSIX
-    #define OS_POSIX 1
+#error "!NS"
+#undef  OS_POSIX
+#define OS_POSIX 1
 #else
-	#error "Unknown OS"
+#error "Unknown OS"
 #endif
+
+typedef struct 
+{
+    bool is_down;
+    u8   transition_count;
+} KeyState;
+
+inline void
+update_key_state(KeyState *state, bool is_down)
+{
+	if (state->is_down != is_down)
+	{
+		state->is_down = is_down;
+		++state->transition_count;
+	}
+}
+
+#define is_key_pressed(key, ...) is_key_pressed_(key, (true, ##__VA_ARGS__))
+inline bool
+is_key_pressed_(KeyState key, bool repeat)
+{
+	bool result = key.is_down;
+	if (!repeat)
+	{
+		result = result && (key.transition_count != 0);
+	}
+	return (result);
+}
 
 // Way of supplying input to application.
 // This is not how it is ususally done: SDL uses event system and GLFW uses callbacks.
@@ -54,15 +85,16 @@ typedef struct
     union
     {
         Vec2 mouse_delta;  
-        struct { f32 mouse_delta_x, mouse_detla_y; };
+        struct { f32 mouse_delta_x, mouse_delta_y; };
     };
     f32 mouse_wheel;
     u32 utf32_input[16];
-    
+    KeyState keys[Key_Count];
     
     Vec2 window_size;
     bool has_focus;
     bool is_quit_requested;
+    
 } Input;
 
 // 
@@ -96,17 +128,24 @@ __attribute__((always_inline)) void sys_exit_thread(void);
 // @NOTE(hl): Although this is not os function, but x64 instruction wrapper, we put it in sys
 inline u64 atomic_add64(volatile u64 *value, u64 addend);
 
-//
-// Window
-//
+// This is SDL-like graphics and window API
 
+// @NOTE(hl): Defined in platform implementation
+// Holds data about window. Typically this is only window handle
 struct SysWindow;
+// Holds platform-specific opengl data. This may include functions like wgl... on windows
 struct SysGLCTX;
+// Actual opengl renderer. Defined not in platform, but in opengl.h. This is opengl 
+// state throughout the program. Also includes pointers to all opengl procedures.
+// @TODO(hl): See if it is better to switch to regular ogl procedure approach, where they are global variables
+struct OpenGLRenderer;
 
+// All functions returning pointers malloc result. @TODO(hl): See if we can make their results static and passed as dest parameter
 // Creates window 
 struct SysWindow *sys_create_window(u32 width, u32 height);
 // Initialized opengl 3.3
-struct SysGLCTX  *sys_init_opengl(u32 swap_interval);
+struct SysGLCTX  *sys_init_opengl(struct SysWindow *window, u32 swap_interval);
+struct OpenGLRenderer *sys_create_renderer(struct SysGLCTX *ctx);
 // Polls window events and writes it all in input parameter
 void sys_update_input(struct SysWindow *window, Input *input);
 // Updates window

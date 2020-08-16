@@ -59,5 +59,7 @@ const imm IMM_MAX = INTPTR_MAX;
 #include <stdio.h>
 #include <stdlib.h>
 
+#define struct_member_offset(struct, member)   ((umm)&(((struct *)0)->member))
+
 #define COMMON_H 1
 #endif

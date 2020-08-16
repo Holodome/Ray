@@ -101,6 +101,12 @@ typedef union
         f32 g;
         f32 b;
     };
+	Vec2 xy;
+	struct 
+	{ 
+		f32 __x;
+		Vec2 yz;
+	};
     f32 e[3];
 } Vec3;
 
@@ -115,11 +121,10 @@ inline Vec3 vec3_divs(Vec3 a, f32 b);
 inline Vec3 vec3_muls(Vec3 a, f32 b);
 
 inline f32  vec3_dot(Vec3 a, Vec3 b);
-inline Vec3 vec3_cross(Vec3 a, Vec3 b);
+inline Vec3 cross(Vec3 a, Vec3 b);
 inline f32  vec3_length_sq(Vec3 a);
 inline f32  vec3_length(Vec3 a);
 inline Vec3 vec3_normalize(Vec3 a);
-inline Vec3 vec3_normalize_fast(Vec3 a);
 inline Vec3 vec3_lerp(Vec3 a, Vec3 b, f32 t);
 
 typedef union 
@@ -211,6 +216,165 @@ unit_sphere_get_uv(Vec3 p)
 
 typedef struct 
 {
+	Vec2 min;
+	Vec2 max;
+} Rect2;
+
+
+inline Rect2
+rect2v(Vec2 min, Vec2 max)
+{
+    Rect2 result;
+    result.min = min;
+    result.max = max;
+    return result;
+}
+
+inline Rect2
+rect2(f32 x0, f32 y0, f32 x1, f32 y1)
+{
+    Rect2 result = rect2v(vec2(x0, y0), vec2(x1, y1));
+    return result;
+}
+
+inline Rect2
+rect2_point_sizev(Vec2 point, Vec2 size)
+{
+    Rect2 result = rect2v(point, vec2_add(point, size));
+    return result;
+}
+
+inline Rect2
+rect2_point_size(f32 x, f32 y, f32 w, f32 h)
+{
+    Rect2 result = rect2_point_sizev(vec2(x, y), vec2(w, h));
+    return result;
+}
+
+inline Vec2
+rect2_top_left(Rect2 r)
+{
+    return r.min;
+}
+
+inline Vec2
+rect2_top_right(Rect2 r)
+{
+    return vec2(r.max.x, r.min.y);
+}
+
+inline Vec2
+rect2_bottom_left(Rect2 r)
+{
+    return vec2(r.min.x, r.max.y);
+}
+
+inline Vec2
+rect2_bottom_right(Rect2 r)
+{
+    return r.max;
+}
+
+inline Vec2
+rect2_center(Rect2 r)
+{
+    return vec2_add(r.min, vec2_muls(vec2_sub(r.max, r.min), 0.5f));
+}
+
+inline Vec2
+rect2_size(Rect2 r)
+{
+    return vec2_sub(r.max, r.min);
+}
+
+inline f32
+rect2_width(Rect2 r)
+{
+    return r.max.x - r.min.x;
+}
+
+inline f32
+rect2_height(Rect2 r)
+{
+    return r.max.y - r.min.y;
+}
+
+inline f32
+rect2_center_x(Rect2 r)
+{
+    return r.min.x + (r.max.x - r.min.x) * 0.5f;
+}
+
+inline f32
+rect2_center_y(Rect2 r)
+{
+    return r.min.y + (r.max.y - r.min.y) * 0.5f;
+}
+
+inline void
+rect2_store_pointsa(Rect2 rect, Vec2 points[4])
+{
+    points[0] = rect2_top_left(rect);
+    points[1] = rect2_bottom_left(rect);
+    points[2] = rect2_top_right(rect);
+    points[3] = rect2_bottom_right(rect);
+}
+
+inline void
+rect2_store_points(Rect2 rect,
+                   Vec2 *top_left, Vec2 *bottom_left,
+				   Vec2 *top_right, Vec2 *bottom_right)
+{
+    *top_left = rect2_top_left(rect);
+    *bottom_left = rect2_bottom_left(rect);
+    *top_right = rect2_top_right(rect);
+    *bottom_right = rect2_bottom_right(rect);
+}
+
+inline bool
+rect2_collide_point(Rect2 rect, Vec2 point)
+{
+	bool result = (((rect.min.x < point.x) && (point.x < rect.max.x)) &&
+				   ((rect.min.y < point.y) && (point.x < rect.max.y)));
+	return result;
+}
+
+inline bool
+rect2_collide(Rect2 a, Rect2 b)
+{
+	bool result = true;
+	
+	if ((a.max.x < b.min.x || a.min.x > b.max.x) ||
+		(a.max.y < b.min.y || a.min.y > b.min.y))
+	{
+		result = false;
+	}
+	
+	return result;
+	
+}
+
+inline Rect2
+rect2_move(Rect2 rect, Vec2 dist)
+{
+	Rect2 result = rect2v(vec2_add(rect.min, dist),
+						  vec2_add(rect.max, dist));
+	return result;
+}
+
+inline Rect2
+rect2_clip(Rect2 parent, Rect2 rect)
+{
+    Rect2 result;
+    result.min.x = max(parent.min.x, rect.min.x);
+    result.min.y = max(parent.min.y, rect.min.y);
+    result.max.x = min(parent.max.x, rect.max.x);
+    result.max.y = min(parent.max.y, rect.max.y);
+    return result;
+}
+
+typedef struct 
+{
     Vec3 min;
     Vec3 max;
 } AABB;
@@ -229,6 +393,15 @@ aabb_join(AABB a, AABB b)
     result.max.x = max(a.max.z, b.max.z);
     
     return result;    
+}
+
+inline Vec3 
+vec3_rotate_z(Vec3 v, f32 sin_theta, f32 cos_theta)
+{
+    Vec3 result;
+    result.x = cos_theta * v.x - sin_theta * v.y;
+    result.y = sin_theta * v.x + cos_theta * v.y;
+    return result;
 }
 
 #define MATH_H 1

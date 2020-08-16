@@ -43,10 +43,11 @@ plane_hit(Plane plane, Ray ray, HitRecord *record)
         {
             record->distance = t;
             record->mat_index = plane.mat_index;
-            record->normal = plane.normal;
+            hit_record_set_normal(record, ray, plane.normal);
             record->hit_point = ray_point_at(ray, t);
-            record->uv.u = mod32(record->hit_point.x, 1.0f);
-            record->uv.v = mod32(record->hit_point.y, 1.0f);
+            // @TODO(hl): These are not normalized!!
+            record->uv.u = record->hit_point.x;
+            record->uv.v = record->hit_point.y;
         }
     }
 }
@@ -77,6 +78,7 @@ sphere_hit(Sphere sphere, Ray ray, HitRecord *record)
         {
             record->distance = t;
             record->mat_index = sphere.mat_index;
+            // hit_record_set_normal(record, ray, vec3_normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, record->distance))));
             record->normal = vec3_normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, record->distance)));
             record->hit_point = ray_point_at(ray, t);
             record->uv = unit_sphere_get_uv(vec3_divs(vec3_sub(record->hit_point, sphere.pos), sphere.radius));
@@ -111,7 +113,7 @@ moving_sphere_hit(MovingSphere sphere, Ray ray, HitRecord *record)
         {
             record->distance = t;
             record->mat_index = sphere.mat_index;
-            record->normal = vec3_normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, record->distance)));
+            hit_record_set_normal(record, ray, vec3_normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, record->distance))));
             record->hit_point = ray_point_at(ray, t);
             record->uv = unit_sphere_get_uv(vec3_divs(vec3_sub(record->hit_point, sphere_pos), sphere.radius));
         }
@@ -147,28 +149,6 @@ ray_hit_aabb(AABB aabb, Ray ray, f32 tmin, f32 tmax)
     return result;
 }
 
-void 
-hitable_hit(Hitable *hitable, Ray ray, HitRecord *record)
-{
-    switch(hitable->type)
-    {
-        default: assert(false); break;
-        case Hitable_Sphere:
-        {
-            sphere_hit(hitable->sphere, ray, record);
-        } break;
-        case Hitable_MovingSphere:
-        {
-            moving_sphere_hit(hitable->moving_sphere, ray, record);
-        } break;
-        case Hitable_BVHNode:
-        {
-            
-        } break;
-    }
-}
-
-
 static AABB
 sphere_bounding_box(Sphere sphere, f32 t0, f32 t1)
 {
@@ -197,18 +177,7 @@ moving_sphere_bounding_box(MovingSphere sphere, f32 t0, f32 t1)
     return result;
 }
 
-Vec3 
-ray_surface_normal(Ray ray, Vec3 normal)
-{
-    Vec3 result = normal;
-    if (!(vec3_dot(ray.dir, normal) < 0))
-    {
-        result = vec3_neg(normal);
-    }    
-    return result;
-}
-
-static void
+__attribute__((noinline)) static void
 cast_sample_rays(CastState *state)
 {
     Scene *scene = state->scene;
@@ -273,99 +242,104 @@ cast_sample_rays(CastState *state)
             {
                 Rect rect_ = scene->rects[rect_index];
                 
-                f32 sin_theta = sin32(rect_.rotation_y);
-                f32 cos_theta = cos32(rect_.rotation_y);
+                // f32 sin_theta = sin32(rect_.rotation_y);
+                // f32 cos_theta = cos32(rect_.rotation_y);
                 
                 Ray rotated_ray = ray;
-                rotated_ray.origin.x = cos_theta * ray.origin.x - sin_theta * ray.origin.y;
-                rotated_ray.origin.y = sin_theta * ray.origin.x + cos_theta * ray.origin.y;
+                // rotated_ray.origin.x = cos_theta * ray.origin.x - sin_theta * ray.origin.y;
+                // rotated_ray.origin.y = sin_theta * ray.origin.x + cos_theta * ray.origin.y;
                 
-                rotated_ray.dir.x = cos_theta * ray.dir.x - sin_theta * ray.dir.y;
-                rotated_ray.dir.y = sin_theta * ray.dir.x + cos_theta * ray.dir.y;
+                // rotated_ray.dir.x = cos_theta * ray.dir.x - sin_theta * ray.dir.y;
+                // rotated_ray.dir.y = sin_theta * ray.dir.x + cos_theta * ray.dir.y;
+                
+                u32 a_index = 0;
+                u32 b_index = 1;
+                if (rect_.type == RectType_XZ)
+                {
+                    b_index = 2;
+                }
+                else if (rect_.type == RectType_YZ)
+                {
+                    a_index = 1;
+                    b_index = 2;
+                }
+                u32 c_index = 3 - a_index - b_index;
                 
                 bool made_hit = false;
-                switch(rect_.type)
+                XYRect rect = rect_.xy;
+                f32 t = (rect.k - ray.origin.e[c_index]) / ray.dir.e[c_index];
+                if ((t > min_hit_distance) && (t < hit_record.distance))
                 {
-                    case RectType_XY:
+                    f32 x = rotated_ray.origin.e[a_index] + t * rotated_ray.dir.e[a_index];
+                    f32 y = rotated_ray.origin.e[b_index] + t * rotated_ray.dir.e[b_index];
+                    if ((rect.x0 < x) && (x < rect.x1) && 
+                        (rect.y0 < y) && (y < rect.y1))
                     {
-                        XYRect rect = rect_.xy;
-                        f32 t = (rect.k - ray.origin.z) / ray.dir.z;
-                        if ((t > min_hit_distance) && (t < hit_record.distance))
-                        {
-                            f32 x = rotated_ray.origin.x + t * rotated_ray.dir.x;
-                            f32 y = rotated_ray.origin.y + t * rotated_ray.dir.y;
-                            if ((rect.x0 < x) && (x < rect.x1) && 
-                                (rect.y0 < y) && (y < rect.y1))
-                            {
-                                made_hit = true;
-                                hit_record.distance = t;
-                                hit_record.mat_index = rect.mat_index;
-                                hit_record.normal = ray_surface_normal(rotated_ray, vec3(0, 0, 1));
-                                // hit_record.normal = vec3(0, 0, 1);
-                                hit_record.hit_point = ray_point_at(rotated_ray, t);
-                                hit_record.uv.u = (x - rect.x0) / (rect.x1 - rect.x0);
-                                hit_record.uv.v = (y - rect.y0) / (rect.y1 - rect.y0);
-                            }
-                        }
-                    } break;
-                    case RectType_XZ:
-                    {
-                        XZRect rect = rect_.xz;
-                        f32 t = (rect.k - rotated_ray.origin.y) / rotated_ray.dir.y;
-                        if ((t > min_hit_distance) && (t < hit_record.distance))
-                        {
-                            f32 x = rotated_ray.origin.x + t * rotated_ray.dir.x;
-                            f32 z = rotated_ray.origin.z + t * rotated_ray.dir.z;
-                            if ((rect.x0 < x) && (x < rect.x1) && 
-                                (rect.z0 < z) && (z < rect.z1))
-                            {
-                                made_hit = true;
-                                hit_record.distance = t;
-                                hit_record.mat_index = rect.mat_index;
-                                hit_record.normal = ray_surface_normal(rotated_ray, vec3(0, 1, 0));
-                                // hit_record.normal = vec3(0, 1, 0);
-                                hit_record.hit_point = ray_point_at(rotated_ray, t);
-                                hit_record.uv.u = (x - rect.x0) / (rect.x1 - rect.x0);
-                                hit_record.uv.v = (z - rect.z0) / (rect.z1 - rect.z0);
-                            }
-                        }
-                    } break;
-                    case RectType_YZ:
-                    {
-                        YZRect rect = rect_.yz;
-                        f32 t = (rect.k - rotated_ray.origin.x) / rotated_ray.dir.x;
-                        if ((t > min_hit_distance) && (t < hit_record.distance))
-                        {
-                            f32 y = rotated_ray.origin.y + t * rotated_ray.dir.y;
-                            f32 z = rotated_ray.origin.z + t * rotated_ray.dir.z;
-                            if ((rect.y0 < y) && (y < rect.y1) && 
-                                (rect.z0 < z) && (z < rect.z1))
-                            {
-                                made_hit = true;
-                                hit_record.distance = t;
-                                hit_record.mat_index = rect.mat_index;
-                                hit_record.normal = ray_surface_normal(rotated_ray, vec3(1, 0, 0));
-                                // hit_record.normal = vec3(1, 0, 0);
-                                hit_record.hit_point = ray_point_at(rotated_ray, t);
-                                hit_record.uv.u = (y - rect.y0) / (rect.y1 - rect.y0);
-                                hit_record.uv.v = (z - rect.z0) / (rect.z1 - rect.z0);
-                            }
-                        }
-                    } break;
+                        made_hit = true;
+                        hit_record.distance = t;
+                        hit_record.mat_index = rect.mat_index;
+                        
+                        Vec3 plane_normal = { 0 };
+                        plane_normal.e[c_index] = 1;
+                        
+                        hit_record_set_normal(&hit_record, ray, plane_normal);
+                        hit_record.hit_point = ray_point_at(rotated_ray, t);
+                        hit_record.uv.u = (x - rect.x0) / (rect.x1 - rect.x0);
+                        hit_record.uv.v = (y - rect.y0) / (rect.y1 - rect.y0);
+                    }
                 }
-                
-                if (made_hit)
+                // if (made_hit)
+                // {
+                //     Vec3 hit_point = hit_record.hit_point;
+                //     Vec3 normal = hit_record.normal;
+                    
+                //     hit_record.hit_point.x =  cos_theta * hit_point.x + sin_theta * hit_point.y;
+                //     hit_record.hit_point.y = -sin_theta * hit_point.x + cos_theta * hit_point.y;
+                    
+                //     normal.x =  cos_theta * normal.x + sin_theta * normal.y;
+                //     normal.y = -sin_theta * normal.x + cos_theta * normal.y;
+                    
+                //     hit_record_set_normal(&hit_record, ray, normal);
+                // }
+            }
+
+            // @TODO(hl): Not tested!
+            for (u32 triangle_index = 0;
+                 triangle_index < scene->triangle_count;
+                 ++triangle_index)
+            {
+                // https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
+                Triangle triangle = scene->triangles[triangle_index];
+                Vec3 edge1 = vec3_sub(triangle.vertex1, triangle.vertex0);
+                Vec3 edge2 = vec3_sub(triangle.vertex2, triangle.vertex0);
+                Vec3 h = cross(ray.dir, edge2);
+                f32  a = vec3_dot(edge1, h);
+                if ((a < -tolerance) > (a > tolerance))
                 {
-                    Vec3 hit_point = hit_record.hit_point;
-                    Vec3 normal = hit_record.normal;
-                    
-                    hit_record.hit_point.x =  cos_theta * hit_point.x + sin_theta * hit_point.y;
-                    hit_record.hit_point.y = -sin_theta * hit_point.x + cos_theta * hit_point.y;
-                    
-                    normal.x =  cos_theta * normal.x + sin_theta * normal.y;
-                    normal.y = -sin_theta * normal.x + cos_theta * normal.y;
-                    
-                    hit_record.normal = ray_surface_normal(rotated_ray, normal);
+                    f32  f = 1.0f / a;
+                    Vec3 s = vec3_sub(ray.origin, triangle.vertex0);
+                    f32  u = f * vec3_dot(s, h);
+                    if ((0 < u) && (u < 1))
+                    {
+                        Vec3 q = cross(s, edge1);
+                        f32  v = f * vec3_dot(ray.dir, q);
+                        if ((v > 0) && (u + v < 1))
+                        {
+                            f32 t = f * vec3_dot(edge2, q);
+                            if ((t > min_hit_distance) && (t < hit_record.distance))
+                            {
+                                Vec3 normal = cross(edge1, edge2);
+                                
+                                hit_record.distance = t;
+                                hit_record.mat_index = triangle.mat_index;
+                                // @TODO(hl): Have normal be per-triangle
+                                hit_record.normal    = normal;
+                                hit_record.hit_point = ray_point_at(ray, t);
+                                // @TODO(hl): Get UV from vertex
+                                // record->uv = ;
+                            }
+                        }
+                    }
                 }
             }
 
@@ -375,6 +349,7 @@ cast_sample_rays(CastState *state)
 
                 ray.origin = hit_record.hit_point;
 
+                
                 // Decide if we want to refract or reflect
                 // Check if refraction_probability != 0 (it is OK to compare floats against constants)
                 if ((mat.refraction_probability != 0.0f)) //&& (random_unitlateral(&series) <= mat.refraction_probability))
@@ -613,8 +588,8 @@ void init_sample_scene(Scene *scene, ImageU32 *image)
     // @NOTE(hl): Create coordinate system for camera.
     // These are unit vectors of 3 axes of our coordinate system
     camera.camera_z = vec3_normalize(camera.camera_pos);
-    camera.camera_x = vec3_normalize(vec3_cross(vec3(0, 0, 1), camera.camera_z));
-    camera.camera_y = vec3_normalize(vec3_cross(camera.camera_z, camera.camera_x));
+    camera.camera_x = vec3_normalize(cross(vec3(0, 0, 1), camera.camera_z));
+    camera.camera_y = vec3_normalize(cross(camera.camera_z, camera.camera_x));
     camera.film_center = vec3_sub(camera.camera_pos, camera.camera_z);
 
     // Apply image aspect ratio
@@ -736,7 +711,7 @@ make_colonel_box(Scene *scene, ImageU32 *image)
     materials[6].refraction_probability = 1.0f;
 
     
-    static Rect rects[12] = { 0 };
+    static Rect rects[6] = { 0 };
     rects[0] = (Rect) { 
         .type = RectType_YZ,
         .yz   = (YZRect) {
@@ -804,17 +779,17 @@ make_colonel_box(Scene *scene, ImageU32 *image)
         }
     };
     
-    static Sphere spheres[1] = { 0 };
+    static Sphere spheres[2] = { 0 };
     spheres[0] = (Sphere) {
-        .mat_index = 6,
+        .mat_index = 5,
         .pos = vec3(2.1f, -2.3f, -3.5f),
         .radius = 1.5f
     };
-    // spheres[1] = (Sphere) {
-    //     .mat_index = 6,
-    //     .pos = vec3(-1.25f, 2.0f, -3.0f),
-    //     .radius = 2.0f
-    // };
+    spheres[1] = (Sphere) {
+        .mat_index = 6,
+        .pos = vec3(-1.25f, 2.0f, -3.0f),
+        .radius = 2.0f
+    };
     scene->sphere_count = array_size(spheres);
     scene->spheres = spheres;
     
@@ -823,11 +798,11 @@ make_colonel_box(Scene *scene, ImageU32 *image)
     //     .max = vec3(3.5f, -0.9f, -2.0f)
     // };
     // add_box(rects + 6, box0, 2,  0.261799f * 1.3f);
-    AABB box1 = {
-        .min = vec3(-2.75f, 0.3f, -5.0f),
-        .max = vec3(  0.2f, 3.3f,  0.95f)
-    };
-    add_box(rects + 6, box1, 2, -0.314159265f);
+    // AABB box1 = {
+    //     .min = vec3(-2.75f, 0.3f, -5.0f),
+    //     .max = vec3(  0.2f, 3.3f,  0.95f)
+    // };
+    // add_box(rects + 6, box1, 2, -0.314159265f);
      
     Camera camera;
     camera.time0 = 0;
@@ -837,8 +812,8 @@ make_colonel_box(Scene *scene, ImageU32 *image)
     // @NOTE(hl): Create coordinate system for camera.
     // These are unit vectors of 3 axes of our coordinate system
     camera.camera_z = vec3_normalize(camera.camera_pos);
-    camera.camera_x = vec3_normalize(vec3_cross(vec3(0, 0, 1), camera.camera_z));
-    camera.camera_y = vec3_normalize(vec3_cross(camera.camera_z, camera.camera_x));
+    camera.camera_x = vec3_normalize(cross(vec3(0, 0, 1), camera.camera_z));
+    camera.camera_y = vec3_normalize(cross(camera.camera_z, camera.camera_x));
     camera.film_center = vec3_sub(camera.camera_pos, camera.camera_z);
 
     // Apply image aspect ratio
@@ -870,7 +845,7 @@ int main(int argc, char **argv)
     
     // Raycasting output is simply an image
     ImageU32 image = {0};
-    image_u32_init(&image, 1500, 1500);
+    image_u32_init(&image, 600, 600);
 
     // Initialize scene
     Scene scene = {0};

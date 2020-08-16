@@ -43,10 +43,7 @@ TEXTURE_PROC(texture_proc_checkered)
 {
     Vec3 result;
     
-    // f32 coef = 1.0f;
-    // f32 sines = sinf(coef * point.x) * sinf(coef * point.y) * sinf(coef * point.z);
-    // printf("%f : %f %f %f : %f %f %f\n", sines, coef * point.x, coef * point.y, coef * point.z, sinf(coef * point.x), sinf(coef * point.y), sinf(coef * point.z));
-    
+    // @TODO(hl): -1 - 1 range of abs parameter is mirrored. Find other algorithm
     if ((mod32(abs32(point.x + 10000.0f), 2.0f) > 1.0f) - (mod32(abs32(point.y + 10000.0f), 2.0f) > 1.0f))
     {
         result = texture->checkered1;
@@ -194,7 +191,7 @@ typedef struct
 } Camera;
 
 // Returns ray from cemera center aimed on position on film
-Ray camera_ray_at(Camera *camera, f32 film_x, f32 film_y, RandomSeries *series);
+inline Ray camera_ray_at(Camera *camera, f32 film_x, f32 film_y, RandomSeries *series);
 
 
 typedef struct 
@@ -248,6 +245,15 @@ typedef struct
     f32 rotation_y;
 } Rect;
 
+typedef struct 
+{
+    Vec3 vertex0;
+    Vec3 vertex1;
+    Vec3 vertex2;
+    
+    u32 mat_index;
+} Triangle;
+
 // World that we are simulating
 typedef struct
 {
@@ -267,6 +273,9 @@ typedef struct
     
     u32 rect_count;
     Rect *rects;
+    
+    u32 triangle_count;
+    Triangle *triangles;
 } Scene;
 
 // Data that is passed to raycating function
@@ -292,8 +301,23 @@ typedef struct
     // UV coordinates of hit position
     Vec2 uv;
     Vec3 hit_point;
+    
+    bool front_face;
 } HitRecord;
 
+inline void 
+hit_record_set_normal(HitRecord *record, Ray ray, Vec3 normal)
+{
+    bool front_face = true;
+    if (!(vec3_dot(ray.dir, normal) < 0))
+    {
+        front_face = false;
+        normal = vec3_neg(normal);
+    }
+    
+    record->front_face = front_face;
+    record->normal = normal;
+}
 inline bool has_hit(HitRecord record) { return (record.mat_index != 0); }
 
 typedef u32 HitableType;
