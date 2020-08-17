@@ -91,7 +91,7 @@ of the values output here will give you the bit-exact double back.
 
 One difference is that our insignificant digits will be different than
 with MSVC or GCC (but they don't match each other either).  We also
-don't attempt to find the minimum length matching float (pre-MSVC15
+don't attempt to find the min length matching float (pre-MSVC15
 doesn't either).
 
 If you don't need float or doubles at all, define STB_SPRINTF_NOFLOAT

@@ -2,8 +2,7 @@
 
 #include "thirdparty/glcorearb.h"
 
-typedef struct 
-{
+typedef struct {
 
 #define GLProc(name, type) type name;
 #include "editor/renderer/gl_proc_list.inc"

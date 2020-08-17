@@ -263,8 +263,7 @@ STBIWDEF void stbi_flip_vertically_on_write(int flag)
    stbi__flip_vertically_on_write = flag;
 }
 
-typedef struct
-{
+typedef struct {
    stbi_write_func *func;
    void *context;
    unsigned char buffer[64];

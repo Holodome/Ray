@@ -34,8 +34,8 @@ typedef Vec3 LaneVec3;
 #define lane_f32_from_lane_u32(a) ((LaneF32)a)
 #define lane_f32_lt(a, b)     lane_u32((a) < (b))
 #define lane_f32_gt(a, b)     lane_u32((a) > (b))
-#define lane_f32_max(a, b)    maximum(a, b)
-#define lane_f32_min(a, b)    minimum(a, b)
+#define lane_f32_max(a, b)    max(a, b)
+#define lane_f32_min(a, b)    min(a, b)
 
 #define lane_u32(a)           ((LaneU32)(a))
 #define lane_u32_neg(a)       (-(a))
@@ -73,8 +73,7 @@ typedef Vec3 LaneVec3;
 
 typedef __m128i LaneU32;
 typedef __m128  LaneF32;
-typedef struct 
-{
+typedef struct {
     LaneF32 x;
     LaneF32 y;
     LaneF32 z;
@@ -84,8 +83,7 @@ typedef struct
 
 typedef __m256i LaneU32;
 typedef __m256  LaneF32;
-typedef struct 
-{
+typedef struct {
     LaneF32 x;
     LaneF32 y;
     LaneF32 z;

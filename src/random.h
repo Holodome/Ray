@@ -10,8 +10,7 @@
 // However, rand from CRT does not use any state structure - thats because it 
 // holds its state in thread local storage, which is actually the slowes part of rand
 // By making our own RNG, we also have to take care of state, while also gaining massive speed increase
-typedef struct 
-{
+typedef struct {
     u32 state;
 } RandomSeries;
 

@@ -44,8 +44,7 @@ static_assert(TARGET_OS_MAC, "Only MacOS build on apple platforms is supported")
 #error "Unknown OS"
 #endif
 
-typedef struct 
-{
+typedef struct {
     bool is_down;
     u8   transition_count;
 } KeyState;
@@ -72,29 +71,40 @@ is_key_pressed_(KeyState key, bool repeat)
 	return (result);
 }
 
+typedef u8 KeyboardModifier;
+enum {
+	KeyboardModifier_Alt,
+	KeyboardModifier_Control,
+	KeyboardModifier_Shift,
+	// @NOTE(hl): Windows key
+	KeyboardModifier_Super,
+	KeyboardModifier_Count
+};
+
 // Way of supplying input to application.
 // This is not how it is ususally done: SDL uses event system and GLFW uses callbacks.
 // By defining struct that contains all separate input events we can easilly obtain all data we actually need
-typedef struct 
-{
-    union 
-    {
+typedef struct {
+    union {
         Vec2 mouse_pos;
         struct { f32 mouse_x, mouse_y; };
     };
-    union
-    {
+    union {
         Vec2 mouse_delta;  
         struct { f32 mouse_delta_x, mouse_delta_y; };
     };
     f32 mouse_wheel;
     u32 utf32_input[16];
     KeyState keys[Key_Count];
+    bool modifiers[KeyboardModifier_Count];
     
     Vec2 window_size;
     bool has_focus;
     bool is_quit_requested;
     
+    f32 dt;
+    f32 time;
+    clock_t frame_start_time;
 } Input;
 
 // 
@@ -113,8 +123,7 @@ typedef struct
 
 typedef THREAD_PROC_SIGNATURE(ThreadProc);
 
-typedef struct 
-{
+typedef struct {
     u32 id;  
 } Thread;
 

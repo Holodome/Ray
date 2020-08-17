@@ -5,8 +5,7 @@
 #include "random.h"
 #include "image.h"
 
-typedef struct
-{
+typedef struct {
     Vec3 origin;
     Vec3 dir;
 
@@ -124,8 +123,7 @@ texture_image(char *filename)
     return result;
 }
 
-typedef struct
-{
+typedef struct {
     // Lambertian reflection
     // 0 is pure diffuse, 1 is pure specular
     // @NOTE(hl): Actually this is more 'not scatter'
@@ -142,8 +140,7 @@ typedef struct
     Texture texture;
 } Material;
 
-typedef struct
-{
+typedef struct {
     Vec3 normal;
     // Distance along normal, from origin
     f32 dist;
@@ -151,16 +148,14 @@ typedef struct
     u32 mat_index;
 } Plane;
 
-typedef struct
-{
+typedef struct {
     Vec3 pos;
     f32 radius;
 
     u32 mat_index;
 } Sphere;
 
-typedef struct 
-{
+typedef struct {
     Vec3 center0;
     Vec3 center1;
     f32 time0;
@@ -172,8 +167,7 @@ typedef struct
 
 inline Vec3 moving_sphere_center(MovingSphere *sphere, f32 time);
 
-typedef struct
-{
+typedef struct {
     Vec3 camera_pos;
     Vec3 camera_x;
     Vec3 camera_y;
@@ -194,8 +188,7 @@ typedef struct
 inline Ray camera_ray_at(Camera *camera, f32 film_x, f32 film_y, RandomSeries *series);
 
 
-typedef struct 
-{
+typedef struct {
     f32 x0;
     f32 y0;
     f32 x1;
@@ -204,8 +197,7 @@ typedef struct
     u32 mat_index;
 } XYRect; 
 
-typedef struct 
-{
+typedef struct {
     f32 x0;
     f32 z0;
     f32 x1;
@@ -214,8 +206,7 @@ typedef struct
     u32 mat_index;
 } XZRect; 
 
-typedef struct 
-{
+typedef struct {
     f32 y0;
     f32 z0;
     f32 y1;
@@ -232,8 +223,7 @@ enum
     RectType_YZ
 };
 
-typedef struct 
-{
+typedef struct {
     RectType type;
     union 
     {
@@ -245,8 +235,7 @@ typedef struct
     f32 rotation_y;
 } Rect;
 
-typedef struct 
-{
+typedef struct {
     Vec3 vertex0;
     Vec3 vertex1;
     Vec3 vertex2;
@@ -255,8 +244,7 @@ typedef struct
 } Triangle;
 
 // World that we are simulating
-typedef struct
-{
+typedef struct {
     Camera camera;
 
     u32 material_count;
@@ -279,8 +267,7 @@ typedef struct
 } Scene;
 
 // Data that is passed to raycating function
-typedef struct
-{
+typedef struct {
     Scene *scene;
     u32 rays_per_pixel;
     u32 max_bounce_count;
@@ -293,8 +280,7 @@ typedef struct
     u64 bounces_computed;
 } CastState;
 
-typedef struct
-{
+typedef struct {
     Vec3 normal;
     u32 mat_index;
     f32 distance;
@@ -330,8 +316,7 @@ enum
 
 struct Hitable;
 
-typedef struct
-{
+typedef struct {
     struct Hitable *left;
     struct Hitable *right;
     AABB            box;

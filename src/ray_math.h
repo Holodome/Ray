@@ -53,15 +53,12 @@ inline f32 clamp(f32 a, f32 low, f32 high);
 inline f32 clamp01(f32 a);
 inline f32 abs32(f32 a);
 
-typedef union 
-{
-    struct 
-    {
+typedef union {
+    struct {
         f32 x;
         f32 y;
     };
-    struct 
-    {
+    struct {
         f32 u;
         f32 v;
     };
@@ -87,23 +84,19 @@ inline Vec2 vec2_mul(Vec2 a, Vec2 b);
 inline Vec2 vec2_divs(Vec2 a, f32 b);
 inline Vec2 vec2_muls(Vec2 a, f32 b);
 
-typedef union 
-{
-    struct
-    {
+typedef union {
+    struct {
         f32 x;
         f32 y;
         f32 z;
     };
-    struct
-    {
+    struct {
         f32 r;
         f32 g;
         f32 b;
     };
 	Vec2 xy;
-	struct 
-	{ 
+	struct { 
 		f32 __x;
 		Vec2 yz;
 	};
@@ -126,6 +119,8 @@ inline f32  vec3_length_sq(Vec3 a);
 inline f32  vec3_length(Vec3 a);
 inline Vec3 vec3_normalize(Vec3 a);
 inline Vec3 vec3_lerp(Vec3 a, Vec3 b, f32 t);
+
+inline Vec3 vec3_from_vec2(Vec2 xy, f32 z) { return (Vec3){ .x = xy.x, .y = xy.y, .z = z }; }
 
 typedef union 
 {
@@ -214,8 +209,7 @@ unit_sphere_get_uv(Vec3 p)
     return result;    
 }
 
-typedef struct 
-{
+typedef struct {
 	Vec2 min;
 	Vec2 max;
 } Rect2;
@@ -373,8 +367,7 @@ rect2_clip(Rect2 parent, Rect2 rect)
     return result;
 }
 
-typedef struct 
-{
+typedef struct {
     Vec3 min;
     Vec3 max;
 } AABB;

@@ -1,5 +1,7 @@
 #include "editor/renderer/opengl.h"
 
+#include "font.h"
+
 static RendererCommandHeader *
 push_buffer(OpenGLRenderer *renderer, umm data_size)
 {
@@ -200,18 +202,20 @@ push_triangle(OpenGLRenderer *renderer,
 			  empty_texture);
 }
 
-#if 0 
-
 static void
 push_text(OpenGLRenderer *renderer, Vec2 position, Vec4 color,
-		  char *text, AssetFont *font, f32 scale)
+		  char *text, struct Font *font, f32 scale)
 {
 	f32 line_height = font->height * scale;
 	
-	f32 rwidth  = reciprocal(cast(f32)font->atlas.size.x);
-	f32 rheight = reciprocal(cast(f32)font->atlas.size.y);
+	f32 rwidth  = reciprocal32(font->atlas.width);
+	f32 rheight = reciprocal32(font->atlas.width);
 	
-	Vec3 offset = vec3_from_vec2(position, 0);
+	Vec3 offset = { 
+        .x = position.x,
+        .y = position.y,
+        .z = 0
+    };
 	offset.y += line_height;
 	
 	for (char *scan = text;
@@ -249,9 +253,6 @@ push_text(OpenGLRenderer *renderer, Vec2 position, Vec4 color,
 		}
 	}
 }
-
-#endif 
-
 
 static void
 push_clip_rect(OpenGLRenderer *renderer, Rect2 rect)

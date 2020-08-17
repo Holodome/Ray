@@ -54,10 +54,38 @@ const imm IMM_MAX = INTPTR_MAX;
 #define format_string(dest, size, ...)               stbsp_snprintf(dest, size, __VA_ARGS__)
 #define format_string_list(dest, size, format, args) stbsp_vsnprintf(dest, size, format, args)
 
+
+#define cstring_copy_static(a, source) cstring_copy(array_size(a), a, source)
+#define cstring_copy_n_static(a, source, source_size) cstring_copy_n(array_size(a), a, source, source_size)
+inline char *
+cstring_copy(u64 dest_size, char *dest, char *source)
+{
+	while (dest_size-- && *source)
+	{
+		*dest++ = *source++;
+	}
+	*dest = 0;
+	return dest;
+}
+
+inline char *
+cstring_copy_n(u64 dest_size, char *dest, char *source, u64 source_size)
+{
+	while (dest_size-- && source_size-- && *source)
+	{
+		*dest++ = *source++;
+	}
+	*dest = 0;
+	return dest;
+}
+
 #include <assert.h>
 
 #include <stdio.h>
 #include <stdlib.h>
+
+#include <ctype.h>
+#include <time.h>
 
 #define struct_member_offset(struct, member)   ((umm)&(((struct *)0)->member))
 

@@ -377,8 +377,7 @@ extern "C" {
 // load image by filename, open file, or memory buffer
 //
 
-typedef struct
-{
+typedef struct {
    int      (*read)  (void *user,char *data,int size);   // fill 'data' with 'size' bytes.  return number of bytes actually read
    void     (*skip)  (void *user,int n);                 // skip the next 'n' bytes, or 'unget' the last -n bytes if negative
    int      (*eof)   (void *user);                       // returns nonzero if we are at end of file/data
@@ -766,8 +765,7 @@ static int stbi__sse2_available(void)
 
 // stbi__context structure is our basic context used by all images, so it
 // contains all the IO context, plus some basic image information
-typedef struct
-{
+typedef struct {
    stbi__uint32 img_x, img_y;
    int img_n, img_out_n;
 
@@ -862,8 +860,7 @@ enum
    STBI_ORDER_BGR
 };
 
-typedef struct
-{
+typedef struct {
    int bits_per_channel;
    int num_channels;
    int channel_order;
@@ -1874,8 +1871,7 @@ static stbi_uc *stbi__hdr_to_ldr(float   *data, int x, int y, int comp)
 // huffman decoding acceleration
 #define FAST_BITS   9  // larger handles more cases; smaller stomps less cache
 
-typedef struct
-{
+typedef struct {
    stbi_uc  fast[1 << FAST_BITS];
    // weirdly, repacking this into AoS is a 10% speed loss, instead of a win
    stbi__uint16 code[256];
@@ -1885,8 +1881,7 @@ typedef struct
    int    delta[17];   // old 'firstsymbol' - old 'firstcode'
 } stbi__huffman;
 
-typedef struct
-{
+typedef struct {
    stbi__context *s;
    stbi__huffman huff_dc[4];
    stbi__huffman huff_ac[4];
@@ -3744,8 +3739,7 @@ static void stbi__cleanup_jpeg(stbi__jpeg *j)
    stbi__free_jpeg_components(j, j->s->img_n, 0);
 }
 
-typedef struct
-{
+typedef struct {
    resample_row_func resample;
    stbi_uc *line0,*line1;
    int hs,vs;   // expansion factor in each axis
@@ -3982,8 +3976,7 @@ static int stbi__jpeg_info(stbi__context *s, int *x, int *y, int *comp)
 
 // zlib-style huffman encoding
 // (jpegs packs from left, zlib from right, so can't share code)
-typedef struct
-{
+typedef struct {
    stbi__uint16 fast[1 << STBI__ZFAST_BITS];
    stbi__uint16 firstcode[16];
    int maxcode[17];
@@ -4062,8 +4055,7 @@ static int stbi__zbuild_huffman(stbi__zhuffman *z, const stbi_uc *sizelist, int 
 //    we require PNG read all the IDATs and combine them into a single
 //    memory buffer
 
-typedef struct
-{
+typedef struct {
    stbi_uc *zbuffer, *zbuffer_end;
    int num_bits;
    stbi__uint32 code_buffer;
@@ -4228,7 +4220,7 @@ static int stbi__compute_huffman_codes(stbi__zbuf *a)
 {
    static const stbi_uc length_dezigzag[19] = { 16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15 };
    stbi__zhuffman z_codelength;
-   stbi_uc lencodes[286+32+137];//padding for maximum single op
+   stbi_uc lencodes[286+32+137];//padding for max single op
    stbi_uc codelength_sizes[19];
    int i,n;
 
@@ -4471,8 +4463,7 @@ STBIDEF int stbi_zlib_decode_noheader_buffer(char *obuffer, int olen, const char
 //      - uses stb_zlib, a PD zlib implementation with fast huffman decoding
 
 #ifndef STBI_NO_PNG
-typedef struct
-{
+typedef struct {
    stbi__uint32 length;
    stbi__uint32 type;
 } stbi__pngchunk;
@@ -4494,8 +4485,7 @@ static int stbi__check_png_header(stbi__context *s)
    return 1;
 }
 
-typedef struct
-{
+typedef struct {
    stbi__context *s;
    stbi_uc *idata, *expanded, *out;
    int depth;
@@ -5265,8 +5255,7 @@ static int stbi__shiftsigned(unsigned int v, int shift, int bits)
    return (int) ((unsigned) v * mul_table[bits]) >> shift_table[bits];
 }
 
-typedef struct
-{
+typedef struct {
    int bpp, offset, hsz;
    unsigned int mr,mg,mb,ma, all_a;
    int extra_read;
@@ -6178,8 +6167,7 @@ static int stbi__pic_test_core(stbi__context *s)
    return 1;
 }
 
-typedef struct
-{
+typedef struct {
    stbi_uc size,type,channel;
 } stbi__pic_packet;
 
@@ -6368,15 +6356,13 @@ static int stbi__pic_test(stbi__context *s)
 // GIF loader -- public domain by Jean-Marc Lienher -- simplified/shrunk by stb
 
 #ifndef STBI_NO_GIF
-typedef struct
-{
+typedef struct {
    stbi__int16 prefix;
    stbi_uc first;
    stbi_uc suffix;
 } stbi__gif_lzw;
 
-typedef struct
-{
+typedef struct {
    int w,h;
    stbi_uc *out;                 // output buffer (always 4 components)
    stbi_uc *background;          // The current "background" as far as a gif is concerned

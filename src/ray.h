@@ -6,8 +6,7 @@
 #include "sys.h"
 
 // Single work order from multithreaded rendering system
-typedef struct
-{
+typedef struct {
     // Lockless data
     Scene *scene;
     ImageU32 *image;
@@ -21,8 +20,7 @@ typedef struct
 } RenderWorkOrder;
 
 // Per-program work queue
-typedef struct
-{
+typedef struct {
     // Total work orders
     u32 work_order_count;
     RenderWorkOrder *work_orders;

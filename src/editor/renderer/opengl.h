@@ -4,8 +4,9 @@
 #include "ray_math.h"
 #include "editor/renderer/opengl_api.h"
 
-typedef struct 
-{
+struct Font;
+
+typedef struct {
 	u32 index;
 	u16 width;
 	u16 height;
@@ -13,16 +14,14 @@ typedef struct
 
 #define empty_texture ((OpenGLTexture) { .index = U32_MAX, .width = 0, .height = 0 })
 
-typedef struct 
-{
+typedef struct {
 	Vec3 pos;
 	Vec2 uv;
 	u32  packed_color;
 	u16  texture_index;
 } OpenGLVertex;
 
-typedef struct 
-{
+typedef struct {
     i32 version_major;
     i32 version_minor;
     char *version_string;
@@ -38,8 +37,7 @@ typedef struct
     GLint max_viewports;
 } OpenGLInfo;
 
-typedef struct 
-{
+typedef struct {
 	GLuint handle;
 	
 	GLint mvp_location;
@@ -47,29 +45,25 @@ typedef struct
 } OpenGLQuadShader;
 
 typedef u32 RendererCommandType;
-enum 
-{
+enum {
 	RendererCommand_RendererCommandQuads,
 };
 
 
-typedef struct 
-{
+typedef struct {
 	RendererCommandType type;
 } RendererCommandHeader;
 
 // @NOTE(hl): Reason quads is a separate command is that we want the most performant way of drawing them for UI and other small stuff.
 
-typedef struct 
-{
+typedef struct {
 	u64 vertex_array_offset;
 	u64 index_array_offset;
 	
 	u32 quad_count;
 } RendererCommandQuads;
 
-typedef struct OpenGLRenderer
-{
+typedef struct OpenGLRenderer {
 	// @NOTE(hl): Per-frame state data
 	u64 request_buffer_size;
 	u8 *request_buffer_base;
@@ -109,7 +103,6 @@ typedef struct OpenGLRenderer
 
 const Vec2 opengl_texture_size = { .x = 512, .y = 512 };
 
-
 void push_quad(OpenGLRenderer *renderer,
 			   Vec3 v00, Vec3 v01, Vec3 v10, Vec3 v11,
 			   Vec4 c00, Vec4 c01, Vec4 c10, Vec4 c11,
@@ -121,7 +114,7 @@ void push_quadr(OpenGLRenderer *renderer,
 				OpenGLTexture texture);
 
 void push_text(OpenGLRenderer *renderer, Vec2 position, Vec4 color,
-			   char *text, struct AssetFont *font, f32 scale);
+			   char *text, struct Font *font, f32 scale);
 
 void push_clip_rect(OpenGLRenderer *renderer, Rect2 rect);
 void pop_clip_rect(OpenGLRenderer *renderer);
