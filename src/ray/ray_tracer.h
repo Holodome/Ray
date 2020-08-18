@@ -1,8 +1,8 @@
 #if !defined(RAY_TRACER_H)
 
-#include "common.h"
-#include "ray_math.h"
-#include "random.h"
+#include "lib/common.h"
+#include "lib/ray_math.h"
+#include "lib/random.h"
 #include "image.h"
 
 typedef struct {
@@ -22,15 +22,24 @@ struct Texture;
 #define TEXTURE_PROC(name) Vec3 name(struct Texture *texture, Vec2 uv, Vec3 point)
 typedef TEXTURE_PROC(TextureProc);
 
-typedef struct Texture
-{
+typedef u8 TextureType;
+enum {
+    Texture_Solid,
+    Texture_Checkered,
+    Texture_Image
+};
+
+typedef struct Texture {
+    TextureType type;
     TextureProc *proc;
-    union 
-    {
+    union {
         Vec3 solid_color;
-        ImageU32 image;
         struct 
         {
+            ImageU32 image;
+            char *filename;
+        };
+        struct {
             Vec3 checkered1;
             Vec3 checkered2;
         };
@@ -97,7 +106,8 @@ texture_solid_color(Vec3 color)
 { 
     Texture result = { 
         .proc = texture_proc_solid_color,
-        .solid_color = color 
+        .solid_color = color,
+        .type = Texture_Solid
     }; 
     return result;
 }
@@ -108,7 +118,8 @@ texture_checkered(Vec3 checkered1, Vec3 checkered2)
     Texture result = {
         .proc = texture_proc_checkered,
         .checkered1 = checkered1,
-        .checkered2 = checkered2  
+        .checkered2 = checkered2,
+        .type = Texture_Checkered
     };
     return result;
 }
@@ -118,6 +129,8 @@ texture_image(char *filename)
 {
     Texture result = {
         .proc = texture_proc_image,
+        .filename = filename,
+        .type = Texture_Image
     };
     image_u32_load(&result.image, filename);
     return result;

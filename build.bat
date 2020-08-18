@@ -16,8 +16,8 @@ set "BuildOptions= %CompilerSwitches% -gcodeview -O0 -mfpmath=sse -I../src %Disa
 REM Build .lib's if not present
 
 
-rem clang -g %BuildOptions% -o ray.exe ../src/ray.c 
-clang -g %BuildOptions% -o editor.exe ../src/editor/editor.c 
+clang -g %BuildOptions% -o ray.exe ../src/ray/ray.c 
+REM clang -g %BuildOptions% -o editor.exe ../src/editor/editor.c 
 
 popd 
 

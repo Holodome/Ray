@@ -2,8 +2,9 @@
 
 #include <time.h>
 
-#include "ray_tracer.h"
-#include "sys.h"
+#include "ray/ray_tracer.h"
+#include "ray/scene_file.h"
+#include "lib/sys.h"
 
 // Single work order from multithreaded rendering system
 typedef struct {
@@ -31,6 +32,8 @@ typedef struct {
     // How many orders are finished
     volatile u64 tile_retired_count;
 } RenderWorkQueue;
+
+void scene_init_from_file(Scene *scene, ImageU32 *image, char *filename);
 
 #define RAY_H 1
 #endif
