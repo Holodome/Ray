@@ -69,10 +69,14 @@ typedef struct {
 } SceneFileTriangle;
 
 typedef struct {
+    Vec3 pos;
+} SceneFileCamera;
+
+typedef struct {
     u32 magic_number;
     u32 version;
     
-    u32 _reserved[10];
+    SceneFileCamera camera;
     
     u64 material_count;
     u64 sphere_count;
@@ -80,41 +84,15 @@ typedef struct {
     u64 aarect_count;
     u64 triangle_count;
     
-    u64 _reserved1[10];
-        
     u64 materials_loc;
     u64 spheres_loc;
     u64 planes_loc;
     u64 aarects_loc;
     u64 triangles_loc;
     
-    u64 _reserved2[10];
 } SceneFileHeader;
 
 #pragma pack(pop)
-
-#if 0 
-
-void read_example(char *filename)
-{
-    FILE *file = fopen(filename, "rb");
-    assert(file);
-    SceneFileHeader header;
-    fread(&header, sizeof(header), 1, file);
-    
-    assert(header.magic_number == SCENE_FILE_MAGIC_NUMBER);
-    assert(header.version == SCENE_FILE_VERSION);
-    
-    SceneFileMaterial *materials = (SceneFileMaterial *)calloc(header.material_count, sizeof(SceneFileMaterial));
-    fseek(file, header.materials_loc, SEEK_SET);
-    fread(materials, sizeof(SceneFileMaterial), header.material_count, file);
-    
-    // ...
-    // ...
-    // ...
-}
-
-#endif 
 
 #define SCENE_FILE_H 1
 #endif

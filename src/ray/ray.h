@@ -33,6 +33,14 @@ typedef struct {
     volatile u64 tile_retired_count;
 } RenderWorkQueue;
 
+typedef struct {
+    char *output_filename;
+    u32   output_width;
+    u32   output_height;
+    
+    char *input_scene;
+} RaySettings;
+
 void scene_init_from_file(Scene *scene, ImageU32 *image, char *filename);
 
 #define RAY_H 1

@@ -511,6 +511,10 @@ scene_write_to_asset_file(Scene *scene, char *filename)
     header.aarect_count = rect_count;
     header.triangle_count = triangle_count;
     
+    SceneFileCamera camera;
+    camera.pos = scene->camera.camera_pos;
+    header.camera = camera;
+    
     u64 materials_size = sizeof(SceneFileMaterial) * material_count;
     u64 spheres_size = sizeof(SceneFileSphere) * sphere_count;
     u64 planes_size = sizeof(SceneFilePlane) * plane_count;
@@ -646,6 +650,39 @@ scene_write_to_asset_file(Scene *scene, char *filename)
     
     free(temp_buffer);
     fclose(file);
+}
+
+static Camera
+camera(Vec3 pos, ImageU32 *image)
+{
+    Camera camera;
+    camera.time0 = 0;
+    camera.time1 = 1;
+    // Camera is an orthographic projection with film having size of dest image
+    camera.camera_pos = pos;
+    // @NOTE(hl): Create coordinate system for camera.
+    // These are unit vectors of 3 axes of our coordinate system
+    camera.camera_z = vec3_normalize(camera.camera_pos);
+    camera.camera_x = vec3_normalize(cross(vec3(0, 0, 1), camera.camera_z));
+    camera.camera_y = vec3_normalize(cross(camera.camera_z, camera.camera_x));
+    camera.film_center = vec3_sub(camera.camera_pos, camera.camera_z);
+
+    // Apply image aspect ratio
+    camera.film_w = 1.0f;
+    camera.film_h = 1.0f;
+    if (image->width > image->height)
+    {
+        camera.film_h = camera.film_w * (f32)image->height / (f32)image->width;
+    }
+    else if (image->height > image->width)
+    {
+        camera.film_w = camera.film_h * (f32)image->width / (f32)image->height;
+    }
+    camera.half_film_w = camera.film_w * 0.5f;
+    camera.half_film_h = camera.film_h * 0.5f;
+    camera.half_pix_w = reciprocal32(image->width) * 0.5f;
+    camera.half_pix_h = reciprocal32(image->height) * 0.5f;
+    return camera;
 }
 
 void 
@@ -793,34 +830,9 @@ scene_init_from_file(Scene *scene, ImageU32 *image, char *filename)
     
     free(temp_buffer);
     
-    Camera camera;
-    camera.time0 = 0;
-    camera.time1 = 1;
-    // Camera is an orthographic projection with film having size of dest image
-    camera.camera_pos = vec3(0, -16, 0);
-    // @NOTE(hl): Create coordinate system for camera.
-    // These are unit vectors of 3 axes of our coordinate system
-    camera.camera_z = vec3_normalize(camera.camera_pos);
-    camera.camera_x = vec3_normalize(cross(vec3(0, 0, 1), camera.camera_z));
-    camera.camera_y = vec3_normalize(cross(camera.camera_z, camera.camera_x));
-    camera.film_center = vec3_sub(camera.camera_pos, camera.camera_z);
-
-    // Apply image aspect ratio
-    camera.film_w = 1.0f;
-    camera.film_h = 1.0f;
-    if (image->width > image->height)
-    {
-        camera.film_h = camera.film_w * (f32)image->height / (f32)image->width;
-    }
-    else if (image->height > image->width)
-    {
-        camera.film_w = camera.film_h * (f32)image->width / (f32)image->height;
-    }
-    camera.half_film_w = camera.film_w * 0.5f;
-    camera.half_film_h = camera.film_h * 0.5f;
-    camera.half_pix_w = reciprocal32(image->width) * 0.5f;
-    camera.half_pix_h = reciprocal32(image->height) * 0.5f;
-    scene->camera = camera;
+    scene->camera = camera(header.camera.pos, image);
+    
+    fclose(file);
 }
 
 // Returns scene with same objects in it
@@ -898,35 +910,7 @@ init_sample_scene(Scene *scene, ImageU32 *image)
     scene->rect_count = array_size(rects);
     scene->rects = rects;
     
-    Camera camera;
-    camera.time0 = 0;
-    camera.time1 = 1;
-    // Camera is an orthographic projection with film having size of dest image
-    camera.camera_pos = vec3(-1.5, -10, 1.5);
-    camera.camera_pos = vec3_muls(camera.camera_pos, 1.5f);
-    // @NOTE(hl): Create coordinate system for camera.
-    // These are unit vectors of 3 axes of our coordinate system
-    camera.camera_z = vec3_normalize(camera.camera_pos);
-    camera.camera_x = vec3_normalize(cross(vec3(0, 0, 1), camera.camera_z));
-    camera.camera_y = vec3_normalize(cross(camera.camera_z, camera.camera_x));
-    camera.film_center = vec3_sub(camera.camera_pos, camera.camera_z);
-
-    // Apply image aspect ratio
-    camera.film_w = 1.0f;
-    camera.film_h = 1.0f;
-    if (image->width > image->height)
-    {
-        camera.film_h = camera.film_w * (f32)image->height / (f32)image->width;
-    }
-    else if (image->height > image->width)
-    {
-        camera.film_w = camera.film_h * (f32)image->width / (f32)image->height;
-    }
-    camera.half_film_w = camera.film_w * 0.5f;
-    camera.half_film_h = camera.film_h * 0.5f;
-    camera.half_pix_w = reciprocal32(image->width) * 0.5f;
-    camera.half_pix_h = reciprocal32(image->height) * 0.5f;
-    scene->camera = camera;
+    scene->camera = camera(vec3_muls(vec3(-1.5, -10, 1.5), 1.5f), image);
 
     scene->material_count = array_size(materials);
     scene->materials = materials;
@@ -1123,34 +1107,7 @@ make_colonel_box(Scene *scene, ImageU32 *image)
     // };
     // add_box(rects + 6, box1, 2, -0.314159265f);
      
-    Camera camera;
-    camera.time0 = 0;
-    camera.time1 = 1;
-    // Camera is an orthographic projection with film having size of dest image
-    camera.camera_pos = vec3(0, -16, 0);
-    // @NOTE(hl): Create coordinate system for camera.
-    // These are unit vectors of 3 axes of our coordinate system
-    camera.camera_z = vec3_normalize(camera.camera_pos);
-    camera.camera_x = vec3_normalize(cross(vec3(0, 0, 1), camera.camera_z));
-    camera.camera_y = vec3_normalize(cross(camera.camera_z, camera.camera_x));
-    camera.film_center = vec3_sub(camera.camera_pos, camera.camera_z);
-
-    // Apply image aspect ratio
-    camera.film_w = 1.0f;
-    camera.film_h = 1.0f;
-    if (image->width > image->height)
-    {
-        camera.film_h = camera.film_w * (f32)image->height / (f32)image->width;
-    }
-    else if (image->height > image->width)
-    {
-        camera.film_w = camera.film_h * (f32)image->width / (f32)image->height;
-    }
-    camera.half_film_w = camera.film_w * 0.5f;
-    camera.half_film_h = camera.film_h * 0.5f;
-    camera.half_pix_w = reciprocal32(image->width) * 0.5f;
-    camera.half_pix_h = reciprocal32(image->height) * 0.5f;
-    scene->camera = camera;
+    scene->camera = camera(vec3(0, -16, 0), image);
 
     scene->material_count = array_size(materials);
     scene->materials = materials;
@@ -1158,21 +1115,99 @@ make_colonel_box(Scene *scene, ImageU32 *image)
     scene->rects = rects;
 }
 
+static void 
+parse_command_line_arguments(RaySettings *settings, u32 argc, char **argv)
+{
+    if (argc == 1)
+    {
+        return;
+    }
+    
+    u32 argument_count = argc;
+    char **arguments = argv;
+    u32 last_argument = argument_count - 1;
+    u32 cursor = 1;
+    
+    while (cursor < argument_count)
+    {
+        char *arg = arguments[cursor];
+        
+        if (!strcmp(arg, "-out"))
+        {
+            if (cursor + 1 >= argument_count)
+            {
+                fprintf(stderr, "[ERROR] Argument -out takes exactly 1 position argument\n");
+                break;
+            }
+            
+            char *out_file = arguments[cursor + 1];
+            settings->output_filename = out_file;
+            
+            cursor += 2;
+        }
+        else if (!strcmp(arg, "-size"))
+        {
+            if (cursor + 2 >= argument_count)
+            {
+                fprintf(stderr, "[ERROR] Argument -size takes exactly 2 position arguments\n");
+                break;
+            }
+            
+            u32 width = atoi(arguments[cursor + 1]);
+            u32 height = atoi(arguments[cursor + 2]);
+            settings->output_width = width;
+            settings->output_height = height;
+            
+            cursor += 3;
+        }
+        else if (!strcmp(arg, "-scene"))
+        {
+            if (cursor + 1 >= argument_count)
+            {
+                fprintf(stderr, "[ERROR] Argument -scene takes exactly 1 position argument\n");
+                break;
+            }
+            
+            char *scene = arguments[cursor + 1];
+            settings->input_scene = scene;
+            
+            cursor += 2;
+        }
+        else 
+        {
+            fprintf(stderr, "[ERROR] Unexpected argument '%s'!\n", arg);
+            break;
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     printf("Ray started!\n");
     
+    RaySettings settings = { 0 };
+    settings.output_filename = "out.png";
+    settings.output_width = 600;
+    settings.output_height = 600;
+    parse_command_line_arguments(&settings, argc, argv);
+    
     // Raycasting output is simply an image
     ImageU32 image = {0};
-    image_u32_init(&image, 600, 600);
+    image_u32_init(&image, settings.output_width, settings.output_height);
 
     // Initialize scene
     Scene scene = {0};
     // init_sample_scene(&scene, &image);
-    make_colonel_box(&scene, &image);
-    scene_write_to_asset_file(&scene, "cornell.ray_scene");
-    scene_init_from_file(&scene, &image, "cornell.ray_scene");
-
+    // make_colonel_box(&scene, &image);
+    // scene_write_to_asset_file(&scene, "data/cornell.ray_scene");
+    if (settings.input_scene)
+    {
+        scene_init_from_file(&scene, &image, settings.input_scene);
+    }
+    else 
+    {
+        make_colonel_box(&scene, &image);
+    }
     // Record time spend on raycasting
     clock_t start_clock = clock();
 
@@ -1270,7 +1305,7 @@ int main(int argc, char **argv)
     printf("Perfomance: %fms/bounce", (f64)time_elapsed / (f64)queue.bounces_computed);
 
     // Save image
-    char *filename = "out.png";
+    char *filename = settings.output_filename;
     image_u32_save(&image, filename);
 
     printf("\nRay finished!\n");
