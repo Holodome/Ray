@@ -1,11 +1,27 @@
 #include "editor/editor.h"
 
-#include "ray_math.c"
-#include "sys.c"
+#include "lib/ray_math.c"
+#include "lib/sys.c"
+#include "lib/memory_pool.c"
+
 #include "editor/renderer/opengl.c"
+#include "editor/ui.c"
 #include "font.c"
-#include "ui.c"
-#include "memory_pool.c"
+#include "image.c"
+
+static void 
+update_time(Input *input)
+{
+    clock_t current_time = clock();
+    if (input->frame_start_time)
+    {
+        clock_t cldt = current_time - input->frame_start_time;
+        f32 dts = (f32)cldt / (f32)CLOCKS_PER_SEC;
+        input->dt = dts;
+        input->time += dts;
+    }
+    input->frame_start_time = current_time;
+}
 
 int 
 main(int argc, char **argv)
@@ -27,15 +43,7 @@ main(int argc, char **argv)
     for(;;) 
     {
         sys_update_input(window, &input);
-        // @TODO hl move this from here
-        clock_t current_time = clock();
-        if (input.frame_start_time)
-        {
-            clock_t cldt = current_time - input.frame_start_time;
-            f32 dts = (f32)cldt / (f32)CLOCKS_PER_SEC;
-            input.dt = dts;
-        }
-        input.frame_start_time = current_time;
+        update_time(&input);
         
         if (input.is_quit_requested)
         {
@@ -48,7 +56,7 @@ main(int argc, char **argv)
     
         ui_begin_frame();
         
-        ui_window("Window", rect2(0, 0, 200, 200), UIWindowFlags_Default, 0);
+        ui_window("Window", rect2_point_size(300, 300, 200, 200), UIWindowFlags_Default, 0);
         ui_text("Hello some text");
         
         ui_end_window();

@@ -593,10 +593,10 @@ opengl_init(OpenGLRenderer *opengl)
     gl->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, opengl->quad_index_buffer);
     gl->glBufferData(GL_ELEMENT_ARRAY_BUFFER, opengl->max_index_buffer_size, 0, GL_STREAM_DRAW);
 	
-    opengl_set_attribute(gl, 0, sizeof(OpenGLVertex), 3, struct_member_offset(OpenGLVertex, pos), GL_FLOAT, false);
-    opengl_set_attribute(gl, 1, sizeof(OpenGLVertex), 4, struct_member_offset(OpenGLVertex, packed_color), GL_UNSIGNED_BYTE, true);
-    opengl_set_attribute(gl, 2, sizeof(OpenGLVertex), 2, struct_member_offset(OpenGLVertex, uv), GL_FLOAT, false);
-    opengl_set_attribute_int(gl, 3, sizeof(OpenGLVertex), 1, struct_member_offset(OpenGLVertex, texture_index), GL_UNSIGNED_SHORT);
+    opengl_set_attribute(gl, 0, sizeof(OpenGLVertex), 3, offsetof(OpenGLVertex, pos), GL_FLOAT, false);
+    opengl_set_attribute(gl, 1, sizeof(OpenGLVertex), 4, offsetof(OpenGLVertex, packed_color), GL_UNSIGNED_BYTE, true);
+    opengl_set_attribute(gl, 2, sizeof(OpenGLVertex), 2, offsetof(OpenGLVertex, uv), GL_FLOAT, false);
+    opengl_set_attribute_int(gl, 3, sizeof(OpenGLVertex), 1, offsetof(OpenGLVertex, texture_index), GL_UNSIGNED_SHORT);
 	
     gl->glBindVertexArray(0);
 	

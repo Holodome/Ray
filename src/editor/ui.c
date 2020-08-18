@@ -382,7 +382,7 @@ ui_render_text(Vec2 position, Vec4 color,
 void
 ui_set_tooltip(char *tooltip)
 {
-    cstring_copy_static(ui.tooltip_text, tooltip);
+    cstring_copy(sizeof(ui.tooltip_text), ui.tooltip_text, tooltip);
 }
 
 UIButtonState
@@ -935,8 +935,8 @@ ui_input_text(char *label, umm buffer_size, char *buffer,
             {
                 // Initialize text edit state
                 memset(&ui.text_edit_state, 0, sizeof(ui.text_edit_state));
-                cstring_copy_static(ui.text_edit_state.text, buffer);
-                cstring_copy_static(ui.text_edit_state.initial_text, buffer);
+                cstring_copy(sizeof(ui.text_edit_state.text), ui.text_edit_state.text, buffer);
+                cstring_copy(sizeof(ui.text_edit_state.initial_text), ui.text_edit_state.initial_text, buffer);
             }
             ui.active_id = id;
         }
@@ -1342,7 +1342,6 @@ ui_window(char *title, Rect2 initial_rect,
         }
         if (window->flags & UIWindowFlags_Colapsable && window->flags & UIWindowFlags_TitleBar)
         {
-
             if (ui_draw_collapse_triangle(window, rect2_top_right(window->title_bar_rect), window->is_collapsed))
             {
                 window->is_collapsed = !window->is_collapsed;

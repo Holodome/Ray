@@ -1,6 +1,6 @@
 #if !defined(FONT_H)
 
-#include "common.h"
+#include "lib/common.h"
 #include "image.h"
 
 // @CLEANUP

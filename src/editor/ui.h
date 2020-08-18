@@ -1,11 +1,11 @@
 #if !defined(UI_H)
 
-#include "common.h"
-#include "ray_math.h"
+#include "lib/common.h"
+#include "lib/ray_math.h"
+#include "lib/sys.h"
+#include "lib/memory_pool.h"
 
-#include "sys.h"
 #include "font.h"
-#include "memory_pool.h"
 
 typedef struct {
 	Vec3 vertices[4]; // 48

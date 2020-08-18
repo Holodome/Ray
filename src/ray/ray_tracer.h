@@ -319,7 +319,7 @@ struct Hitable;
 typedef struct {
     struct Hitable *left;
     struct Hitable *right;
-    AABB            box;
+    Box3            box;
 } BVHNode; 
 
 typedef struct Hitable

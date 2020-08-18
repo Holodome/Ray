@@ -1,7 +1,7 @@
 #if !defined(OPENGL_H)
 
-#include "common.h"
-#include "ray_math.h"
+#include "lib/common.h"
+#include "lib/ray_math.h"
 #include "editor/renderer/opengl_api.h"
 
 struct Font;

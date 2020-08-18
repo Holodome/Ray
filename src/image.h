@@ -1,6 +1,6 @@
 #if !defined(IMAGE_H)
 
-#include "common.h"
+#include "lib/common.h"
 
 //  Wrapper for 4-component image (little-endian RGBA), where each pixel is represented as u32
 typedef struct {

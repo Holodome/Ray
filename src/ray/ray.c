@@ -12,22 +12,6 @@ Vec3 ray_point_at(Ray ray, f32 param)
     return result;
 }
 
-static f32
-linear_to_srgb(f32 l)
-{
-    if (l < 0)
-        l = 0;
-    if (l > 1)
-        l = 1;
-
-    f32 s = l * 12.92f;
-    if (l > 0.0031308f)
-    {
-        s = 1.055f * pow32(l, reciprocal32(2.4f)) - 0.055f;
-    }
-    return s;
-}
-
 
 const f32 min_hit_distance = 0.001f;
 const f32 tolerance = 0.001f;
@@ -121,7 +105,7 @@ moving_sphere_hit(MovingSphere sphere, Ray ray, HitRecord *record)
 }
 
 static bool 
-ray_hit_aabb(AABB aabb, Ray ray, f32 tmin, f32 tmax)
+ray_hit_aabb(Box3 aabb, Ray ray, f32 tmin, f32 tmax)
 {
     bool result = true;
     
@@ -149,10 +133,10 @@ ray_hit_aabb(AABB aabb, Ray ray, f32 tmin, f32 tmax)
     return result;
 }
 
-static AABB
+static Box3
 sphere_bounding_box(Sphere sphere, f32 t0, f32 t1)
 {
-    AABB result = { 
+    Box3 result = { 
         .min = vec3_sub(sphere.pos, vec3s(sphere.radius)),  
         .max = vec3_add(sphere.pos, vec3s(sphere.radius)),  
     };
@@ -160,24 +144,24 @@ sphere_bounding_box(Sphere sphere, f32 t0, f32 t1)
     return result;
 }
 
-static AABB
+static Box3
 moving_sphere_bounding_box(MovingSphere sphere, f32 t0, f32 t1)
 {
-    AABB box0 = { 
+    Box3 box0 = { 
         .min = vec3_sub(sphere.center0, vec3s(sphere.radius)),  
         .max = vec3_add(sphere.center0, vec3s(sphere.radius)),  
     };
-    AABB box1 = { 
+    Box3 box1 = { 
         .min = vec3_sub(sphere.center1, vec3s(sphere.radius)),  
         .max = vec3_add(sphere.center1, vec3s(sphere.radius)),  
     };
     
-    AABB result = aabb_join(box0, box1);
+    Box3 result = box3_join(box0, box1);
     
     return result;
 }
 
-__attribute__((noinline)) static void
+static void
 cast_sample_rays(CastState *state)
 {
     Scene *scene = state->scene;
@@ -429,9 +413,9 @@ cast_sample_rays(CastState *state)
         final_color = vec3_add(final_color, vec3_muls(ray_cast_color, contrib));
     }
 
-    final_color = vec3_muls(vec3(linear_to_srgb(final_color.x),
-                                 linear_to_srgb(final_color.y),
-                                 linear_to_srgb(final_color.z)),
+    final_color = vec3_muls(vec3(linear1_to_srgb1(final_color.x),
+                                 linear1_to_srgb1(final_color.y),
+                                 linear1_to_srgb1(final_color.z)),
                             255.0f);
     state->bounces_computed += bounces_computed;
     state->final_color = final_color;
@@ -620,7 +604,7 @@ void init_sample_scene(Scene *scene, ImageU32 *image)
 }
 
 void 
-add_box(Rect *rects, AABB box, u32 mat_index, f32 rotation)
+add_box(Rect *rects, Box3 box, u32 mat_index, f32 rotation)
 {
     *rects++ = (Rect) {
         .type = RectType_XY,
@@ -793,12 +777,12 @@ make_colonel_box(Scene *scene, ImageU32 *image)
     scene->sphere_count = array_size(spheres);
     scene->spheres = spheres;
     
-    // AABB box0 = { 
+    // Box3 box0 = { 
     //     .min = vec3(0.7f, -3.8f, -5.0f),
     //     .max = vec3(3.5f, -0.9f, -2.0f)
     // };
     // add_box(rects + 6, box0, 2,  0.261799f * 1.3f);
-    // AABB box1 = {
+    // Box3 box1 = {
     //     .min = vec3(-2.75f, 0.3f, -5.0f),
     //     .max = vec3(  0.2f, 3.3f,  0.95f)
     // };

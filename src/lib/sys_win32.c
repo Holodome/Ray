@@ -446,7 +446,7 @@ void sys_update_input(struct SysWindow *window, Input *input)
 		 ++mouse_button_index)
 	{
 		DWORD vk = win32_mouse_buttons[mouse_button_index];
-		bool is_down = GetKeyState(vk) & WIN32_KEY_DOWN_BIT;
+		bool is_down = (bool)(GetKeyState(vk) & WIN32_KEY_DOWN_BIT);
 		update_key_state(&input->keys[FIRST_MOUSE_BUTTON + mouse_button_index], is_down);
 	}
 	

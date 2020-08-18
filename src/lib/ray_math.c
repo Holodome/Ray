@@ -50,6 +50,18 @@ rsqrt32(f32 a)
     return result;
 }
 
+inline f32 
+max32(f32 a, f32 b)
+{
+    return _mm_cvtss_f32(_mm_max_ss(_mm_set_ss(a), _mm_set_ss(b)));
+}
+
+inline f32 
+min32(f32 a, f32 b)
+{
+    return _mm_cvtss_f32(_mm_min_ss(_mm_set_ss(a), _mm_set_ss(b)));
+}
+
 inline f32
 sin32(f32 a)
 {
@@ -480,6 +492,22 @@ vec3_lerp(Vec3 a, Vec3 b, f32 t)
     return result;
 }
 
+inline f32
+linear1_to_srgb1(f32 l)
+{
+    if (l < 0)
+        l = 0;
+    if (l > 1)
+        l = 1;
+
+    f32 s = l * 12.92f;
+    if (l > 0.0031308f)
+    {
+        s = 1.055f * pow32(l, reciprocal32(2.4f)) - 0.055f;
+    }
+    return s;
+}
+
 inline Vec4 
 linear1_to_srgb255(Vec4 a)
 {
@@ -683,4 +711,156 @@ mat4x4_mul(Mat4x4 a, Mat4x4 b)
 		}
 	}
 	return result;
+}
+
+inline Rect2
+rect2v(Vec2 min, Vec2 max)
+{
+    Rect2 result;
+    result.min = min;
+    result.max = max;
+    return result;
+}
+
+inline Rect2
+rect2(f32 x0, f32 y0, f32 x1, f32 y1)
+{
+    Rect2 result = rect2v(vec2(x0, y0), vec2(x1, y1));
+    return result;
+}
+
+inline Rect2
+rect2_point_sizev(Vec2 point, Vec2 size)
+{
+    Rect2 result = rect2v(point, vec2_add(point, size));
+    return result;
+}
+
+inline Rect2
+rect2_point_size(f32 x, f32 y, f32 w, f32 h)
+{
+    Rect2 result = rect2_point_sizev(vec2(x, y), vec2(w, h));
+    return result;
+}
+
+inline Vec2
+rect2_top_left(Rect2 r)
+{
+    return r.min;
+}
+
+inline Vec2
+rect2_top_right(Rect2 r)
+{
+    return vec2(r.max.x, r.min.y);
+}
+
+inline Vec2
+rect2_bottom_left(Rect2 r)
+{
+    return vec2(r.min.x, r.max.y);
+}
+
+inline Vec2
+rect2_bottom_right(Rect2 r)
+{
+    return r.max;
+}
+
+inline Vec2
+rect2_center(Rect2 r)
+{
+    return vec2_add(r.min, vec2_muls(vec2_sub(r.max, r.min), 0.5f));
+}
+
+inline Vec2
+rect2_size(Rect2 r)
+{
+    return vec2_sub(r.max, r.min);
+}
+
+inline f32
+rect2_width(Rect2 r)
+{
+    return r.max.x - r.min.x;
+}
+
+inline f32
+rect2_height(Rect2 r)
+{
+    return r.max.y - r.min.y;
+}
+
+inline f32
+rect2_center_x(Rect2 r)
+{
+    return r.min.x + (r.max.x - r.min.x) * 0.5f;
+}
+
+inline f32
+rect2_center_y(Rect2 r)
+{
+    return r.min.y + (r.max.y - r.min.y) * 0.5f;
+}
+
+inline void
+rect2_store_pointsa(Rect2 rect, Vec2 points[4])
+{
+    points[0] = rect2_top_left(rect);
+    points[1] = rect2_bottom_left(rect);
+    points[2] = rect2_top_right(rect);
+    points[3] = rect2_bottom_right(rect);
+}
+
+inline void
+rect2_store_points(Rect2 rect,
+                   Vec2 *top_left, Vec2 *bottom_left,
+				   Vec2 *top_right, Vec2 *bottom_right)
+{
+    *top_left = rect2_top_left(rect);
+    *bottom_left = rect2_bottom_left(rect);
+    *top_right = rect2_top_right(rect);
+    *bottom_right = rect2_bottom_right(rect);
+}
+
+inline bool
+rect2_collide_point(Rect2 rect, Vec2 point)
+{
+	bool result = (((rect.min.x < point.x) && (point.x < rect.max.x)) &&
+				   ((rect.min.y < point.y) && (point.y < rect.max.y)));
+	return result;
+}
+
+inline bool
+rect2_collide(Rect2 a, Rect2 b)
+{
+	bool result = true;
+	
+	if ((a.max.x < b.min.x || a.min.x > b.max.x) ||
+		(a.max.y < b.min.y || a.min.y > b.min.y))
+	{
+		result = false;
+	}
+	
+	return result;
+	
+}
+
+inline Rect2
+rect2_move(Rect2 rect, Vec2 dist)
+{
+	Rect2 result = rect2v(vec2_add(rect.min, dist),
+						  vec2_add(rect.max, dist));
+	return result;
+}
+
+inline Rect2
+rect2_clip(Rect2 parent, Rect2 rect)
+{
+    Rect2 result;
+    result.min.x = max(parent.min.x, rect.min.x);
+    result.min.y = max(parent.min.y, rect.min.y);
+    result.max.x = min(parent.max.x, rect.max.x);
+    result.max.y = min(parent.max.y, rect.max.y);
+    return result;
 }
