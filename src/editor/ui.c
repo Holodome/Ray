@@ -194,7 +194,7 @@ hash_string(char *data_init, umm data_size, u32 seed)
 static Vec2
 ui_get_text_size(Font *font, char *text, f32 scale)
 {
-    Vec2 result = { 0 };
+    Vec2 result = {0};
     if (*text != '$')
     {
         result = get_text_size(font, text, scale);
@@ -247,7 +247,7 @@ ui_id_is_valid(UIID id)
 UIID
 ui_make_id(UIWindow *window, char *text, umm count)
 {
-    UIID result ={ 0 };
+    UIID result ={0};
     if (!count)
     {
         count = strlen(text);
@@ -305,7 +305,7 @@ ui_push_quadr(
     Rect2 rect, Vec4 color,
     OpenGLTexture texture)
 {
-    Vec3 vertices[4] ={ 0 };
+    Vec3 vertices[4] ={0};
     rect2_store_points(rect, &vertices[0].xy, &vertices[1].xy, &vertices[2].xy, &vertices[3].xy);
 
     ui_push_quad(vertices[0], vertices[1], vertices[2], vertices[3],
@@ -579,39 +579,6 @@ ui_text_f(char *text, ...)
 }
 
 bool
-ui_color_button(Vec4 color)
-{
-    bool result = false;
-
-    UIWindow *window = ui.current_window;
-    assert(window);
-    if (!window->is_collapsed)
-    {
-        f32 square_size = ui.font.height * window->text_scale;
-        Rect2 rect = rect2_point_sizev(window->cursor_pos, vec2(square_size + ui.style.frame_padding.x * 2,
-            square_size + ui.style.frame_padding.y * 2));
-        ui_element_size(rect2_size(rect), 0);
-
-        bool is_hot = (ui.hot_window == window && !ui_id_is_valid(ui.hot_id) &&
-            rect2_collide_point(rect, ui.input->mouse_pos));
-
-        if (is_hot)
-        {
-            u32 packed = rgba_pack_4x8(vec4_muls(color, 255));
-            char color_format[128];
-            format_string(color_format, sizeof(color_format), "Color:\n(%.2f,%.2f,%.2f,%.2f)\n#%X",
-                color.x, color.y, color.z, color.w, packed);
-
-            ui_set_tooltip(color_format);
-        }
-
-        ui_push_quadr(rect, color, empty_texture);
-    }
-
-    return result;
-}
-
-bool
 ui_button(char *label, bool repeat_when_held)
 {
     bool is_pressed = false;
@@ -731,174 +698,7 @@ ui_slider_float(char *label, f32 *value,
 }
 
 bool
-ui_slider_int(char *label, i32 *value, i32 value_min, i32 value_max, char *format)
-{
-    f32 value_float = (f32)*value;
-    bool result = ui_slider_float(label, &value_float, value_min, value_max, format);
-    *value = round32(value_float);
-    return result;
-}
-
-// @TODO(hl): Fix padding
-bool
-ui_color_edit_4(char *label, Vec4 *color, bool show_alpha)
-{
-    bool is_changed = false;
-
-    UIWindow *window = ui.current_window;
-    assert(window);
-    if (!window->is_collapsed)
-    {
-        UIID id = ui_make_id(window, label, 0);
-        ui.current_pushed_id = id;
-
-        f32 full_width = window->current_item_width;
-        f32 square_size = ui.font.height + ui.style.frame_padding.x * 2.0f;
-
-        f32 r = color->r, g = color->g, b = color->b, a = color->a;
-        Vec4 color_to_display = vec4(r, g, b, 1.0f);
-
-        i32 ir = round32(r * 255.0f);
-        i32 ig = round32(g * 255.0f);
-        i32 ib = round32(b * 255.0f);
-        i32 ia = round32(a * 255.0f);
-
-        i32 components = show_alpha ? 4 : 3;
-
-        {
-            f32 all_items_width = full_width - (square_size + ui.style.item_spacing.x);
-            f32 item_one_width  = max(1.0f, (all_items_width - (ui.style.frame_padding.x * 2.0f + ui.style.item_spacing.x) * (components - 1)) / ((f32)components));
-            f32 item_last_width = max(1.0f, (all_items_width - (item_one_width + ui.style.frame_padding.x * 2.0f + ui.style.item_spacing.x) * (components - 1)));
-
-            window->current_item_width = item_one_width;
-            is_changed = is_changed || ui_slider_int("$R", &ir, 0, 255, "R:%3.0f");
-            ui_same_line(0, 0);
-            is_changed = is_changed || ui_slider_int("$G", &ig, 0, 255, "G:%3.0f");
-            ui_same_line(0, 0);
-            if (show_alpha)
-            {
-                is_changed = is_changed || ui_slider_int("$B", &ib, 0, 255, "B:%3.0f");
-                ui_same_line(0, 0);
-                window->current_item_width = item_last_width;
-                is_changed = is_changed || ui_slider_int("$A", &ia, 0, 255, "A:%3.0f");
-            }
-            else
-            {
-                window->current_item_width = item_last_width;
-                is_changed = is_changed || ui_slider_int("$B", &ib, 0, 255, "B:%3.0f");
-            }
-            window->current_item_width = window->item_width_default;
-        }
-
-        ui_same_line(0, 0);
-        ui_color_button(color_to_display);
-        ui_same_line(0, -1);
-        ui_text(label);
-
-        f32 r255 = reciprocal32(255.0f);
-        r = ir * r255;
-        g = ig * r255;
-        b = ib * r255;
-        a = ia * r255;
-        if (is_changed)
-        {
-            color->r = r;
-            color->b = b;
-            color->g = g;
-            color->a = a;
-        }
-        ui.current_pushed_id = ui_empty_id;
-    }
-
-    return is_changed;
-}
-
-bool
-ui_color_edit_3(char *label, Vec3 *color)
-{
-    Vec4 color_4;
-    color_4.rgb = *color;
-    color_4.a = 1.0f;
-    bool is_changed = ui_color_edit_4(label, &color_4, false);
-    *color = color_4.rgb;
-    return is_changed;
-}
-
-bool
-ui_collapsing_header(char *label, bool show_background, bool default_open)
-{
-    bool result = false;
-
-    UIWindow *window = ui.current_window;
-    assert(window);
-    if (!window->is_collapsed)
-    {
-        UIID id = ui_make_id(window, label, 0);
-
-        // Do linear search for state of this header
-        // @TODO(hl): Probably do something more optimal
-        bool is_opened;
-        UIPairIDValue *tree_node = 0;
-        for (u32 node_index = 0;
-            node_index < array_size(window->node_storage);
-            ++node_index)
-        {
-            UIPairIDValue *node = window->node_storage + node_index;
-            if (node->id.packed != ui_empty_id.packed)
-            {
-                if (node->id.packed == id.packed)
-                {
-                    is_opened = *(bool *)&node->value;
-                    tree_node = node;
-                    break;
-                }
-            }
-            else
-            {
-                // We have not found node with such id - create new
-                node->id = id;
-                node->value = default_open;
-                tree_node = node;
-                break;
-            }
-        }
-
-        Vec2 text_size = ui_get_text_size(&ui.font, label, window->text_scale);
-        Vec2 pos_min = window->cursor_pos;
-        Vec2 pos_max = vec2(window->rect.max.x - ui.style.window_padding.x,
-            window->cursor_pos.y + text_size.y + ui.style.frame_padding.y * 2);
-        Rect2 header_rect = rect2v(pos_min, pos_max);
-        ui_element_size(vec2(0, rect2_height(header_rect)), 0);
-
-        UIButtonState button = ui_update_button(header_rect, id, false);
-        if (button.is_pressed)
-        {
-            is_opened = !is_opened;
-            tree_node->value = *(i32 *)&is_opened;
-        }
-        result = is_opened;
-
-        Vec2 tri_size = vec2(19, 18);
-        Vec4 color = (button.is_held ? ui.style.color_button_active :
-            button.is_hot  ? ui.style.color_button_hot    :
-            ui.style.color_button);
-        if (show_background)
-        {
-            ui_push_quadr(header_rect, color, empty_texture);
-        }
-        ui_same_line(0, 0);
-        ui_draw_collapse_triangle(window, vec2_add(header_rect.min, vec2(tri_size.x, 0)), is_opened);
-        ui_element_size(tri_size, 0);
-        ui_same_line(0, -1);
-        ui_same_line(0, ui.style.frame_padding.x * 2);
-        ui_text(label);
-    }
-    return result;
-}
-
-bool
-ui_input_text(char *label, umm buffer_size, char *buffer,
-    u32 flags)
+ui_input_text(char *label, umm buffer_size, char *buffer)
 {
     bool result = false;
 
@@ -1031,21 +831,6 @@ ui_input_text(char *label, umm buffer_size, char *buffer,
                     u32 symbol = ui.input->utf32_input[index];
                     if (symbol)
                     {
-                        if (flags & UITextEditFlag_FilterDecimal)
-                        {
-                            if (!(isdigit(symbol) || symbol == '.' || symbol == '-' || symbol == '+'))
-                            {
-                                continue;
-                            }
-                        }
-                        if (flags & UITextEditFlag_FilterHexadecimal)
-                        {
-                            if (!(char_is_hex(symbol)))
-                            {
-                                continue;
-                            }
-                        }
-
                         char *buffer_end = ui.text_edit_state.text + ui.text_edit_state.max_length;
                         u32 text_size = strlen(ui.text_edit_state.text);
 
@@ -1077,14 +862,7 @@ ui_input_text(char *label, umm buffer_size, char *buffer,
             }
         }
 
-        if (flags & UITextEditFlag_EnterReturnsTrue)
-        {
-            result = is_enter_pressed;
-        }
-        else
-        {
-            result = is_value_changed;
-        }
+        result = is_value_changed;
 
         ui_push_quadr(frame_rect, ui.style.color_widget_background, empty_texture);
         if (ui.active_id.packed == id.packed)
@@ -1100,34 +878,6 @@ ui_input_text(char *label, umm buffer_size, char *buffer,
         ui_render_text(vec2(frame_rect.max.x + ui.style.item_spacing.x, frame_rect.min.y), ui.style.color_text, label, window->text_scale);
     }
 
-    return result;
-}
-
-bool
-ui_input_float(char *label, f32 *value, f32 step, i32 decimal_precision)
-{
-    bool result = false;
-
-    UIWindow *window = ui.current_window;
-    assert(window);
-    if (!window->is_collapsed)
-    {
-        char buffer[64];
-        format_string(buffer, sizeof(buffer), "%.*f", decimal_precision, *value);
-
-        UIID id = ui_make_id(window, label, 0);
-        ui.current_pushed_id = id;
-
-        if (ui_input_text("$L", sizeof(buffer), buffer, UITextEditFlag_FilterDecimal))
-        {
-            *value = atof(buffer);
-            result = true;
-        }
-        ui_same_line(0, -1);
-        ui_text(label);
-
-        ui.current_pushed_id = ui_empty_id;
-    }
     return result;
 }
 
@@ -1176,16 +926,11 @@ ui_checkbox(char *label, bool *value)
 }
 
 bool
-ui_window(char *title, Rect2 initial_rect,
-    u32 flags,
-    bool *is_closed_ptr)
+ui_window(char *title, Rect2 initial_rect, bool *is_closed_ptr)
 {
     bool is_open = false;
 
     assert(title);
-    // assert(!ui.current_window);
-    assert((flags & UIWindowFlags_Colapsable ? flags & UIWindowFlags_TitleBar : true));
-    assert((flags & UIWindowFlags_Closable   ? is_closed_ptr != 0 : true));
     // Look for window slot
     UIWindow *window = 0;
     bool used_new_slot;
@@ -1218,15 +963,9 @@ ui_window(char *title, Rect2 initial_rect,
     // If we found window slot
     if (window)
     {
-        if (flags & UIWindowFlags_ChildWindow)
-        {
-            window->parent_window = ui.current_window;
-        }
-
         ui.current_window = window;
 
         window->is_active = true;
-        window->flags = flags;
 
         // Set connections of double-linked list
         if (!ui.first_window)
@@ -1250,10 +989,7 @@ ui_window(char *title, Rect2 initial_rect,
             window->id = ui_make_id(0, title, sizeof(window->title));
             window->text_scale = 0.5f;
         }
-        else if (flags & UIWindowFlags_AlwaysSetRect)
-        {
-            window->rect = initial_rect;
-        }
+        
         window->whole_window_rect = window->rect;
         if (is_closed_ptr)
         {
@@ -1261,56 +997,35 @@ ui_window(char *title, Rect2 initial_rect,
         }
 
         // Move window
-        if (window->flags & UIWindowFlags_Movable)
+        UIID MoveID = ui_make_id(window, "#MOVE", 0);
+        if (ui.active_id.packed == MoveID.packed)
         {
-            // printf("Movable");
-            UIID MoveID = ui_make_id(window, "#MOVE", 0);
-            if (ui.active_id.packed == MoveID.packed)
+            if (ui.left_mouse_button_held)
             {
-                if (ui.left_mouse_button_held)
-                {
-                    window->rect = rect2_move(window->rect, ui.input->mouse_delta);
-                }
-                else
-                {
-                    ui.active_id = ui_empty_id;
-                }
+                window->rect = rect2_move(window->rect, ui.input->mouse_delta);
+            }
+            else
+            {
+                ui.active_id = ui_empty_id;
             }
         }
 
-        if (flags & UIWindowFlags_ChildWindow)
-        {
-            window->rect = rect2_point_sizev(window->parent_window->cursor_pos, rect2_size(window->rect));
-        }
-
         Rect2 window_rect = window->rect;
-        if (window->flags & UIWindowFlags_TitleBar)
-        {
-            Rect2 title_bar_rect = rect2_point_size(window_rect.min.x, window_rect.min.y,
-                rect2_width(window_rect), ui.style.window_title_bar_height);
-            window_rect.min.y += ui.style.window_title_bar_height;
-            ui_push_quadr(title_bar_rect, ui.style.color_window_titlebar, empty_texture);
-            ui_push_text(vec2_add(title_bar_rect.min, vec2(2, 2 - ui.style.window_title_bar_height)),
-                ui.style.color_text, window->title, 1.0f);
-            window->title_bar_rect = title_bar_rect;
-        }
-        else
-        {
-            window->title_bar_rect = rect2v(window->rect.min, window->rect.min);
-        }
+        Rect2 title_bar_rect = rect2_point_size(window_rect.min.x, window_rect.min.y,
+            rect2_width(window_rect), ui.style.window_title_bar_height);
+        window_rect.min.y += ui.style.window_title_bar_height;
+        ui_push_quadr(title_bar_rect, ui.style.color_window_titlebar, empty_texture);
+        ui_push_text(vec2_add(title_bar_rect.min, vec2(2, 2 - ui.style.window_title_bar_height)),
+            ui.style.color_text, window->title, 1.0f);
+        window->title_bar_rect = title_bar_rect;
 
         if (!window->is_collapsed)
         {
             Vec4 color = ui.style.color_window_background;
-            if (flags & UIWindowFlags_ChildWindow)
-            {
-                color = vec4_mul(color, vec4s(0.6f));
-            }
-
             ui_push_quadr(window_rect, color, empty_texture);
         }
 
-        if (window->flags & UIWindowFlags_Resizable && !window->is_collapsed)
+        if (!window->is_collapsed)
         {
             Vec2 resize_size = vec2(16, 16);
             Rect2 resize_rect = rect2_point_sizev(vec2_sub(rect2_bottom_right(window->rect), resize_size), resize_size);
@@ -1340,12 +1055,10 @@ ui_window(char *title, Rect2 initial_rect,
                 vec2(0, 0), vec2(0, 1), vec2(1, 0), vec2(1, 1),
                 empty_texture);
         }
-        if (window->flags & UIWindowFlags_Colapsable && window->flags & UIWindowFlags_TitleBar)
+
+        if (ui_draw_collapse_triangle(window, rect2_top_right(window->title_bar_rect), window->is_collapsed))
         {
-            if (ui_draw_collapse_triangle(window, rect2_top_right(window->title_bar_rect), window->is_collapsed))
-            {
-                window->is_collapsed = !window->is_collapsed;
-            }
+            window->is_collapsed = !window->is_collapsed;
         }
 
         window->scroll_y = window->next_scroll_y;
@@ -1356,48 +1069,42 @@ ui_window(char *title, Rect2 initial_rect,
         }
         window->next_scroll_y = window->scroll_y;
 
-        // @TODO scrollbar window flag
+        Rect2 scrollbar_rect = rect2(window->rect.max.x - ui.style.scroll_bar_width,
+            window->title_bar_rect.max.y,
+            window->rect.max.x,
+            window->rect.max.y);
+
+        f32 grab_height_normalized = clamp01(rect2_height(window->rect) / max(window->size_content_fit.y, rect2_height(window->rect)));
+        f32 grab_height = rect2_height(scrollbar_rect) * grab_height_normalized;
+
+        UIButtonState button ={0};
+        if (grab_height_normalized < 1.0f)
         {
-            Rect2 scrollbar_rect = rect2(window->rect.max.x - ui.style.scroll_bar_width,
-                window->title_bar_rect.max.y,
-                window->rect.max.x,
-                window->rect.max.y);
-
-            f32 grab_height_normalized = clamp01(rect2_height(window->rect) / max(window->size_content_fit.y, rect2_height(window->rect)));
-            f32 grab_height = rect2_height(scrollbar_rect) * grab_height_normalized;
-
-            UIButtonState button ={ 0 };
-            if (grab_height_normalized < 1.0f)
+            UIID scrollbar_id = ui_make_id(window, "$SCROLLBARY", 0);
+            button = ui_update_button(scrollbar_rect, scrollbar_id, true);
+            if (button.is_held)
             {
-                UIID scrollbar_id = ui_make_id(window, "$SCROLLBARY", 0);
-                button = ui_update_button(scrollbar_rect, scrollbar_id, true);
-                if (button.is_held)
-                {
-                    ui.hot_id = scrollbar_id;
-                    f32 grab_y_normalized = clamp01((ui.input->mouse_pos.y - (scrollbar_rect.min.y + grab_height * 0.5f))
-                        / (rect2_height(scrollbar_rect) - grab_height))
-                        * (1.0f - grab_height_normalized);
-                    window->scroll_y = grab_y_normalized * window->size_content_fit.y;
-                    window->next_scroll_y = window->scroll_y;
-                }
-
-
-                f32 grab_y_normalized = clamp01(window->scroll_y / max(0.0f, window->size_content_fit.y));
-                Vec4 color = (button.is_held ? ui.style.color_button_active :
-                    button.is_hot  ? ui.style.color_button_hot    :
-                    ui.style.color_button);
-                Rect2 grab_rect = rect2v(vec2(scrollbar_rect.min.x, lerp(scrollbar_rect.min.y, scrollbar_rect.max.y, grab_y_normalized)),
-                    vec2(scrollbar_rect.max.x, lerp(scrollbar_rect.min.y, scrollbar_rect.max.y, grab_y_normalized + grab_height_normalized)));
-                ui_push_quadr(scrollbar_rect, ui.style.color_widget_background, empty_texture);
-                ui_push_quadr(grab_rect, color, empty_texture);
+                ui.hot_id = scrollbar_id;
+                f32 grab_y_normalized = clamp01((ui.input->mouse_pos.y - (scrollbar_rect.min.y + grab_height * 0.5f))
+                    / (rect2_height(scrollbar_rect) - grab_height))
+                    * (1.0f - grab_height_normalized);
+                window->scroll_y = grab_y_normalized * window->size_content_fit.y;
+                window->next_scroll_y = window->scroll_y;
             }
+
+
+            f32 grab_y_normalized = clamp01(window->scroll_y / max(0.0f, window->size_content_fit.y));
+            Vec4 color = (button.is_held ? ui.style.color_button_active :
+                button.is_hot  ? ui.style.color_button_hot    :
+                ui.style.color_button);
+            Rect2 grab_rect = rect2v(vec2(scrollbar_rect.min.x, lerp(scrollbar_rect.min.y, scrollbar_rect.max.y, grab_y_normalized)),
+                vec2(scrollbar_rect.max.x, lerp(scrollbar_rect.min.y, scrollbar_rect.max.y, grab_y_normalized + grab_height_normalized)));
+            ui_push_quadr(scrollbar_rect, ui.style.color_widget_background, empty_texture);
+            ui_push_quadr(grab_rect, color, empty_texture);
         }
 
         window->cursor_pos = window->rect.min;
-        if (window->flags & UIWindowFlags_TitleBar)
-        {
-            window->cursor_pos.y += ui.style.window_title_bar_height;
-        }
+        window->cursor_pos.y += ui.style.window_title_bar_height;
         window->cursor_pos = vec2_add(window->cursor_pos, ui.style.window_padding);
         window->cursor_pos.y -= window->scroll_y;
         window->cursor_pos_last_line = window->cursor_pos;
@@ -1405,8 +1112,7 @@ ui_window(char *title, Rect2 initial_rect,
         window->current_item_width = window->item_width_default;
         window->line_height_last_line = window->current_line_height = 0;
 
-        Rect2 clip_rect = (window->parent_window ? rect2_clip(window->parent_window->rect, window->rect) : window->rect);
-
+        Rect2 clip_rect = window->rect;
         push_clip_rect(ui.renderer, clip_rect);
     }
     else
@@ -1421,8 +1127,7 @@ ui_window(char *title, Rect2 initial_rect,
 void
 ui_end_window()
 {
-    if (ui.current_window->flags & UIWindowFlags_Movable &&
-        !ui_id_is_valid(ui.active_id) &&
+    if (!ui_id_is_valid(ui.active_id) &&
         !ui_id_is_valid(ui.hot_id) &&
         rect2_collide_point(ui.current_window->title_bar_rect, ui.input->mouse_pos) &&
         ui.left_mouse_button_pressed)
@@ -1430,43 +1135,7 @@ ui_end_window()
         ui.active_id = ui_make_id(ui.current_window, "#MOVE", 0);
     }
     pop_clip_rect(ui.renderer);
-    ui.current_window = ui.current_window->parent_window;
-}
-
-void
-ui_section(char *title,
-    Vec2 size,
-    u32 flags)
-{
-    UIWindow *window = ui.current_window;
-    assert(window);
-
-    Vec2 content_min = window->cursor_pos;
-    Vec2 content_max = vec2_sub(rect2_bottom_right(window->rect), ui.style.window_padding);
-
-    if (size.x <= 0)
-    {
-        size.x = content_max.x - content_min.x + size.x;
-    }
-    if (size.y <= 0)
-    {
-        size.y = content_max.y - content_min.y + size.y;
-    }
-
-    Rect2 section_rect = rect2v(content_min, vec2_add(content_min, size));
-
-    ui_window(title, section_rect, flags, 0);
-}
-
-void
-ui_section_end()
-{
-    UIWindow *window = ui.current_window;
-    assert(window && window->parent_window);
-    Vec2 section_size = rect2_size(window->rect);
-
-    ui_end_window();
-    ui_element_size(section_size, 0);
+    ui.current_window = 0;
 }
 
 void
@@ -1595,17 +1264,9 @@ ui_begin_frame()
 void
 ui_end_frame()
 {
-    if (ui.tooltip_text[0])
-    {
-        Vec2 pos = vec2_add(ui.input->mouse_pos, vec2(32, 16));
-        Vec2 tooltip_size = get_text_size(&ui.font, ui.tooltip_text, 0.5f);
-        Rect2 tooltip_rect = rect2v(vec2_sub(pos, vec2_mul(ui.style.frame_padding, vec2s(2))), vec2_add(pos, vec2_add(tooltip_size, vec2_mul(ui.style.frame_padding, vec2s(2)))));
-
-        ui_window("$TOOLTIP", tooltip_rect, UIWindowFlags_AlwaysSetRect, 0);
-        ui_text(ui.tooltip_text);
-        ui_end_window();
-    }
-
+    push_projection(ui.renderer, mat4x4_orthographic2d(0, ui.renderer->display_size.x, ui.renderer->display_size.y, 0));
+    push_view(ui.renderer, mat4x4_identity());
+    
     for(u32 i = 0; 
         i < ui.draw_list_size;
         ++i)
@@ -1614,4 +1275,7 @@ ui_end_frame()
 
         push_quad(ui.renderer, entry->vertices[0], entry->vertices[1], entry->vertices[2], entry->vertices[3], entry->colors[0], entry->colors[1], entry->colors[2], entry->colors[3], entry->uvs[0], entry->uvs[1], entry->uvs[2], entry->uvs[3], entry->renderer_texture);
     }
+    
+    pop_projection(ui.renderer);
+    pop_view(ui.renderer);
 }

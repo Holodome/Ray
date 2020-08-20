@@ -229,9 +229,9 @@ inline Mat4x4 mat4x4_rotate_z(f32 angle);
 inline Mat4x4 mat4x4_rotate(f32 angle, Vec3 v);
 inline Mat4x4 mat4x4_orthographic3d(f32 l, f32 r, f32 b, f32 t, f32 n, f32 f);
 inline Mat4x4 mat4x4_orthographic2d(f32 l, f32 r, f32 b, f32 t);
+inline Mat4x4 mat4x4_perspective(f32 fovy, f32 aspect, f32 near, f32 far);
 inline Mat4x4 mat4x4_look_at(Vec3 pos, Vec3 target);
 inline Mat4x4 mat4x4_mul(Mat4x4 a, Mat4x4 b);
-
 
 //
 // Rect2

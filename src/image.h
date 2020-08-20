@@ -3,7 +3,7 @@
 #include "lib/common.h"
 
 //  Wrapper for 4-component image (little-endian RGBA), where each pixel is represented as u32
-typedef struct {
+typedef struct ImageU32 {
     u32 width;
     u32 height;
     u32 *pixels;

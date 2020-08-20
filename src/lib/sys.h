@@ -130,7 +130,7 @@ typedef struct {
 u32    sys_get_processor_count(void);
 Thread sys_create_thread(ThreadProc *proc, void *param);
 // @NOTE(hl): Needs to be inlined in case compiler does something stupid.
-// Exits current thread
+// Exits calling thread
 __attribute__((always_inline)) void sys_exit_thread(void);
 
 // Interlocked add. Returns contents of value before addition
@@ -149,7 +149,7 @@ struct SysGLCTX;
 // @TODO(hl): See if it is better to switch to regular ogl procedure approach, where they are global variables
 struct OpenGLRenderer;
 
-// All functions returning pointers malloc result. @TODO(hl): See if we can make their results static and passed as dest parameter
+// All functions' return values are heap-allocated, because size of each structure is platform-dependent
 // Creates window 
 struct SysWindow *sys_create_window(u32 width, u32 height);
 // Initialized opengl 3.3

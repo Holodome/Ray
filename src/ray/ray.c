@@ -1,10 +1,10 @@
 #include "ray/ray.h"
 
-
-#include "ray/ray_tracer.c"
 #include "lib/ray_math.c"
 #include "lib/sys.c"
 #include "image.c"
+#include "ray/ray_tracer.c"
+#include "ray/scene_file.c"
 
 Vec3 ray_point_at(Ray ray, f32 param)
 {
@@ -263,7 +263,7 @@ cast_sample_rays(CastState *state)
                         hit_record.distance = t;
                         hit_record.mat_index = rect.mat_index;
                         
-                        Vec3 plane_normal = { 0 };
+                        Vec3 plane_normal = {0};
                         plane_normal.e[c_index] = 1;
                         
                         hit_record_set_normal(&hit_record, ray, plane_normal);
@@ -390,7 +390,7 @@ cast_sample_rays(CastState *state)
                     {
                         cos_atten = 0.0f;
                     }
-                    Vec3 reflect_value = { 0 };
+                    Vec3 reflect_value = {0};
                     if (mat.texture.proc)
                     {
                         reflect_value = mat.texture.proc(&mat.texture, hit_record.uv, hit_record.hit_point);
@@ -489,352 +489,6 @@ static THREAD_PROC_SIGNATURE(render_thread_proc)
     return 0;
 }
 
-
-void 
-scene_write_to_asset_file(Scene *scene, char *filename)
-{
-    FILE *file = fopen(filename, "wb");
-    assert(file);
-    
-    u64 material_count = scene->material_count;
-    u64 sphere_count = scene->sphere_count;
-    u64 plane_count = scene->plane_count;
-    u64 rect_count = scene->rect_count;
-    u64 triangle_count = scene->triangle_count;
-    
-    SceneFileHeader header = { 0 };
-    header.magic_number = SCENE_FILE_MAGIC_NUMBER;
-    header.version = SCENE_FILE_VERSION;
-    header.material_count = material_count;
-    header.sphere_count = sphere_count;
-    header.plane_count = plane_count;
-    header.aarect_count = rect_count;
-    header.triangle_count = triangle_count;
-    
-    SceneFileCamera camera;
-    camera.pos = scene->camera.camera_pos;
-    header.camera = camera;
-    
-    u64 materials_size = sizeof(SceneFileMaterial) * material_count;
-    u64 spheres_size = sizeof(SceneFileSphere) * sphere_count;
-    u64 planes_size = sizeof(SceneFilePlane) * plane_count;
-    u64 aarects_size = sizeof(SceneFileAARect) * rect_count;
-    u64 triangles_size = sizeof(SceneFileTriangle) * triangle_count;
-    
-    u64 materials_loc = sizeof(header);
-    u64 spheres_loc = materials_loc + materials_size;
-    u64 planes_loc = spheres_loc + spheres_size;
-    u64 aarects_loc = planes_loc + aarects_size;
-    u64 triangles_loc = aarects_loc + aarects_size;
-        
-    header.materials_loc = materials_loc;
-    header.spheres_loc = spheres_loc;
-    header.planes_loc = planes_loc;
-    header.aarects_loc = aarects_loc;
-    header.triangles_loc = triangles_loc;    
-    
-    fwrite(&header, sizeof(header), 1, file);
-    
-    u64 temp_buffer_size = max(materials_size, max(spheres_size, max(planes_size, max(aarects_size, triangles_size))));
-    void *temp_buffer = malloc(temp_buffer_size);
-    
-    SceneFileMaterial *file_materials = (SceneFileMaterial *)temp_buffer;
-    for (u32 material_index = 0;
-         material_index < material_count;
-         ++material_index)
-    {
-        SceneFileMaterial *dest = file_materials + material_index;
-        Material *source = scene->materials + material_index;
-        
-        dest->scatter = source->scatter;
-        dest->refraction_probability = source->refraction_probability;
-        dest->emit_color = source->emit_color;
-        switch(source->texture.type)
-        {
-            case Texture_Solid:
-            {
-                dest->type = SceneFileTexture_Solid;
-                dest->solid = source->texture.solid_color;
-            } break;
-            case Texture_Checkered:
-            {
-                dest->type = SceneFileTexture_Checkered;
-                dest->checkered1 = source->texture.checkered1;
-                dest->checkered2 = source->texture.checkered2;
-            } break;
-            case Texture_Image:
-            {
-                dest->type = SceneFileTexture_Image;
-                format_string(dest->image_file, sizeof(dest->image_file), "%s", source->texture.filename);
-            } break;     
-        }
-    }
-    fwrite(file_materials, materials_size, 1, file);
-
-    SceneFileSphere *file_spheres = temp_buffer;
-     for (u32 sphere_index = 0;
-         sphere_index < sphere_count;
-         ++sphere_index)
-    {
-        SceneFileSphere *dest = file_spheres + sphere_index;
-        Sphere *source = scene->spheres + sphere_index;
-        
-        dest->pos = source->pos;
-        dest->r = source->radius;
-        dest->mat_index = source->mat_index;
-    }
-    fwrite(file_spheres, spheres_size, 1, file);
-    
-    SceneFilePlane *file_planes = temp_buffer;
-     for (u32 plane_index = 0;
-         plane_index < plane_count;
-         ++plane_index)
-    {
-        SceneFilePlane *dest = file_planes + plane_index;
-        Plane *source = scene->planes + plane_index;
-        
-        dest->normal = source->normal;
-        dest->d = source->dist;
-        dest->mat_index = source->mat_index;
-    }
-    fwrite(file_planes, planes_size, 1, file);
-    
-    SceneFileAARect *file_rects = temp_buffer;
-     for (u32 rect_index = 0;
-         rect_index < rect_count;
-         ++rect_index)
-    {
-        SceneFileAARect *dest = file_rects + rect_index;
-        Rect *source = scene->rects + rect_index;
-        
-        SceneFileAARectType type;
-        switch(source->type)
-        {
-            case RectType_XY:
-            {
-                type = SceneFileAARect_XY;
-            } break;
-            case RectType_YZ:
-            {
-                type = SceneFileAARect_YZ;
-            } break;
-            case RectType_XZ:
-            {
-                type = SceneFileAARect_XZ;
-            } break;
-        }
-        dest->type = type;
-        dest->a0_0 = source->xy.x0;
-        dest->a0_1 = source->xy.x1;
-        dest->a1_0 = source->xy.y0;
-        dest->a1_1 = source->xy.y1;
-        dest->a2 = source->xy.k;
-        dest->mat_index = source->xy.mat_index;
-    }
-    fwrite(file_rects, aarects_size, 1, file);
-    
-    SceneFileTriangle *file_triangles = temp_buffer;
-     for (u32 triangle_index = 0;
-         triangle_index < triangle_count;
-         ++triangle_index)
-    {
-        SceneFileTriangle *dest = file_triangles + triangle_index;
-        Triangle *source = scene->triangles + triangle_index;
-        
-        dest->vertex0 = source->vertex0;
-        dest->vertex1 = source->vertex1;
-        dest->vertex2 = source->vertex2;
-        dest->mat_index = source->mat_index;
-    }
-    fwrite(file_triangles, triangles_size, 1, file);
-    
-    free(temp_buffer);
-    fclose(file);
-}
-
-static Camera
-camera(Vec3 pos, ImageU32 *image)
-{
-    Camera camera;
-    camera.time0 = 0;
-    camera.time1 = 1;
-    // Camera is an orthographic projection with film having size of dest image
-    camera.camera_pos = pos;
-    // @NOTE(hl): Create coordinate system for camera.
-    // These are unit vectors of 3 axes of our coordinate system
-    camera.camera_z = vec3_normalize(camera.camera_pos);
-    camera.camera_x = vec3_normalize(cross(vec3(0, 0, 1), camera.camera_z));
-    camera.camera_y = vec3_normalize(cross(camera.camera_z, camera.camera_x));
-    camera.film_center = vec3_sub(camera.camera_pos, camera.camera_z);
-
-    // Apply image aspect ratio
-    camera.film_w = 1.0f;
-    camera.film_h = 1.0f;
-    if (image->width > image->height)
-    {
-        camera.film_h = camera.film_w * (f32)image->height / (f32)image->width;
-    }
-    else if (image->height > image->width)
-    {
-        camera.film_w = camera.film_h * (f32)image->width / (f32)image->height;
-    }
-    camera.half_film_w = camera.film_w * 0.5f;
-    camera.half_film_h = camera.film_h * 0.5f;
-    camera.half_pix_w = reciprocal32(image->width) * 0.5f;
-    camera.half_pix_h = reciprocal32(image->height) * 0.5f;
-    return camera;
-}
-
-void 
-scene_init_from_file(Scene *scene, ImageU32 *image, char *filename)
-{
-    FILE *file = fopen(filename, "rb");
-    assert(file);
-    SceneFileHeader header;
-    fread(&header, sizeof(header), 1, file);
-    
-    assert(header.magic_number == SCENE_FILE_MAGIC_NUMBER);
-    assert(header.version == SCENE_FILE_VERSION);
-       
-    u64 material_count = header.material_count;
-    u64 sphere_count = header.sphere_count;
-    u64 plane_count = header.plane_count;
-    u64 rect_count = header.aarect_count;
-    u64 triangle_count = header.triangle_count;
-    
-    scene->material_count = material_count;
-    scene->sphere_count = sphere_count;
-    scene->plane_count = plane_count;
-    scene->rect_count = rect_count;
-    scene->triangle_count = triangle_count;
-       
-    u64 materials_size = sizeof(SceneFileMaterial) * material_count;
-    u64 spheres_size = sizeof(SceneFileSphere) * sphere_count;
-    u64 planes_size = sizeof(SceneFilePlane) * plane_count;
-    u64 aarects_size = sizeof(SceneFileAARect) * rect_count;
-    u64 triangles_size = sizeof(SceneFileTriangle) * triangle_count;
-    u64 temp_buffer_size = max(materials_size, max(spheres_size, max(planes_size, max(aarects_size, triangles_size))));
-    void *temp_buffer = malloc(temp_buffer_size);
-    
-    fseek(file, header.materials_loc, SEEK_SET);
-    
-    SceneFileMaterial *materials = temp_buffer;
-    fread(materials, materials_size, 1, file);    
-    scene->materials = calloc(material_count, sizeof(Material));
-    for (u32 material_index = 0;
-         material_index < material_count;
-         ++material_index)
-    {
-        SceneFileMaterial *source = materials + material_index;
-        Material *dest = scene->materials + material_index;
-        
-        dest->scatter = source->scatter;
-        dest->refraction_probability = source->refraction_probability;
-        dest->emit_color = source->emit_color;
-        switch(source->type)
-        {
-            case SceneFileTexture_Solid:
-            {
-                dest->texture = texture_solid_color(source->solid);
-            } break;
-            case SceneFileTexture_Checkered:
-            {
-                dest->texture = texture_checkered(source->checkered1, source->checkered2);
-            } break;
-            case SceneFileTexture_Image:
-            {
-                dest->texture = texture_image(source->image_file);
-            } break;
-        }
-    }
-
-    SceneFileSphere *file_spheres = temp_buffer;
-    fread(file_spheres, spheres_size, 1, file);    
-    scene->spheres = calloc(sphere_count, sizeof(Sphere));
-    for (u32 sphere_index = 0;
-         sphere_index < sphere_count;
-         ++sphere_index)
-    {
-        SceneFileSphere *source = file_spheres + sphere_index;
-        Sphere *dest = scene->spheres + sphere_index;
-        
-        dest->pos = source->pos;
-        dest->radius = source->r;
-        dest->mat_index = source->mat_index;
-    }
-    
-    SceneFilePlane *file_planes = temp_buffer;
-    fread(materials, materials_size, 1, file);    
-    scene->planes = calloc(plane_count, sizeof(Plane));
-     for (u32 plane_index = 0;
-         plane_index < plane_count;
-         ++plane_index)
-    {
-        SceneFilePlane *source = file_planes + plane_index;
-        Plane *dest = scene->planes + plane_index;
-        
-        dest->normal = source->normal;
-        dest->dist = source->d;
-        dest->mat_index = source->mat_index;
-    }
-    
-    SceneFileAARect *file_rects = temp_buffer;
-    fread(materials, materials_size, 1, file);    
-    scene->rects = calloc(rect_count, sizeof(Rect));
-    for (u32 rect_index = 0;
-         rect_index < rect_count;
-         ++rect_index)
-    {
-        SceneFileAARect *source = file_rects + rect_index;
-        Rect *dest = scene->rects + rect_index;
-        
-        RectType type;
-        switch(source->type)
-        {
-            case SceneFileAARect_XY:
-            {
-                type = RectType_XY;
-            } break;
-            case SceneFileAARect_YZ:
-            {
-                type = RectType_YZ;
-            } break;
-            case SceneFileAARect_XZ:
-            {
-                type = RectType_XZ;
-            } break;
-        }
-        dest->type = type;
-        dest->xy.x0 = source->a0_0;
-        dest->xy.x1 = source->a0_1;
-        dest->xy.y0 = source->a1_0;
-        dest->xy.y1 = source->a1_1;
-        dest->xy.k = source->a2;
-        dest->xy.mat_index = source->mat_index;
-    }
-    
-    SceneFileTriangle *file_triangles = temp_buffer;
-    fread(materials, materials_size, 1, file);    
-    scene->triangles = calloc(triangle_count, sizeof(Triangle));
-    for (u32 triangle_index = 0;
-         triangle_index < triangle_count;
-         ++triangle_index)
-    {
-        SceneFileTriangle *source = file_triangles + triangle_index;
-        Triangle *dest = scene->triangles + triangle_index;
-        
-        dest->vertex0 = source->vertex0;
-        dest->vertex1 = source->vertex1;
-        dest->vertex2 = source->vertex2;
-    }
-    
-    free(temp_buffer);
-    
-    scene->camera = camera(header.camera.pos, image);
-    
-    fclose(file);
-}
-
 // Returns scene with same objects in it
 // Can be used for testing and comparing results
 void 
@@ -887,7 +541,7 @@ init_sample_scene(Scene *scene, ImageU32 *image)
     // spheres[5].radius = 1000.0f;
     // spheres[5].mat_index = 1;
     
-    static MovingSphere moving_spheres[1] = { 0 };
+    static MovingSphere moving_spheres[1] = {0};
     moving_spheres[0].center0 = vec3(-2, -3, 0);
     moving_spheres[0].center1 = vec3(-2, -3, 1);
     moving_spheres[0].mat_index = 7;
@@ -895,7 +549,7 @@ init_sample_scene(Scene *scene, ImageU32 *image)
     moving_spheres[0].time0 = 0;    
     moving_spheres[0].time1 = 1;    
     
-    static Rect rects[1] = { 0 };
+    static Rect rects[1] = {0};
     rects[0] = (Rect) { 
         .type = RectType_XY,
         .xy   = (XYRect) {
@@ -1002,7 +656,7 @@ add_box(Rect *rects, Box3 box, u32 mat_index, f32 rotation)
 void 
 make_colonel_box(Scene *scene, ImageU32 *image)
 {
-    static Material materials[7] = { 0 };
+    static Material materials[7] = {0};
     materials[1].texture = texture_solid_color(vec3(0.65f, 0.05f, 0.05f));
     materials[1].scatter = 0.5f;
     materials[2].texture = texture_solid_color(vec3(0.73f, 0.73f, 0.73f));
@@ -1014,7 +668,7 @@ make_colonel_box(Scene *scene, ImageU32 *image)
     materials[6].refraction_probability = 1.0f;
 
     
-    static Rect rects[6] = { 0 };
+    static Rect rects[6] = {0};
     rects[0] = (Rect) { 
         .type = RectType_YZ,
         .yz   = (YZRect) {
@@ -1082,7 +736,7 @@ make_colonel_box(Scene *scene, ImageU32 *image)
         }
     };
     
-    static Sphere spheres[2] = { 0 };
+    static Sphere spheres[2] = {0};
     spheres[0] = (Sphere) {
         .mat_index = 5,
         .pos = vec3(2.1f, -2.3f, -3.5f),
@@ -1125,7 +779,6 @@ parse_command_line_arguments(RaySettings *settings, u32 argc, char **argv)
     
     u32 argument_count = argc;
     char **arguments = argv;
-    u32 last_argument = argument_count - 1;
     u32 cursor = 1;
     
     while (cursor < argument_count)
@@ -1185,7 +838,7 @@ int main(int argc, char **argv)
 {
     printf("Ray started!\n");
     
-    RaySettings settings = { 0 };
+    RaySettings settings = {0};
     settings.output_filename = "out.png";
     settings.output_width = 600;
     settings.output_height = 600;

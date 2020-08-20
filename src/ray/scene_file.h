@@ -3,6 +3,8 @@
 #include "lib/common.h"
 #include "lib/ray_math.h"
 
+#include "ray/ray_tracer.h"
+
 #define ASCII_PACK(a, b, c, d) ((a << 0) | (b << 8) | (c << 16) | (d << 24))
 #define SCENE_FILE_MAGIC_NUMBER ASCII_PACK('h', 'r', 's', 'f')
 #define SCENE_FILE_VERSION 0 
@@ -93,6 +95,12 @@ typedef struct {
 } SceneFileHeader;
 
 #pragma pack(pop)
+
+struct Scene;
+struct ImageU32;
+
+void scene_init_from_file(struct Scene *scene, struct ImageU32 *image, char *filename);
+void scene_write_to_scene_file(struct Scene *scene, char *filename);
 
 #define SCENE_FILE_H 1
 #endif

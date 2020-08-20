@@ -2,9 +2,21 @@
 
 #include "lib/common.h"
 #include "lib/ray_math.h"
-#include "editor/renderer/opengl_api.h"
+
+#include "thirdparty/glcorearb.h"
 
 struct Font;
+
+#define RENDERER_MATRIX_STACK_SIZE 	  4
+#define RENDERER_CLIP_RECT_STACK_SIZE 8 
+
+typedef struct {
+
+#define GLProc(name, type) type name;
+#include "editor/renderer/gl_proc_list.inc"
+#undef GLProc
+
+} OpenGLApi;
 
 typedef struct {
 	u32 index;
@@ -60,6 +72,9 @@ typedef struct {
 	u64 vertex_array_offset;
 	u64 index_array_offset;
 	
+	Mat4x4 projection;
+	Mat4x4 view;
+	
 	u32 quad_count;
 } RendererCommandQuads;
 
@@ -81,6 +96,12 @@ typedef struct OpenGLRenderer {
 	
 	Vec3 clear_color;
 	Vec2 display_size;
+	
+	// @NOTE(hl): Size + 1 beacuse we want 0 element to always exist, even in user didn't push anything
+	Mat4x4 projection_matrix_stack[RENDERER_MATRIX_STACK_SIZE];
+	Mat4x4 view_matrix_stack	  [RENDERER_MATRIX_STACK_SIZE];
+	u32 projection_matrix_stack_size;
+	u32 view_matrix_stack_size;
 	
 	// @NOTE(hl): Initialized in platform
     OpenGLApi gl;
@@ -119,19 +140,24 @@ void push_text(OpenGLRenderer *renderer, Vec2 position, Vec4 color,
 void push_clip_rect(OpenGLRenderer *renderer, Rect2 rect);
 void pop_clip_rect(OpenGLRenderer *renderer);
 
+void push_projection(OpenGLRenderer *renderer, Mat4x4 m);
+void push_view(OpenGLRenderer *renderer, Mat4x4 m);
+void pop_projection(OpenGLRenderer *renderer);
+void pop_view(OpenGLRenderer *renderer);
+
 // These function are made for visualization, uv or testing.
 // They are not very performat because they always draw rects under the hood,
 // wasting space on repeating vertices
-void quad_outline(OpenGLRenderer *renderer,
+void push_quad_outline(OpenGLRenderer *renderer,
 				  Vec2 v00, Vec2 v01, Vec2 v10, Vec2 v11,
 				  Vec4 color,
 				  f32  width);
 
-void quad_outliner(OpenGLRenderer *renderer,
+void push_quad_outliner(OpenGLRenderer *renderer,
 				   Rect2 rect, Vec4 color,
 				   f32 width);
 
-void triangle(OpenGLRenderer *renderer,
+void push_triangle(OpenGLRenderer *renderer,
 			  Vec3 v0, Vec3 v1, Vec3 v2,
 			  Vec4 c0, Vec4 c1, Vec4 c2);
 

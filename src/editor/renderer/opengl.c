@@ -49,10 +49,18 @@ get_current_quads(OpenGLRenderer *renderer)
     if (renderer->last_command_header
         && renderer->last_command_header->type == RendererCommand_RendererCommandQuads)
     {
-        result = (RendererCommandQuads *)(renderer->last_command_header + 1);
-        ++result->quad_count;
+        RendererCommandQuads *quads = (RendererCommandQuads *)(renderer->last_command_header + 1);
+        if (quads
+            && !memcmp(&quads->view, &renderer->view_matrix_stack[renderer->view_matrix_stack_size - 1], sizeof(Mat4x4))
+            && !memcmp(&quads->projection, &renderer->projection_matrix_stack[renderer->projection_matrix_stack_size - 1], sizeof(Mat4x4)))
+        {
+            result = quads;
+            ++result->quad_count;
+        }
     }
-    else
+    
+    
+    if (!result)
     {
         result = push_command(renderer, RendererCommandQuads);
 		
@@ -135,6 +143,12 @@ push_quad(OpenGLRenderer *renderer,
         // Update buffer sizes after we are finished.
         renderer->vertex_buffer_size += 4;
         renderer->index_buffer_size  += 6;
+        
+        assert(renderer->projection_matrix_stack_size);
+        assert(renderer->view_matrix_stack_size);
+        
+        quads->projection = renderer->projection_matrix_stack[renderer->projection_matrix_stack_size - 1];
+        quads->view       = renderer->view_matrix_stack[renderer->view_matrix_stack_size - 1];
     }
     else
     {
@@ -254,14 +268,43 @@ push_text(OpenGLRenderer *renderer, Vec2 position, Vec4 color,
 	}
 }
 
-static void
+void
 push_clip_rect(OpenGLRenderer *renderer, Rect2 rect)
 {
 }
 
-static void
+void
 pop_clip_rect(OpenGLRenderer *renderer)
 {
+}
+
+
+void
+push_projection(OpenGLRenderer *renderer, Mat4x4 m)
+{
+    assert(renderer->projection_matrix_stack_size + 1 < RENDERER_MATRIX_STACK_SIZE - 1);
+    renderer->projection_matrix_stack[renderer->projection_matrix_stack_size++] = m;
+}
+
+void 
+push_view(OpenGLRenderer *renderer, Mat4x4 m)
+{
+    assert(renderer->view_matrix_stack_size + 1 < RENDERER_MATRIX_STACK_SIZE - 1);
+    renderer->view_matrix_stack[renderer->view_matrix_stack_size++] = m;
+}
+
+void 
+pop_projection(OpenGLRenderer *renderer)
+{
+    assert(renderer->projection_matrix_stack_size != 0);
+    --renderer->projection_matrix_stack_size;
+}
+
+void 
+pop_view(OpenGLRenderer *renderer)
+{
+    assert(renderer->view_matrix_stack_size != 0);
+    --renderer->view_matrix_stack_size;
 }
 
 
@@ -640,6 +683,11 @@ opengl_begin_frame(OpenGLRenderer *opengl, Vec2 display_size, Vec3 clear_color)
 	
     assert(opengl->max_index_buffer_size);
     opengl->index_buffer_size = 0;
+    
+    opengl->projection_matrix_stack_size = 0;
+    opengl->view_matrix_stack_size = 0;
+    push_projection(opengl, mat4x4_orthographic2d(0, opengl->display_size.x, opengl->display_size.y, 0));
+    push_view(opengl, mat4x4_identity());
 }
 
 void
@@ -670,8 +718,6 @@ opengl_end_frame(OpenGLRenderer *opengl)
                      opengl->clear_color.b, 1.0f);
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	
-    Mat4x4 view_projection = mat4x4_orthographic2d(0, opengl->display_size.x, opengl->display_size.y, 0);
-	
     // Iterate through requests
     for (u8 *header_at = opengl->request_buffer_base;
          header_at < opengl->request_buffer_at;
@@ -689,6 +735,9 @@ opengl_end_frame(OpenGLRenderer *opengl)
                 header_at += sizeof(RendererCommandQuads);
                 RendererCommandQuads *entry = (RendererCommandQuads *)data;
 				
+                Mat4x4 view_projection = mat4x4_mul(entry->projection, entry->view);
+                // view_projection = mat4x4_orthographic2d(0, opengl->display_size.x, opengl->display_size.y, 0);
+                
                 OpenGLQuadShader *shader = &opengl->quad_shader;
                 gl->glUseProgram(shader->handle);
 				

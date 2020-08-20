@@ -153,7 +153,7 @@ win32_opengl_set_pixel_format(HDC hdc, SysGLCTX *ctx)
 	
 	if (!extended_pick)
 	{
-		PIXELFORMATDESCRIPTOR desired_pixel_format = { 0 };
+		PIXELFORMATDESCRIPTOR desired_pixel_format = {0};
 		desired_pixel_format.nSize = sizeof(desired_pixel_format);
 		desired_pixel_format.nVersion = 1;
 		desired_pixel_format.iPixelType = PFD_TYPE_RGBA;

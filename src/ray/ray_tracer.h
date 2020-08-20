@@ -199,7 +199,7 @@ typedef struct {
 
 // Returns ray from cemera center aimed on position on film
 inline Ray camera_ray_at(Camera *camera, f32 film_x, f32 film_y, RandomSeries *series);
-
+Camera camera(Vec3 pos, ImageU32 *image);
 
 typedef struct {
     f32 x0;
@@ -257,7 +257,7 @@ typedef struct {
 } Triangle;
 
 // World that we are simulating
-typedef struct {
+typedef struct Scene {
     Camera camera;
 
     u32 material_count;
@@ -318,34 +318,6 @@ hit_record_set_normal(HitRecord *record, Ray ray, Vec3 normal)
     record->normal = normal;
 }
 inline bool has_hit(HitRecord record) { return (record.mat_index != 0); }
-
-typedef u32 HitableType;
-enum 
-{
-    Hitable_Sphere,
-    Hitable_MovingSphere,
-    Hitable_BVHNode
-};
-
-struct Hitable;
-
-typedef struct {
-    struct Hitable *left;
-    struct Hitable *right;
-    Box3            box;
-} BVHNode; 
-
-typedef struct Hitable
-{
-    HitableType type;
-    union 
-    {
-        Sphere       sphere;
-        MovingSphere moving_sphere;
-        BVHNode      bvh_node;
-    };
-} Hitable;
-
 
 #define RAY_TRACER_H 1
 #endif

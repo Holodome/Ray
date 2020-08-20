@@ -2,8 +2,8 @@
 //
 #if !defined(RANDOM_H)
 
-#include "common.h"
-#include "ray_math.h"
+#include "lib/common.h"
+#include "lib/ray_math.h"
 
 // @NOTE(hl): Struct holding state of RNG
 // State field can be used to seed the RNG to produce same sequence of numbers.

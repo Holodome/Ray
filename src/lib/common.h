@@ -24,27 +24,27 @@ typedef double f64;
 typedef uintptr_t umm;
 typedef intptr_t  imm;
 
-const u8 U8_MAX   = UINT8_MAX;
-const u16 U16_MAX = UINT16_MAX;
-const u32 U32_MAX = UINT32_MAX;
-const u64 U64_MAX = UINT64_MAX;
+#define U8_MAX  UINT8_MAX
+#define U16_MAX UINT16_MAX
+#define U32_MAX UINT32_MAX
+#define U64_MAX UINT64_MAX
 
-const i8 I8_MAX   = INT8_MAX;
-const i8 I8_MIN   = INT8_MIN;
-const i16 I16_MAX = INT16_MAX;
-const i16 I16_MIN = INT16_MIN;
-const i32 I32_MAX = INT32_MAX;
-const i32 I32_MIN = INT32_MIN;
-const i64 I64_MAX = INT64_MAX;
-const i64 I64_MIN = INT64_MIN;
+#define I8_MAX  INT8_MAX
+#define I8_MIN  INT8_MIN
+#define I16_MAX INT16_MAX
+#define I16_MIN INT16_MIN
+#define I32_MAX INT32_MAX
+#define I32_MIN INT32_MIN
+#define I64_MAX INT64_MAX
+#define I64_MIN INT64_MIN
 
-const f32 F32_MAX = FLT_MAX;
-const f32 F32_MIN = FLT_MIN;
-const f64 F64_MAX = DBL_MAX;
-const f64 F64_MIN = DBL_MIN;
+#define F32_MAX FLT_MAX
+#define F32_MIN FLT_MIN
+#define F64_MAX DBL_MAX
+#define F64_MIN DBL_MIN
 
-const umm UMM_MAX = UINTPTR_MAX;
-const imm IMM_MAX = INTPTR_MAX;
+#define UMM_MAX UINTPTR_MAX
+#define IMM_MAX INTPTR_MAX
 
 #define array_size(a) (sizeof(a) / sizeof(*(a)))
 

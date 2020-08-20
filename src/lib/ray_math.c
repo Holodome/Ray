@@ -539,7 +539,7 @@ rgba_pack_4x8(Vec4 a)
 inline Mat4x4 
 mat4x4(void)
 {
-	Mat4x4 result = { 0 };
+	Mat4x4 result = {0};
 	return result;
 }
 
@@ -566,7 +566,8 @@ mat4x4_identity(void)
 inline Mat4x4
 mat4x4_translate(Vec3 t) {
 	Mat4x4 result = mat4x4_identity();
-    result.v[0].xyz = t;
+    result.v[3].xyz = t;
+    result.v[3].w = 1.0f;
 	return result;
 }
 
@@ -583,7 +584,7 @@ mat4x4_scale(Vec3 s) {
 }
 
 inline Mat4x4
-mat4x4_rotation_x(f32 angle) {
+mat4x4_rotate_x(f32 angle) {
 	const f32 c = cos32(angle);
 	const f32 s = sin32(angle);
 	Mat4x4 r =
@@ -597,7 +598,7 @@ mat4x4_rotation_x(f32 angle) {
 }
 
 inline Mat4x4
-mat4x4_rotation_y(f32 angle) {
+mat4x4_rotate_y(f32 angle) {
 	const f32 c = cos32(angle);
 	const f32 s = sin32(angle);
 	Mat4x4 r =
@@ -611,7 +612,7 @@ mat4x4_rotation_y(f32 angle) {
 }
 
 inline Mat4x4
-mat4x4_rotation_z(f32 angle) {
+mat4x4_rotate_z(f32 angle) {
 	const f32 c = cos32(angle);
 	const f32 s = sin32(angle);
 	Mat4x4 r =
@@ -625,7 +626,7 @@ mat4x4_rotation_z(f32 angle) {
 }
 
 inline Mat4x4
-mat4x4_rotation(f32 angle, Vec3 a) {
+mat4x4_rotate(f32 angle, Vec3 a) {
 	const f32 c = cos32(angle);
 	const f32 s = sin32(angle);
 	a = vec3_normalize(a);
@@ -636,9 +637,9 @@ mat4x4_rotation(f32 angle, Vec3 a) {
 	
 	Mat4x4 r =
 	{{
-			{c + tx * a.x, 		     tx * a.y - s * a.z, tx * a.z - s * a.z, 0},
-			{    ty * a.x,		     ty * a.y + c,       ty * a.z + s * a.x, 0},
-			{    tz * a.x + s * a.x, tz * a.y - s * a.x, tz * a.z + c,       0},
+			{c + tx * a.x, 		     tx * a.y + s * a.z, tx * a.z - s * a.y, 0},
+			{    ty * a.x - s * a.z, ty * a.y + c,       ty * a.z + s * a.x, 0},
+			{    tz * a.x + s * a.y, tz * a.y - s * a.x, tz * a.z + c,       0},
 			{0, 0, 0, 1}
 		}};
 	return(r);
@@ -681,11 +682,11 @@ mat4x4_look_at(Vec3 pos, Vec3 target)
     
     Mat4x4 result = 
     {{
-			{camera_x.x, camera_y.x, -camera_z.x, 0}, 
-			{camera_x.y, camera_y.y, -camera_y.y, 0}, 
-			{camera_x.z, camera_y.y, -camera_y.z, 0}, 
-			{-vec3_dot(camera_x, pos), -vec3_dot(camera_y, pos), vec3_dot(camera_z, pos), 1.0f} 
-		}};
+        {camera_x.x, camera_y.x, -camera_z.x, 0}, 
+        {camera_x.y, camera_y.y, -camera_y.y, 0}, 
+        {camera_x.z, camera_y.y, -camera_y.z, 0}, 
+        {-vec3_dot(camera_x, pos), -vec3_dot(camera_y, pos), vec3_dot(camera_z, pos), 1.0f} 
+    }};
     
     return result;
 }
@@ -693,24 +694,38 @@ mat4x4_look_at(Vec3 pos, Vec3 target)
 inline Mat4x4 
 mat4x4_mul(Mat4x4 a, Mat4x4 b)
 {
-    Mat4x4 result;
-	for(u32 r = 0; 
-        r < 4;
-        ++r)
+    Mat4x4 result = {0};
+	for(u32 i = 0; 
+        i < 4;
+        ++i)
     {
-		for(u32 c = 0;
-            c < 4;
-            ++c)
+		for(u32 j = 0;
+            j < 4;
+            ++j)
         {
-			for(u32 i = 0;
-                i < 4;
-                ++i) 
-            {
-				result.e[r][c] += a.e[r][i] * b.e[i][c];
-			}
+            result.e[i][j] = a.e[0][j] * b.e[i][0] +
+                             a.e[1][j] * b.e[i][1] +
+                             a.e[2][j] * b.e[i][2] +
+                             a.e[3][j] * b.e[i][3];
 		}
 	}
 	return result;
+}
+
+inline Mat4x4 
+mat4x4_perspective(f32 fovy, f32 aspect, f32 near, f32 far)
+{
+    Mat4x4 result = {0};
+    
+    f32 thf = tan32(fovy / 2.0f);
+
+	result.e[0][0] = 1.0f / (aspect * thf);
+	result.e[1][1] = 1.0f / (thf);
+	result.e[2][2] = -(far + near) / (far - near);
+	result.e[2][3] = -1.0f;
+	result.e[3][2] = -2.0f* far * near / (far - near);
+    
+    return result;
 }
 
 inline Rect2

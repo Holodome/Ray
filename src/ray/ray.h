@@ -41,7 +41,5 @@ typedef struct {
     char *input_scene;
 } RaySettings;
 
-void scene_init_from_file(Scene *scene, ImageU32 *image, char *filename);
-
 #define RAY_H 1
 #endif
