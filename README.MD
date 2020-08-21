@@ -37,4 +37,5 @@ If project grows much more complicated, it is possible to integrate some build s
 
 ![Screenshot1](screenshots/0-1024rp.jpg)
 ![Screenshot2](screenshots/1-128.jpg)
-![Screenshot3](screenshots/cornellbox1-8192rp-42m.png)
+![Screenshot3](screenshots/cornellbox1-8192rp-9m.png)
+![Screenshot4](screenshots/cornellbox2-8192rp-36m.png)

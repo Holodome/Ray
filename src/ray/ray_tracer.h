@@ -253,6 +253,8 @@ typedef struct {
     Vec3 vertex1;
     Vec3 vertex2;
     
+    Vec3 normal;
+    
     u32 mat_index;
 } Triangle;
 

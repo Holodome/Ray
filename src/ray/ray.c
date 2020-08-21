@@ -226,15 +226,15 @@ cast_sample_rays(CastState *state)
             {
                 Rect rect_ = scene->rects[rect_index];
                 
-                // f32 sin_theta = sin32(rect_.rotation_y);
-                // f32 cos_theta = cos32(rect_.rotation_y);
+                f32 sin_theta = sin32(rect_.rotation_y);
+                f32 cos_theta = cos32(rect_.rotation_y);
                 
                 Ray rotated_ray = ray;
-                // rotated_ray.origin.x = cos_theta * ray.origin.x - sin_theta * ray.origin.y;
-                // rotated_ray.origin.y = sin_theta * ray.origin.x + cos_theta * ray.origin.y;
+                rotated_ray.origin.x = cos_theta * ray.origin.x - sin_theta * ray.origin.y;
+                rotated_ray.origin.y = sin_theta * ray.origin.x + cos_theta * ray.origin.y;
                 
-                // rotated_ray.dir.x = cos_theta * ray.dir.x - sin_theta * ray.dir.y;
-                // rotated_ray.dir.y = sin_theta * ray.dir.x + cos_theta * ray.dir.y;
+                rotated_ray.dir.x = cos_theta * ray.dir.x - sin_theta * ray.dir.y;
+                rotated_ray.dir.y = sin_theta * ray.dir.x + cos_theta * ray.dir.y;
                 
 #if 0
                 u32 a_index = 0;
@@ -343,19 +343,19 @@ cast_sample_rays(CastState *state)
                 }
 #endif 
                 
-                // if (made_hit)
-                // {
-                //     Vec3 hit_point = hit_record.hit_point;
-                //     Vec3 normal = hit_record.normal;
+                if (made_hit)
+                {
+                    Vec3 hit_point = hit_record.hit_point;
+                    Vec3 normal = hit_record.normal;
                     
-                //     hit_record.hit_point.x =  cos_theta * hit_point.x + sin_theta * hit_point.y;
-                //     hit_record.hit_point.y = -sin_theta * hit_point.x + cos_theta * hit_point.y;
+                    hit_record.hit_point.x =  cos_theta * hit_point.x + sin_theta * hit_point.y;
+                    hit_record.hit_point.y = -sin_theta * hit_point.x + cos_theta * hit_point.y;
                     
-                //     normal.x =  cos_theta * normal.x + sin_theta * normal.y;
-                //     normal.y = -sin_theta * normal.x + cos_theta * normal.y;
+                    normal.x =  cos_theta * normal.x + sin_theta * normal.y;
+                    normal.y = -sin_theta * normal.x + cos_theta * normal.y;
                     
-                //     hit_record_set_normal(&hit_record, rotated_ray, normal);
-                // }
+                    hit_record_set_normal(&hit_record, rotated_ray, normal);
+                }
             }
 
             // @TODO(hl): Not tested!
@@ -735,7 +735,7 @@ make_colonel_box(Scene *scene, ImageU32 *image)
     materials[6].texture = texture_solid_color(vec3(0.7f, 0.5f, 0.3f));
     materials[6].refraction_probability = 1.0f;
 
-    static Rect rects[6] = {0};
+    static Rect rects[18] = {0};
     rects[0] = (Rect) { 
         .type = RectType_YZ,
         .yz   = (YZRect) {
@@ -805,30 +805,30 @@ make_colonel_box(Scene *scene, ImageU32 *image)
         }
     };
 
-    static Sphere spheres[2] = {0};
-    spheres[0] = (Sphere) {
-        .mat_index = 6,
-        .pos = vec3(1.4f, -2.3f, -3.5f),
-        .radius = 1.5f
-    };
-    spheres[1] = (Sphere) {
-        .mat_index = 5,
-        .pos = vec3(-1.25f, 2.0f, -3.0f),
-        .radius = 2.0f
-    };
-    scene->sphere_count = array_size(spheres);
-    scene->spheres = spheres;
+    // static Sphere spheres[2] = {0};
+    // spheres[0] = (Sphere) {
+    //     .mat_index = 6,
+    //     .pos = vec3(1.4f, -2.3f, -3.5f),
+    //     .radius = 1.5f
+    // };
+    // spheres[1] = (Sphere) {
+    //     .mat_index = 5,
+    //     .pos = vec3(-1.25f, 2.0f, -3.0f),
+    //     .radius = 2.0f
+    // };
+    // scene->sphere_count = array_size(spheres);
+    // scene->spheres = spheres;
     
-    // Box3 box0 = { 
-    //     .min = vec3(0.7f, -3.3f, -5.0f),
-    //     .max = vec3(3.5f, -0.4f, -2.0f)
-    // };
-    // add_box(rects + 6, box0, 2,  0.261799f * 1.3f);
-    // Box3 box1 = {
-    //     .min = vec3(-2.75f, 0.3f, -5.0f),
-    //     .max = vec3(  0.2f, 3.3f,  0.95f)
-    // };
-    // add_box(rects + 12, box1, 2, -0.314159265f);
+    Box3 box0 = { 
+        .min = vec3(0.7f, -3.3f, -5.0f),
+        .max = vec3(3.5f, -0.4f, -2.0f)
+    };
+    add_box(rects + 6, box0, 2,  0.261799f * 1.3f);
+    Box3 box1 = {
+        .min = vec3(-2.75f, 0.3f, -5.0f),
+        .max = vec3(  0.2f, 3.3f,  0.95f)
+    };
+    add_box(rects + 12, box1, 2, -0.314159265f);
      
     scene->camera = camera(vec3(0, -16, 0), image);
 
