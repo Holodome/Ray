@@ -120,57 +120,31 @@ main(int argc, char **argv)
             break;
         }
         
-        f32 speed = 50.0f * input.dt;
-        // if (is_key_pressed(input.keys[Key_A]))
-        // {
-        //     camera_pos.x -= speed;
-        // }
-        // if (is_key_pressed(input.keys[Key_D]))
-        // {
-        //     camera_pos.x += speed;
-        // }
-        // if (is_key_pressed(input.keys[Key_S]))
-        // {
-        //     camera_pos.y -= speed;
-        // }
-        // if (is_key_pressed(input.keys[Key_W]))
-        // {
-        //     camera_pos.y += speed;
-        // }
-        // if (is_key_pressed(input.keys[Key_Z]))
-        // {
-        //     camera_pos.z -= speed;
-        // }
-        // if (is_key_pressed(input.keys[Key_X]))
-        // {
-        //     camera_pos.z += speed;
-        // }
-		
 		Vec3 clear_color = vec3(0.2f, 0.2f, 0.2f);
         opengl_begin_frame(opengl, input.window_size, clear_color);
         ui_begin_frame();
         
         // Move camera
-        f32 SpeeedCoeff = (is_key_pressed(input.keys[Key_LeftShift]) ? 2.0f : 1.0f);
+        f32 speed_multiplier = (is_key_pressed(input.keys[Key_LeftShift]) ? 2.0f : 1.0f);
 
-        f32 Speed = 0;
+        f32 speed = 0;
         if (is_key_pressed(input.keys[Key_W]))
-            Speed = 0.1f * SpeeedCoeff;
+            speed = 0.1f * speed_multiplier;
         else if (is_key_pressed(input.keys[Key_S]))
-            Speed = -0.1f * SpeeedCoeff;
-        camera_pos.x += Speed *  sin32(camera_rotation.y);
-        camera_pos.z += Speed * -cos32(camera_rotation.y);
+            speed = -0.1f * speed_multiplier;
+        camera_pos.x += speed *  sin32(camera_rotation.y);
+        camera_pos.z += speed * -cos32(camera_rotation.y);
 
-        Speed = 0;
+        speed = 0;
         if (is_key_pressed(input.keys[Key_A]))
-            Speed = -0.1f * SpeeedCoeff;
+            speed = -0.1f * speed_multiplier;
         else if (is_key_pressed(input.keys[Key_D]))
-            Speed = 0.1f * SpeeedCoeff;
-        camera_pos.x += Speed *  sin32(camera_rotation.y + HALF_PI32);
-        camera_pos.z += Speed * -cos32(camera_rotation.y + HALF_PI32);
+            speed = 0.1f * speed_multiplier;
+        camera_pos.x += speed *  sin32(camera_rotation.y + HALF_PI32);
+        camera_pos.z += speed * -cos32(camera_rotation.y + HALF_PI32);
 
-        if (is_key_pressed(input.keys[Key_Z])) camera_pos.y += 0.2f * SpeeedCoeff;
-        if (is_key_pressed(input.keys[Key_X])) camera_pos.y -= 0.2f * SpeeedCoeff;
+        if (is_key_pressed(input.keys[Key_Z])) camera_pos.y += 0.2f * speed_multiplier;
+        if (is_key_pressed(input.keys[Key_X])) camera_pos.y -= 0.2f * speed_multiplier;
         // Rotate camera
         if (is_key_pressed(input.keys[Key_MouseLeft]))
         {

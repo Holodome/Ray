@@ -20,8 +20,24 @@ typedef struct {
     RandomSeries random_series;
 } RenderWorkOrder;
 
+typedef struct {
+    char *output_filename;
+    u32   output_width;
+    u32   output_height;
+    
+    char *input_scene;
+    
+    u32 rays_per_pixel;
+    u32 max_bounce_count;
+    
+    bool open_image_after_done;
+} RaySettings;
+
 // Per-program work queue
 typedef struct {
+    // Settings
+    u32 rays_per_pixel;
+    u32 max_bounce_count;
     // Total work orders
     u32 work_order_count;
     RenderWorkOrder *work_orders;
@@ -33,13 +49,6 @@ typedef struct {
     volatile u64 tile_retired_count;
 } RenderWorkQueue;
 
-typedef struct {
-    char *output_filename;
-    u32   output_width;
-    u32   output_height;
-    
-    char *input_scene;
-} RaySettings;
 
 #define RAY_H 1
 #endif

@@ -319,5 +319,19 @@ hit_record_set_normal(HitRecord *record, Ray ray, Vec3 normal)
 }
 inline bool has_hit(HitRecord record) { return (record.mat_index != 0); }
 
+typedef struct {
+    Vec3 base_color;
+    f32 subsurface;
+    f32 metallic;
+    f32 specular;
+    f32 specular_tint;
+    f32 roughness;
+    f32 anisotropic;
+    f32 sheen;
+    f32 sheen_tint;
+    f32 clearcoat;
+    f32 clearcoat_gloss;
+} DisneyMaterial;
+
 #define RAY_TRACER_H 1
 #endif

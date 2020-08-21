@@ -236,6 +236,7 @@ cast_sample_rays(CastState *state)
                 // rotated_ray.dir.x = cos_theta * ray.dir.x - sin_theta * ray.dir.y;
                 // rotated_ray.dir.y = sin_theta * ray.dir.x + cos_theta * ray.dir.y;
                 
+#if 0
                 u32 a_index = 0;
                 u32 b_index = 1;
                 if (rect_.type == RectType_XZ)
@@ -272,6 +273,76 @@ cast_sample_rays(CastState *state)
                         hit_record.uv.v = (y - rect.y0) / (rect.y1 - rect.y0);
                     }
                 }
+#else 
+                bool made_hit = false;
+                switch(rect_.type)
+                {
+                    case RectType_XY:
+                    {
+                        XYRect rect = rect_.xy;
+                        f32 t = (rect.k - ray.origin.z) / ray.dir.z;
+                        if ((t > min_hit_distance) && (t < hit_record.distance))
+                        {
+                            f32 x = rotated_ray.origin.x + t * rotated_ray.dir.x;
+                            f32 y = rotated_ray.origin.y + t * rotated_ray.dir.y;
+                            if ((rect.x0 < x) && (x < rect.x1) && 
+                                (rect.y0 < y) && (y < rect.y1))
+                            {
+                                made_hit = true;
+                                hit_record.distance = t;
+                                hit_record.mat_index = rect.mat_index;
+                                hit_record_set_normal(&hit_record, rotated_ray, vec3(0, 0, 1));
+                                hit_record.hit_point = ray_point_at(rotated_ray, t);
+                                hit_record.uv.u = (x - rect.x0) / (rect.x1 - rect.x0);
+                                hit_record.uv.v = (y - rect.y0) / (rect.y1 - rect.y0);
+                            }
+                        }
+                    } break;
+                    case RectType_XZ:
+                    {
+                        XZRect rect = rect_.xz;
+                        f32 t = (rect.k - rotated_ray.origin.y) / rotated_ray.dir.y;
+                        if ((t > min_hit_distance) && (t < hit_record.distance))
+                        {
+                            f32 x = rotated_ray.origin.x + t * rotated_ray.dir.x;
+                            f32 z = rotated_ray.origin.z + t * rotated_ray.dir.z;
+                            if ((rect.x0 < x) && (x < rect.x1) && 
+                                (rect.z0 < z) && (z < rect.z1))
+                            {
+                                made_hit = true;
+                                hit_record.distance = t;
+                                hit_record.mat_index = rect.mat_index;
+                                hit_record_set_normal(&hit_record, rotated_ray, vec3(0, 1, 0));
+                                hit_record.hit_point = ray_point_at(rotated_ray, t);
+                                hit_record.uv.u = (x - rect.x0) / (rect.x1 - rect.x0);
+                                hit_record.uv.v = (z - rect.z0) / (rect.z1 - rect.z0);
+                            }
+                        }
+                    } break;
+                    case RectType_YZ:
+                    {
+                        YZRect rect = rect_.yz;
+                        f32 t = (rect.k - rotated_ray.origin.x) / rotated_ray.dir.x;
+                        if ((t > min_hit_distance) && (t < hit_record.distance))
+                        {
+                            f32 y = rotated_ray.origin.y + t * rotated_ray.dir.y;
+                            f32 z = rotated_ray.origin.z + t * rotated_ray.dir.z;
+                            if ((rect.y0 < y) && (y < rect.y1) && 
+                                (rect.z0 < z) && (z < rect.z1))
+                            {
+                                made_hit = true;
+                                hit_record.distance = t;
+                                hit_record.mat_index = rect.mat_index;
+                                hit_record_set_normal(&hit_record, rotated_ray, vec3(1, 0, 0));
+                                hit_record.hit_point = ray_point_at(rotated_ray, t);
+                                hit_record.uv.u = (y - rect.y0) / (rect.y1 - rect.y0);
+                                hit_record.uv.v = (z - rect.z0) / (rect.z1 - rect.z0);
+                            }
+                        }
+                    } break;
+                }
+#endif 
+                
                 // if (made_hit)
                 // {
                 //     Vec3 hit_point = hit_record.hit_point;
@@ -283,7 +354,7 @@ cast_sample_rays(CastState *state)
                 //     normal.x =  cos_theta * normal.x + sin_theta * normal.y;
                 //     normal.y = -sin_theta * normal.x + cos_theta * normal.y;
                     
-                //     hit_record_set_normal(&hit_record, ray, normal);
+                //     hit_record_set_normal(&hit_record, rotated_ray, normal);
                 // }
             }
 
@@ -333,7 +404,6 @@ cast_sample_rays(CastState *state)
 
                 ray.origin = hit_record.hit_point;
 
-                
                 // Decide if we want to refract or reflect
                 // Check if refraction_probability != 0 (it is OK to compare floats against constants)
                 if ((mat.refraction_probability != 0.0f)) //&& (random_unitlateral(&series) <= mat.refraction_probability))
@@ -439,9 +509,8 @@ render_tile(RenderWorkQueue *queue)
 
     state.scene = order->scene;
     state.series = order->random_series;
-    // @TODO(hl): Settings for these fellas
-    state.rays_per_pixel = 128;
-    state.max_bounce_count = 8;
+    state.rays_per_pixel = queue->rays_per_pixel;
+    state.max_bounce_count = queue->max_bounce_count;
 
     ImageU32 *image = order->image;
 
@@ -658,16 +727,14 @@ make_colonel_box(Scene *scene, ImageU32 *image)
 {
     static Material materials[7] = {0};
     materials[1].texture = texture_solid_color(vec3(0.65f, 0.05f, 0.05f));
-    materials[1].scatter = 0.5f;
     materials[2].texture = texture_solid_color(vec3(0.73f, 0.73f, 0.73f));
     materials[3].texture = texture_solid_color(vec3(0.12f, 0.45f, 0.15f));
-    materials[3].scatter = 0.5f;
-    materials[4].emit_color = vec3(25, 25, 25);
+    f32 c = 30.0f;
+    materials[4].emit_color = vec3(c, c, c * 0.8f);
     materials[5].texture = texture_image("e:\\dev\\ray\\data\\earthmap.jpg");
     materials[6].texture = texture_solid_color(vec3(0.7f, 0.5f, 0.3f));
     materials[6].refraction_probability = 1.0f;
 
-    
     static Rect rects[6] = {0};
     rects[0] = (Rect) { 
         .type = RectType_YZ,
@@ -691,13 +758,15 @@ make_colonel_box(Scene *scene, ImageU32 *image)
             .mat_index = 3
         }
     };
+    
+    f32 d = 1.2f;
     rects[2] = (Rect) { 
         .type = RectType_XY,
         .xy = (XYRect) {
-            .x0 = -1.2f,
-            .y0 = -1.2f,
-            .x1 = 1.2f,
-            .y1 = 1.2f,
+            .x0 = -d,
+            .y0 = -d,
+            .x1 = d,
+            .y1 = d,
             .k = 4.99f,
             .mat_index = 4
         }
@@ -735,15 +804,15 @@ make_colonel_box(Scene *scene, ImageU32 *image)
             .mat_index = 2 
         }
     };
-    
+
     static Sphere spheres[2] = {0};
     spheres[0] = (Sphere) {
-        .mat_index = 5,
-        .pos = vec3(2.1f, -2.3f, -3.5f),
+        .mat_index = 6,
+        .pos = vec3(1.4f, -2.3f, -3.5f),
         .radius = 1.5f
     };
     spheres[1] = (Sphere) {
-        .mat_index = 6,
+        .mat_index = 5,
         .pos = vec3(-1.25f, 2.0f, -3.0f),
         .radius = 2.0f
     };
@@ -751,15 +820,15 @@ make_colonel_box(Scene *scene, ImageU32 *image)
     scene->spheres = spheres;
     
     // Box3 box0 = { 
-    //     .min = vec3(0.7f, -3.8f, -5.0f),
-    //     .max = vec3(3.5f, -0.9f, -2.0f)
+    //     .min = vec3(0.7f, -3.3f, -5.0f),
+    //     .max = vec3(3.5f, -0.4f, -2.0f)
     // };
     // add_box(rects + 6, box0, 2,  0.261799f * 1.3f);
     // Box3 box1 = {
     //     .min = vec3(-2.75f, 0.3f, -5.0f),
     //     .max = vec3(  0.2f, 3.3f,  0.95f)
     // };
-    // add_box(rects + 6, box1, 2, -0.314159265f);
+    // add_box(rects + 12, box1, 2, -0.314159265f);
      
     scene->camera = camera(vec3(0, -16, 0), image);
 
@@ -785,6 +854,22 @@ parse_command_line_arguments(RaySettings *settings, u32 argc, char **argv)
     {
         char *arg = arguments[cursor];
         
+        if (!strcmp(arg, "-help"))
+        {
+            printf("OVERVIEW: command-line raytracer\n\n");
+            printf("USAGE: ray.exe [options]\n\n");
+            printf("OPTIONS:\n");
+#define option_format "  %-15s %s\n"
+            printf(option_format, "-help", "prints help");
+            printf(option_format, "-out <path>", "specifies name of output image (.png)");
+            printf(option_format, "-size <w> <h>", "specified size of output image");
+            printf(option_format, "-scene <path>", "specifies scene. If not set, use default");
+            printf(option_format, "-rpp <n>", "speciifes Rays Per Pixel. Default is 128");
+            printf(option_format, "-mbc <n>", "speciifes Max Bounce Count. Default is 8");
+            printf(option_format, "-open", "open output image after done");
+            
+            exit(0);
+        }
         if (!strcmp(arg, "-out"))
         {
             if (cursor + 1 >= argument_count)
@@ -826,6 +911,37 @@ parse_command_line_arguments(RaySettings *settings, u32 argc, char **argv)
             
             cursor += 2;
         }
+        else if (!strcmp(arg, "-rpp"))
+        {
+            if (cursor + 1 >= argument_count)
+            {
+                fprintf(stderr, "[ERROR] Argument -rpp takes exactly 1 position argument\n");
+                break;
+            }
+            
+            u32 value = atoi(arguments[cursor + 1]);
+            settings->rays_per_pixel = value;
+            
+            cursor += 2;
+        }
+        else if (!strcmp(arg, "-mbc"))
+        {
+            if (cursor + 1 >= argument_count)
+            {
+                fprintf(stderr, "[ERROR] Argument -mbc takes exactly 1 position argument\n");
+                break;
+            }
+            
+            u32 value = atoi(arguments[cursor + 1]);
+            settings->max_bounce_count = value;
+            
+            cursor += 2;
+        }
+        else if (!strcmp(arg, "-open"))
+        {
+            settings->open_image_after_done = true;
+            ++cursor;
+        }
         else 
         {
             fprintf(stderr, "[ERROR] Unexpected argument '%s'!\n", arg);
@@ -842,7 +958,14 @@ int main(int argc, char **argv)
     settings.output_filename = "out.png";
     settings.output_width = 600;
     settings.output_height = 600;
+    settings.rays_per_pixel = 128;
+    settings.max_bounce_count = 8;
     parse_command_line_arguments(&settings, argc, argv);
+    printf("SETTINGS:\n");
+    printf("Output image: %s (%ux%u)\n", settings.output_filename, settings.output_width, settings.output_height);
+    printf("Scene: %s", settings.input_scene ? : "default\n");
+    printf("Rays per pixel: %u, Max bounce count: %u\n", settings.rays_per_pixel, settings.max_bounce_count);
+    printf("\n");
     
     // Raycasting output is simply an image
     ImageU32 image = {0};
@@ -850,9 +973,6 @@ int main(int argc, char **argv)
 
     // Initialize scene
     Scene scene = {0};
-    // init_sample_scene(&scene, &image);
-    // make_colonel_box(&scene, &image);
-    // scene_write_to_asset_file(&scene, "data/cornell.ray_scene");
     if (settings.input_scene)
     {
         scene_init_from_file(&scene, &image, settings.input_scene);
@@ -881,6 +1001,8 @@ int main(int argc, char **argv)
     // lockless write access to image. And since we also only read from scene structure,
     // we have no locks at all.
     RenderWorkQueue queue = {0};
+    queue.rays_per_pixel = settings.rays_per_pixel;
+    queue.max_bounce_count = settings.max_bounce_count;
     queue.work_orders = malloc(sizeof(RenderWorkOrder) * total_tile_count);
 
     // Iterate tiles and find their bounds
@@ -917,7 +1039,8 @@ int main(int argc, char **argv)
             order->one_past_ymax = one_past_ymax;
             // Set random series of each tile to be dependent on tile position, just to make images with same settings
             // have same 'random' values
-            order->random_series = (RandomSeries){tile_x * 12098 + tile_y * 23771};
+            order->random_series = (RandomSeries){tile_x * 12098 + tile_y * 23771 +
+                                                  tile_count_x * 29103 + tile_count_y * 34298};
         }
     }
 
@@ -960,6 +1083,15 @@ int main(int argc, char **argv)
     // Save image
     char *filename = settings.output_filename;
     image_u32_save(&image, filename);
+
+    if (settings.open_image_after_done)
+    {
+        // @TODO(hl): Make multi-platform
+        char command[256];
+        format_string(command, sizeof(command), "start %s", settings.output_filename);
+        system(command);
+    }
+    
 
     printf("\nRay finished!\n");
     return 0;
