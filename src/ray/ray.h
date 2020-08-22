@@ -3,7 +3,7 @@
 #include <time.h>
 
 #include "ray/ray_tracer.h"
-#include "ray/scene_file.h"
+// #include "ray/scene_file.h"
 #include "lib/sys.h"
 
 // Single work order from multithreaded rendering system

@@ -4,164 +4,49 @@
 #include "lib/sys.c"
 #include "image.c"
 #include "ray/ray_tracer.c"
-#include "ray/scene_file.c"
 
-Vec3 ray_point_at(Ray ray, f32 param)
-{
-    Vec3 result = vec3_add(ray.origin, vec3_muls(ray.dir, param));
-    return result;
-}
-
+// #include "ray/scene_file.c"
 
 const f32 min_hit_distance = 0.001f;
-const f32 tolerance = 0.001f;
+const f32 tolerance        = 0.001f;
 
-static inline void 
-plane_hit(Plane plane, Ray ray, HitRecord *record)
+static bool
+ray_intersect_triangle(Ray ray, Vec3 v0, Vec3 v1, Vec3 v2, f32 *dt, f32 *du, f32 *dv)
 {
-    f32 denominator = dot(plane.normal, ray.dir);
-    if ((denominator < -tolerance) || (denominator > tolerance))
-    {
-        f32 t = (-plane.dist - dot(plane.normal, ray.origin)) / denominator;
-        if ((t > min_hit_distance) && (t < record->distance))
-        {
-            record->distance = t;
-            record->mat_index = plane.mat_index;
-            hit_record_set_normal(record, ray, plane.normal);
-            record->hit_point = ray_point_at(ray, t);
-            // @TODO(hl): These are not normalized!!
-            record->uv.u = record->hit_point.x;
-            record->uv.v = record->hit_point.y;
-        }
-    }
-}
-
-static inline void 
-sphere_hit(Sphere sphere, Ray ray, HitRecord *record)
-{
-    Vec3 sphere_relative_ray_origin = vec3_sub(ray.origin, sphere.pos);
-    f32 a = dot(ray.dir, ray.dir);
-    f32 b = 2.0f * dot(sphere_relative_ray_origin, ray.dir);
-    f32 c = dot(sphere_relative_ray_origin, sphere_relative_ray_origin) - sphere.radius * sphere.radius;
-
-    f32 denominator = 2.0f * a;
-    f32 root_term = sqrt32(b * b - 4.0f * a * c);
-
-    if (root_term > tolerance)
-    {
-        f32 tp = (-b + root_term) / denominator;
-        f32 tn = (-b - root_term) / denominator;
-
-        f32 t = tp;
-        if ((tn > min_hit_distance) && (tn < tp))
-        {
-            t = tn;
-        }
-
-        if ((t > min_hit_distance) && (t < record->distance))
-        {
-            record->distance = t;
-            record->mat_index = sphere.mat_index;
-            // hit_record_set_normal(record, ray, normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, record->distance))));
-            record->normal = normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, record->distance)));
-            record->hit_point = ray_point_at(ray, t);
-            record->uv = unit_sphere_get_uv(vec3_divs(vec3_sub(record->hit_point, sphere.pos), sphere.radius));
-        }
-    }
-}
-
-static inline void 
-moving_sphere_hit(MovingSphere sphere, Ray ray, HitRecord *record)
-{
-    Vec3 sphere_pos = moving_sphere_center(&sphere, ray.time);
-    Vec3 sphere_relative_ray_origin = vec3_sub(ray.origin, sphere_pos);
-    f32 a = dot(ray.dir, ray.dir);
-    f32 b = 2.0f * dot(sphere_relative_ray_origin, ray.dir);
-    f32 c = dot(sphere_relative_ray_origin, sphere_relative_ray_origin) - sphere.radius * sphere.radius;
-
-    f32 denominator = 2.0f * a;
-    f32 root_term = sqrt32(b * b - 4.0f * a * c);
-
-    if (root_term > tolerance)
-    {
-        f32 tp = (-b + root_term) / denominator;
-        f32 tn = (-b - root_term) / denominator;
-
-        f32 t = tp;
-        if ((tn > min_hit_distance) && (tn < tp))
-        {
-            t = tn;
-        }
-
-        if ((t > min_hit_distance) && (t < record->distance))
-        {
-            record->distance = t;
-            record->mat_index = sphere.mat_index;
-            hit_record_set_normal(record, ray, normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, record->distance))));
-            record->hit_point = ray_point_at(ray, t);
-            record->uv = unit_sphere_get_uv(vec3_divs(vec3_sub(record->hit_point, sphere_pos), sphere.radius));
-        }
-    }
-}
-
-static bool 
-ray_hit_aabb(Box3 aabb, Ray ray, f32 tmin, f32 tmax)
-{
-    bool result = true;
+    bool result = false;
     
-    for(u32 i = 0;
-        i < 3;
-        ++i)
+    Vec3 edge1 = vec3_sub(v1, v0);
+    Vec3 edge2 = vec3_sub(v2, v0);
+    Vec3 h = cross(ray.dir, edge2);
+    f32  a = dot(edge1, h);
+    
+#if 1
+    if ((a < -tolerance) || (a > tolerance))
+#else 
+    // @NOTE(hl): This is culling. Discards back faces
+    if (a > tolerance)
+#endif 
     {
-        f32 rd = reciprocal32(ray.dir.e[i]);
-        f32 t0 = (aabb.min.e[i] - ray.origin.e[i]) * rd; 
-        f32 t1 = (aabb.max.e[i] - ray.origin.e[i]) * rd; 
-        if (rd < 0.0f)
+        f32  f = 1.0f / a;
+        Vec3 s = vec3_sub(ray.origin, v0);
+        f32  u = f * dot(s, h);
+        Vec3 q = cross(s, edge1);
+        f32 v = f * dot(ray.dir, q);
+        f32 t = f * dot(edge2, q);
+        // @NOTE(hl): Although it looks messy, it speeds up perfomance significantly by reducing ifs
+        if (((0 < u) && (u < 1)) && ((v > 0) && (u + v < 1)))
         {
-            swap(t0, t1);
-        }
-
-        tmin = max(tmin, t0);
-        tmax = min(tmax, t1);        
-        if (tmax <= tmin)
-        {
-            result = false;
-            break;
+            *dt = t;
+            *du = u;
+            *dv = v;
+            result = true;
         }
     }
     
     return result;
 }
 
-static Box3
-sphere_bounding_box(Sphere sphere, f32 t0, f32 t1)
-{
-    Box3 result = { 
-        .min = vec3_sub(sphere.pos, vec3s(sphere.radius)),  
-        .max = vec3_add(sphere.pos, vec3s(sphere.radius)),  
-    };
-    
-    return result;
-}
-
-static Box3
-moving_sphere_bounding_box(MovingSphere sphere, f32 t0, f32 t1)
-{
-    Box3 box0 = { 
-        .min = vec3_sub(sphere.center0, vec3s(sphere.radius)),  
-        .max = vec3_add(sphere.center0, vec3s(sphere.radius)),  
-    };
-    Box3 box1 = { 
-        .min = vec3_sub(sphere.center1, vec3s(sphere.radius)),  
-        .max = vec3_add(sphere.center1, vec3s(sphere.radius)),  
-    };
-    
-    Box3 result = box3_join(box0, box1);
-    
-    return result;
-}
-
-static void
+static void __attribute__((noinline))
 cast_sample_rays(CastState *state)
 {
     Scene *scene = state->scene;
@@ -174,11 +59,9 @@ cast_sample_rays(CastState *state)
     Vec3 final_color = vec3(0, 0, 0);
     u64 bounces_computed = 0;
 
-    u32 lane_width = 1;
-    u32 lane_ray_count = rays_per_pixel / lane_width;
-    f32 contrib = reciprocal32(lane_ray_count);
+    f32 contrib = reciprocal32(rays_per_pixel);
     for (u32 ray_index = 0;
-         ray_index < lane_ray_count;
+         ray_index < rays_per_pixel;
          ++ray_index)
     {
         Ray ray = camera_ray_at(camera, film_x, film_y, &series);
@@ -201,7 +84,21 @@ cast_sample_rays(CastState *state)
                  ++plane_index)
             {
                 Plane plane = scene->planes[plane_index];
-                plane_hit(plane, ray, &hit_record);
+                f32 denominator = dot(plane.normal, ray.dir);
+                if ((denominator < -tolerance) || (denominator > tolerance))
+                {
+                    f32 t = (-plane.dist - dot(plane.normal, ray.origin)) / denominator;
+                    if ((t > min_hit_distance) && (t < hit_record.distance))
+                    {
+                        hit_record.distance = t;
+                        hit_record.mat_index = plane.mat_index;
+                        hit_record_set_normal(&hit_record, ray, plane.normal);
+                        hit_record.hit_point = ray_point_at(ray, t);
+                        // @TODO(hl): These are not normalized!!
+                        hit_record.uv.u = hit_record.hit_point.x;
+                        hit_record.uv.v = hit_record.hit_point.y;
+                    }
+                }
             }
 
             for (u32 sphere_index = 0;
@@ -209,155 +106,37 @@ cast_sample_rays(CastState *state)
                  ++sphere_index)
             {
                 Sphere sphere = scene->spheres[sphere_index];
-                sphere_hit(sphere, ray, &hit_record);
-            }
-            
-            for (u32 moving_sphere_index = 0;
-                 moving_sphere_index < scene->moving_sphere_count;
-                 ++moving_sphere_index)
-            {
-                MovingSphere sphere = scene->moving_spheres[moving_sphere_index];
-                moving_sphere_hit(sphere, ray, &hit_record);
-            }
-            
-            for (u32 rect_index = 0;
-                 rect_index < scene->rect_count;
-                 ++rect_index)
-            {
-                Rect rect_ = scene->rects[rect_index];
-                
-                f32 sin_theta = sin32(rect_.rotation_y);
-                f32 cos_theta = cos32(rect_.rotation_y);
-                
-                Ray rotated_ray = ray;
-                rotated_ray.origin.x = cos_theta * ray.origin.x - sin_theta * ray.origin.y;
-                rotated_ray.origin.y = sin_theta * ray.origin.x + cos_theta * ray.origin.y;
-                
-                rotated_ray.dir.x = cos_theta * ray.dir.x - sin_theta * ray.dir.y;
-                rotated_ray.dir.y = sin_theta * ray.dir.x + cos_theta * ray.dir.y;
-                
-#if 0
-                u32 a_index = 0;
-                u32 b_index = 1;
-                if (rect_.type == RectType_XZ)
+                Vec3 sphere_relative_ray_origin = vec3_sub(ray.origin, sphere.pos);
+                f32 a = dot(ray.dir, ray.dir);
+                f32 b = 2.0f * dot(sphere_relative_ray_origin, ray.dir);
+                f32 c = dot(sphere_relative_ray_origin, sphere_relative_ray_origin) - sphere.radius * sphere.radius;
+
+                f32 denominator = 2.0f * a;
+                f32 root_term = sqrt32(b * b - 4.0f * a * c);
+
+                if (root_term > tolerance)
                 {
-                    b_index = 2;
-                }
-                else if (rect_.type == RectType_YZ)
-                {
-                    a_index = 1;
-                    b_index = 2;
-                }
-                u32 c_index = 3 - a_index - b_index;
-                
-                bool made_hit = false;
-                XYRect rect = rect_.xy;
-                f32 t = (rect.k - ray.origin.e[c_index]) / ray.dir.e[c_index];
-                if ((t > min_hit_distance) && (t < hit_record.distance))
-                {
-                    f32 x = rotated_ray.origin.e[a_index] + t * rotated_ray.dir.e[a_index];
-                    f32 y = rotated_ray.origin.e[b_index] + t * rotated_ray.dir.e[b_index];
-                    if ((rect.x0 < x) && (x < rect.x1) && 
-                        (rect.y0 < y) && (y < rect.y1))
+                    f32 tp = (-b + root_term) / denominator;
+                    f32 tn = (-b - root_term) / denominator;
+
+                    f32 t = tp;
+                    if ((tn > min_hit_distance) && (tn < tp))
                     {
-                        made_hit = true;
+                        t = tn;
+                    }
+
+                    if ((t > min_hit_distance) && (t < hit_record.distance))
+                    {
                         hit_record.distance = t;
-                        hit_record.mat_index = rect.mat_index;
-                        
-                        Vec3 plane_normal = {0};
-                        plane_normal.e[c_index] = 1;
-                        
-                        hit_record_set_normal(&hit_record, ray, plane_normal);
-                        hit_record.hit_point = ray_point_at(rotated_ray, t);
-                        hit_record.uv.u = (x - rect.x0) / (rect.x1 - rect.x0);
-                        hit_record.uv.v = (y - rect.y0) / (rect.y1 - rect.y0);
+                        hit_record.mat_index = sphere.mat_index;
+                        // hit_record_set_normal(&hit_record, ray, normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, hit_record.distance))));
+                        hit_record.normal = normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, hit_record.distance)));
+                        hit_record.hit_point = ray_point_at(ray, t);
+                        hit_record.uv = unit_sphere_get_uv(vec3_divs(vec3_sub(hit_record.hit_point, sphere.pos), sphere.radius));
                     }
                 }
-#else 
-                bool made_hit = false;
-                switch(rect_.type)
-                {
-                    case RectType_XY:
-                    {
-                        XYRect rect = rect_.xy;
-                        f32 t = (rect.k - ray.origin.z) / ray.dir.z;
-                        if ((t > min_hit_distance) && (t < hit_record.distance))
-                        {
-                            f32 x = rotated_ray.origin.x + t * rotated_ray.dir.x;
-                            f32 y = rotated_ray.origin.y + t * rotated_ray.dir.y;
-                            if ((rect.x0 < x) && (x < rect.x1) && 
-                                (rect.y0 < y) && (y < rect.y1))
-                            {
-                                made_hit = true;
-                                hit_record.distance = t;
-                                hit_record.mat_index = rect.mat_index;
-                                hit_record_set_normal(&hit_record, rotated_ray, vec3(0, 0, 1));
-                                hit_record.hit_point = ray_point_at(rotated_ray, t);
-                                hit_record.uv.u = (x - rect.x0) / (rect.x1 - rect.x0);
-                                hit_record.uv.v = (y - rect.y0) / (rect.y1 - rect.y0);
-                            }
-                        }
-                    } break;
-                    case RectType_XZ:
-                    {
-                        XZRect rect = rect_.xz;
-                        f32 t = (rect.k - rotated_ray.origin.y) / rotated_ray.dir.y;
-                        if ((t > min_hit_distance) && (t < hit_record.distance))
-                        {
-                            f32 x = rotated_ray.origin.x + t * rotated_ray.dir.x;
-                            f32 z = rotated_ray.origin.z + t * rotated_ray.dir.z;
-                            if ((rect.x0 < x) && (x < rect.x1) && 
-                                (rect.z0 < z) && (z < rect.z1))
-                            {
-                                made_hit = true;
-                                hit_record.distance = t;
-                                hit_record.mat_index = rect.mat_index;
-                                hit_record_set_normal(&hit_record, rotated_ray, vec3(0, 1, 0));
-                                hit_record.hit_point = ray_point_at(rotated_ray, t);
-                                hit_record.uv.u = (x - rect.x0) / (rect.x1 - rect.x0);
-                                hit_record.uv.v = (z - rect.z0) / (rect.z1 - rect.z0);
-                            }
-                        }
-                    } break;
-                    case RectType_YZ:
-                    {
-                        YZRect rect = rect_.yz;
-                        f32 t = (rect.k - rotated_ray.origin.x) / rotated_ray.dir.x;
-                        if ((t > min_hit_distance) && (t < hit_record.distance))
-                        {
-                            f32 y = rotated_ray.origin.y + t * rotated_ray.dir.y;
-                            f32 z = rotated_ray.origin.z + t * rotated_ray.dir.z;
-                            if ((rect.y0 < y) && (y < rect.y1) && 
-                                (rect.z0 < z) && (z < rect.z1))
-                            {
-                                made_hit = true;
-                                hit_record.distance = t;
-                                hit_record.mat_index = rect.mat_index;
-                                hit_record_set_normal(&hit_record, rotated_ray, vec3(1, 0, 0));
-                                hit_record.hit_point = ray_point_at(rotated_ray, t);
-                                hit_record.uv.u = (y - rect.y0) / (rect.y1 - rect.y0);
-                                hit_record.uv.v = (z - rect.z0) / (rect.z1 - rect.z0);
-                            }
-                        }
-                    } break;
-                }
-#endif 
-                
-                if (made_hit)
-                {
-                    Vec3 hit_point = hit_record.hit_point;
-                    Vec3 normal = hit_record.normal;
-                    
-                    hit_record.hit_point.x =  cos_theta * hit_point.x + sin_theta * hit_point.y;
-                    hit_record.hit_point.y = -sin_theta * hit_point.x + cos_theta * hit_point.y;
-                    
-                    normal.x =  cos_theta * normal.x + sin_theta * normal.y;
-                    normal.y = -sin_theta * normal.x + cos_theta * normal.y;
-                    
-                    hit_record_set_normal(&hit_record, rotated_ray, normal);
-                }
             }
-
+            
             for (u32 disk_index = 0;
                  disk_index < scene->disk_count;
                  ++disk_index)
@@ -365,7 +144,7 @@ cast_sample_rays(CastState *state)
                 // @TODO(hl): This is technically test for collision with disk plane, so we can unify functions for doing so
                 Disk disk = scene->disks[disk_index];
                 
-                 f32 denominator = dot(disk.normal, ray.dir);
+                f32 denominator = dot(disk.normal, ray.dir);
                 if ((denominator < -tolerance) || (denominator > tolerance))
                 {
                     Vec3 p010 = vec3_sub(disk.point, ray.origin);
@@ -386,56 +165,57 @@ cast_sample_rays(CastState *state)
                 }
             }
             
-            for (u32 box_index = 0;
-                 box_index < scene->box_count;
-                 ++box_index)
-            {
-                Box box = scene->boxes[box_index];
-                
-                // @TODO(hl): Think if we need boxes
-            }
-
             for (u32 triangle_index = 0;
                  triangle_index < scene->triangle_count;
                  ++triangle_index)
             {
                 // https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
                 Triangle triangle = scene->triangles[triangle_index];
-                Vec3 edge1 = vec3_sub(triangle.vertex1, triangle.vertex0);
-                Vec3 edge2 = vec3_sub(triangle.vertex2, triangle.vertex0);
-                Vec3 h = cross(ray.dir, edge2);
-                f32  a = dot(edge1, h);
-#if 1
-// @NOTE(hl): This has no culling
-                if ((a < -tolerance) || (a > tolerance))
-#else 
-// @NOTE(hl): This is culling. Discards back faces
-                if (a > tolerance)
-#endif 
+                f32 t, u, v;
+                if (ray_intersect_triangle(ray, triangle.vertex0, triangle.vertex1, triangle.vertex2, &t, &u, &v))
                 {
-                    f32  f = 1.0f / a;
-                    Vec3 s = vec3_sub(ray.origin, triangle.vertex0);
-                    f32  u = f * dot(s, h);
-                    if ((0 < u) && (u < 1))
+                    if ((t > min_hit_distance) && (t < hit_record.distance))
                     {
-                        Vec3 q = cross(s, edge1);
-                        f32  v = f * dot(ray.dir, q);
-                        if ((v > 0) && (u + v < 1))
+                        hit_record.distance = t;
+                        hit_record.mat_index = triangle.mat_index;
+                        hit_record_set_normal(&hit_record, ray, triangle.normal);
+                        hit_record.hit_point = ray_point_at(ray, t);
+                        hit_record.uv = vec2(u, v);
+                    }
+                }
+            }
+            
+            for (u32 mesh_index = 0;
+                 mesh_index < scene->mesh_count;
+                 ++mesh_index)
+            {
+                TriangleMesh mesh = scene->meshes[mesh_index];
+                
+                u32 j = 0;
+                for (u32 triangle_index = 0;
+                     triangle_index < mesh.triangle_count;
+                     ++triangle_index)
+                {
+                    Vec3 v0 = mesh.p[mesh.tri_indices[j]];   
+                    Vec3 v1 = mesh.p[mesh.tri_indices[j + 1]];   
+                    Vec3 v2 = mesh.p[mesh.tri_indices[j + 2]];   
+                    f32 t, u, v;
+                    if (ray_intersect_triangle(ray, v0, v1, v2, &t, &u, &v))
+                    {
+                        if ((t > min_hit_distance) && (t < hit_record.distance))
                         {
-                            f32 t = f * dot(edge2, q);
-                            if ((t > min_hit_distance) && (t < hit_record.distance))
-                            {
-                                Vec3 normal = normalize(cross(edge1, edge2));
-     
-                                hit_record.distance = t;
-                                hit_record.mat_index = triangle.mat_index;
-                                // hit_record.normal    = normal;
-                                hit_record_set_normal(&hit_record, ray, normal);
-                                hit_record.hit_point = ray_point_at(ray, t);
-                                hit_record.uv = vec2(u, v);
-                            }
+                            Vec3 normal = triangle_normal(v0, v1, v2);
+                            
+                            hit_record.distance = t;
+                            hit_record.mat_index = mesh.mat_index;
+                            
+                            hit_record_set_normal(&hit_record, ray, normal);
+                            hit_record.hit_point = ray_point_at(ray, t);
+                            hit_record.uv = vec2(u, v);
                         }
                     }
+                    
+                    j += 3;
                 }
             }
 
@@ -501,11 +281,60 @@ cast_sample_rays(CastState *state)
                     {
                         cos_atten = 0.0f;
                     }
-                    Vec3 reflect_value = {0};
-                    if (mat.texture.proc)
+                    
+                    Vec3 reflect_value;
+                    switch(mat.texture.type)
                     {
-                        reflect_value = mat.texture.proc(&mat.texture, hit_record.uv, hit_record.hit_point);
+                        case Texture_Solid:
+                        {
+                            reflect_value = mat.texture.solid_color;
+                        } break;
+                        case Texture_Checkered:
+                        {
+                            if ((mod32(abs32(hit_record.hit_point.x + 10000.0f), 2.0f) > 1.0f) - (mod32(abs32(hit_record.hit_point.y + 10000.0f), 2.0f) > 1.0f))
+                            {
+                                reflect_value = mat.texture.checkered1;
+                            }
+                            else 
+                            {
+                                reflect_value = mat.texture.checkered2;
+                            }
+                        } break;
+                        case Texture_Image:
+                        {
+#if 0
+                            ImageU32 *image = &mat.texture.image;
+                            
+                            Vec2 uv = hit_record.uv;
+                            
+                            uv.u = 1.0f - clamp(uv.u, 0, 1);
+                            uv.v = 1.0f - clamp(uv.v, 0, 1);
+                            
+                            u32 x = round32(uv.u * image->width);
+                            u32 y = round32(uv.v * image->height);
+                            
+                            if (x >= image->width) 
+                            {
+                                x = image->width - 1;
+                            }
+                            if (y >= image->height)
+                            {
+                                y = image->height - 1;
+                            }
+                            
+                            f32 r255 = reciprocal32(255.0f);
+                            u8 *pixels = (u8 *)image_u32_get_pixel_pointer(image, x, y);
+                            
+                            reflect_value.x = pixels[0] * r255;
+                            reflect_value.y = pixels[1] * r255;
+                            reflect_value.z = pixels[2] * r255;
+#else 
+                            // @TODO(hl): Find TF this is faster!!
+                            reflect_value = texture_proc_image(&mat.texture, hit_record.uv, hit_record.hit_point);
+#endif 
+                        } break;
                     }
+                    
                     attenuation = vec3_mul(attenuation, vec3_muls(reflect_value, cos_atten));
 
                     Vec3 pure_reflection = vec3_reflect(ray.dir, hit_record.normal);
@@ -599,6 +428,139 @@ static THREAD_PROC_SIGNATURE(render_thread_proc)
     return 0;
 }
 
+TriangleMesh 
+triangle_mesh(u32 nfaces, u32 *fi, u32 *vi, Vec3 *p, Vec3 *n, Vec2 *st)
+{
+    TriangleMesh result = {0};
+    
+    u32 k = 0, max_vertex_index = 0;
+    for (u32 i = 0;
+         i < nfaces;
+         ++i)
+    {
+        result.triangle_count += fi[i] - 2;
+        for (u32 j = 0;
+             j < fi[i];
+             ++j)
+        {
+            if (vi[k + j] > max_vertex_index)
+            {
+                max_vertex_index = vi[k + j];
+            }
+        }
+        k += fi[i];
+    }
+    
+    result.p = calloc(max_vertex_index, sizeof(Vec3));
+    memcpy(result.p, p, max_vertex_index * sizeof(Vec3));
+    
+    result.n = calloc(max_vertex_index, sizeof(Vec3));
+    memcpy(result.n, n, max_vertex_index * sizeof(Vec3));
+    
+    result.uvs = calloc(max_vertex_index, sizeof(Vec2));
+    memcpy(result.uvs, st, max_vertex_index * sizeof(Vec2));
+    
+    result.tri_indices = calloc(result.triangle_count * 3, sizeof(u32));
+    u32 l = 0;
+    for (u32 i = 0, k = 0; 
+         i < nfaces;
+         ++i)
+    {
+        for (u32 j = 0; 
+             j < fi[i] - 2;
+             ++j)
+        {
+            result.tri_indices[l] = vi[k];
+            result.tri_indices[l + 1] = vi[k + j + 1];
+            result.tri_indices[l + 2] = vi[k + j + 2];
+            l += 3;
+        }
+        k += fi[i];
+    }
+    
+    return result;
+}
+
+TriangleMesh
+make_poly_sphere(f32 r, u32 divs)
+{
+    // generate points                                                                                                                                                                                      
+    u32 numVertices = (divs - 1) * divs + 2; 
+    Vec3 *P = calloc(numVertices, sizeof(Vec3)); 
+    Vec3 *N = calloc(numVertices, sizeof(Vec3)); 
+    Vec2 *st = calloc(numVertices, sizeof(Vec2)); 
+ 
+    float u = -HALF_PI32; 
+    float v = -PI32; 
+    float du = PI32 / divs; 
+    float dv = 2 * PI32 / divs; 
+ 
+    P[0] = N[0] = vec3(0, 0, -r); 
+    u32 k = 1; 
+    for (u32 i = 0;
+         i < divs - 1;
+         i++) { 
+        u += du; 
+        v = -PI32; 
+        for (u32 j = 0; 
+             j < divs;
+             j++) { 
+            float x = r * cos32(u) * cos32(v); 
+            float z = r * sin32(u); 
+            float y = r * cos32(u) * sin32(v) ; 
+            P[k] = N[k] = vec3(x, y, z); 
+            st[k].x = u / PI32 + 0.5; 
+            st[k].y = v * 0.5 / PI32 + 0.5; 
+            v += dv, k++; 
+        } 
+    } 
+    P[k] = N[k] = vec3(0, 0, r); 
+ 
+    u32 npolys = divs * divs; 
+    u32 *faceIndex = calloc(npolys, sizeof(u32)); 
+    u32 *vertsIndex = calloc((6 + (divs - 1) * 4) * divs, sizeof(u32)); 
+ 
+    // create the connectivity lists                                                                                                                                                                        
+    u32 vid = 1, numV = 0, l = 0; 
+    k = 0; 
+    for (u32 i = 0;
+         i < divs;
+         i++) 
+    { 
+        for (u32 j = 0;
+             j < divs;
+             j++) 
+        { 
+            if (i == 0) { 
+                faceIndex[k++] = 3; 
+                vertsIndex[l] = 0; 
+                vertsIndex[l + 1] = j + vid; 
+                vertsIndex[l + 2] = (j == (divs - 1)) ? vid : j + vid + 1; 
+                l += 3; 
+            } 
+            else if (i == (divs - 1)) { 
+                faceIndex[k++] = 3; 
+                vertsIndex[l] = j + vid + 1 - divs; 
+                vertsIndex[l + 1] = vid + 1; 
+                vertsIndex[l + 2] = (j == (divs - 1)) ? vid + 1 - divs : j + vid + 2 - divs; 
+                l += 3; 
+            } 
+            else { 
+                faceIndex[k++] = 4; 
+                vertsIndex[l] = j + vid + 1 - divs; 
+                vertsIndex[l + 1] = j + vid + 1; 
+                vertsIndex[l + 2] = (j == (divs - 1)) ? vid + 1 : j + vid + 2; 
+                vertsIndex[l + 3] = (j == (divs - 1)) ? vid + 1 - divs : j + vid + 2 - divs; 
+                l += 4; 
+            } 
+            numV++; 
+        } 
+        vid = numV; 
+    } 
+    
+    return triangle_mesh(npolys, faceIndex, vertsIndex, P, N, st); 
+}
+
 // Returns scene with same objects in it
 // Can be used for testing and comparing results
 void 
@@ -643,29 +605,6 @@ init_sample_scene(Scene *scene, ImageU32 *image)
     spheres[4].radius = 1.0f;
     spheres[4].mat_index = 2;
     
-    static MovingSphere moving_spheres[1] = {0};
-    moving_spheres[0].center0 = vec3(-2, -3, 0);
-    moving_spheres[0].center1 = vec3(-2, -3, 1);
-    moving_spheres[0].mat_index = 7;
-    moving_spheres[0].radius = 0.5f;
-    moving_spheres[0].time0 = 0;    
-    moving_spheres[0].time1 = 1;    
-    
-    static Rect rects[1] = {0};
-    rects[0] = (Rect) { 
-        .type = RectType_XY,
-        .xy   = (XYRect) {
-            .x0 = -555,
-            .y0 = -555,
-            .x1 = 555,
-            .y1 = 555,
-            .k = 0,
-            .mat_index = 1 
-        }
-    };
-    scene->rect_count = array_size(rects);
-    scene->rects = rects;
-    
     static Disk disks[1] = {0};
     disks[0] = (Disk) {
         .mat_index = 8,
@@ -675,13 +614,6 @@ init_sample_scene(Scene *scene, ImageU32 *image)
     };
     scene->disk_count = array_size(disks);
     scene->disks = disks;
-    
-    static Box boxes[1] = {0};
-    boxes[0] = (Box) {
-        .mat_index = 9,
-        .min = vec3(4, -3, 0),
-        .max = vec3(6, -1, 4)
-    };
     
     static Triangle triangles[36];
     triangles[0] = (Triangle) { .mat_index = 10, 
@@ -865,7 +797,8 @@ init_sample_scene(Scene *scene, ImageU32 *image)
         .vertex2 = vec3(0.0,0.356822,-0.934172),
         };
         
-    
+    scene->triangles = triangles;
+    scene->triangle_count = array_size(triangles);
     Vec3 tr = vec3(-4, -7, 1);
     for(u32 i = 0; i < array_size(triangles); ++i)
     {
@@ -873,8 +806,7 @@ init_sample_scene(Scene *scene, ImageU32 *image)
         triangles[i].vertex1 = vec3_add(triangles[i].vertex1, tr);
         triangles[i].vertex2 = vec3_add(triangles[i].vertex2, tr);
     }
-    scene->triangles = triangles;
-    scene->triangle_count = array_size(triangles);
+   
 
     
     scene->camera = camera(vec3_muls(vec3(-1.5, -10, 1.5), 1.5f), image);
@@ -883,93 +815,90 @@ init_sample_scene(Scene *scene, ImageU32 *image)
     scene->materials = materials;
     scene->sphere_count = array_size(spheres);
     scene->spheres = spheres;
-    // scene->plane_count = array_size(planes);
-    // scene->planes = planes;
-    scene->moving_sphere_count = array_size(moving_spheres);
-    scene->moving_spheres = moving_spheres;
 }
 
 void 
-add_box(Rect *rects, Box3 box, u32 mat_index, f32 rotation)
+write_yz_rect(Triangle *t, Vec2 yz0, Vec2 yz1, f32 x, u32 mat_index)
 {
-    *rects++ = (Rect) {
-        .type = RectType_XY,
-        .rotation_y = rotation,
-        .xy   = (XYRect) {
-            .x0 = box.min.x,
-            .y0 = box.min.y,
-            .x1 = box.max.x,
-            .y1 = box.max.y,
-            .k  = box.min.z,
-            .mat_index = mat_index
-        },
+    Vec3 v00 = vec3(x, yz0.x, yz0.y);
+    Vec3 v01 = vec3(x, yz0.x, yz1.y);
+    Vec3 v10 = vec3(x, yz1.x, yz0.y);
+    Vec3 v11 = vec3(x, yz1.x, yz1.y);
+    
+    Vec3 normal = normalize(cross(vec3_sub(v01, v00), vec3_sub(v10, v00)));
+    
+    *t++ = (Triangle) {
+        .vertex0 = v00,
+        .vertex1 = v01,
+        .vertex2 = v11,
+        .normal = normal,
+        .mat_index = mat_index
     };
-    *rects++ = (Rect) {
-        .type = RectType_XY,
-        .rotation_y = rotation,
-        .xy   = (XYRect) {
-            .x0 = box.min.x,
-            .y0 = box.min.y,
-            .x1 = box.max.x,
-            .y1 = box.max.y,
-            .k  = box.max.z,
-            .mat_index = mat_index
-        }
-    };
-    *rects++ = (Rect) {
-        .type = RectType_YZ,
-        .rotation_y = rotation,
-        .yz   = (YZRect) {
-            .y0 = box.min.y,
-            .z0 = box.min.z,
-            .y1 = box.max.y,
-            .z1 = box.max.z,
-            .k  = box.min.x,
-            .mat_index = mat_index
-        }
-    };
-    *rects++ = (Rect) {
-        .type = RectType_YZ,
-        .rotation_y = rotation,
-        .yz   = (YZRect) {
-            .y0 = box.min.y,
-            .z0 = box.min.z,
-            .y1 = box.max.y,
-            .z1 = box.max.z,
-            .k  = box.max.x,
-            .mat_index = mat_index
-        }
-    };
-    *rects++ = (Rect) {
-        .type = RectType_XZ,
-        .rotation_y = rotation,
-        .xz   = (XZRect) {
-            .x0 = box.min.x,
-            .z0 = box.min.z,
-            .x1 = box.max.x,
-            .z1 = box.max.z,
-            .k  = box.min.y,
-            .mat_index = mat_index
-        }
-    };
-    *rects++ = (Rect) {
-        .type = RectType_XZ,
-        .rotation_y = rotation,
-        .xz   = (XZRect) {
-            .x0 = box.min.x,
-            .z0 = box.min.z,
-            .x1 = box.max.x,
-            .z1 = box.max.z,
-            .k  = box.max.y,
-            .mat_index = mat_index
-        }
+    *t++ = (Triangle) {
+        .vertex0 = v00,
+        .vertex1 = v11,
+        .vertex2 = v10,
+        .normal = normal,
+        .mat_index = mat_index
     };
 }
 
 void 
-make_colonel_box(Scene *scene, ImageU32 *image)
+write_xy_rect(Triangle *t, Vec2 xy0, Vec2 xy1, f32 z, u32 mat_index)
 {
-    static Material materials[7] = {0};
+    Vec3 v00 = vec3(xy0.x, xy0.y, z);
+    Vec3 v01 = vec3(xy0.x, xy1.y, z);
+    Vec3 v10 = vec3(xy1.x, xy0.y, z);
+    Vec3 v11 = vec3(xy1.x, xy1.y, z);
+    
+    Vec3 normal = normalize(cross(vec3_sub(v01, v00), vec3_sub(v10, v00)));
+    
+    *t++ = (Triangle) {
+        .vertex0 = v00,
+        .vertex1 = v01,
+        .vertex2 = v11,
+        .normal = normal,
+        .mat_index = mat_index
+    };
+    *t++ = (Triangle) {
+        .vertex0 = v00,
+        .vertex1 = v11,
+        .vertex2 = v10,
+        .normal = normal,
+        .mat_index = mat_index
+    };
+}
+
+void 
+write_xz_rect(Triangle *t, Vec2 xz0, Vec2 xz1, f32 y, u32 mat_index)
+{
+    Vec3 v00 = vec3(xz0.x, y, xz0.y);
+    Vec3 v01 = vec3(xz0.x, y, xz1.y);
+    Vec3 v10 = vec3(xz1.x, y, xz0.y);
+    Vec3 v11 = vec3(xz1.x, y, xz1.y);
+    
+    Vec3 normal = normalize(cross(vec3_sub(v01, v00), vec3_sub(v10, v00)));
+    
+    *t++ = (Triangle) {
+        .vertex0 = v00,
+        .vertex1 = v01,
+        .vertex2 = v11,
+        .normal = normal,
+        .mat_index = mat_index
+    };
+    *t++ = (Triangle) {
+        .vertex0 = v00,
+        .vertex1 = v11,
+        .vertex2 = v10,
+        .normal = normal,
+        .mat_index = mat_index
+    };
+}
+
+void 
+make_cornell_box(Scene *scene, ImageU32 *image)
+{
+    static Material materials[8] = {0};
     materials[1].texture = texture_solid_color(vec3(0.65f, 0.05f, 0.05f));
     materials[2].texture = texture_solid_color(vec3(0.73f, 0.73f, 0.73f));
     materials[3].texture = texture_solid_color(vec3(0.12f, 0.45f, 0.15f));
@@ -978,90 +907,42 @@ make_colonel_box(Scene *scene, ImageU32 *image)
     materials[5].texture = texture_image("e:\\dev\\ray\\data\\pano.jpg");
     materials[6].texture = texture_solid_color(vec3(0.7f, 0.5f, 0.3f));
     materials[6].refraction_probability = 1.0f;
+    materials[7].texture = texture_solid_color(vec3(0.8f, 0.8f, 0.1f));
 
-    static Rect rects[6] = {0};
-    rects[0] = (Rect) { 
-        .type = RectType_YZ,
-        .yz   = (YZRect) {
-            .y0 = -5,
-            .z0 = -5,
-            .y1 = 5,
-            .z1 = 5,
-            .k = -5,
-            .mat_index = 1
-        }
-    };
-    rects[1] = (Rect) { 
-        .type = RectType_YZ,
-        .yz   = (YZRect) {
-            .y0 = -5,
-            .z0 = -5,
-            .y1 = 5,
-            .z1 = 5,
-            .k = 5,
-            .mat_index = 3
-        }
-    };
-    
+    static Triangle triangles[12] = {0};
+    Triangle *r = triangles;
+    write_yz_rect(triangles, vec2(-5, -5), vec2(5, 5), -5, 1);
+    write_yz_rect(triangles + 2, vec2(-5, -5), vec2(5, 5),  5, 3);
     f32 d = 1.2f;
-    rects[2] = (Rect) { 
-        .type = RectType_XY,
-        .xy = (XYRect) {
-            .x0 = -d,
-            .y0 = -d,
-            .x1 = d,
-            .y1 = d,
-            .k = 4.99f,
-            .mat_index = 4
-        }
-    };
-    rects[3] = (Rect) { 
-        .type = RectType_XY,
-        .xy   = (XYRect) {
-            .x0 = -5,
-            .y0 = -5,
-            .x1 = 5,
-            .y1 = 5,
-            .k = 5,
-            .mat_index = 2
-        }
-    };
-    rects[4] = (Rect) { 
-        .type = RectType_XY,
-        .xy   = (XYRect) {
-            .x0 = -5,
-            .y0 = -5,
-            .x1 = 5,
-            .y1 = 5,
-            .k = -5,
-            .mat_index = 2 
-        }
-    };
-    rects[5] = (Rect) { 
-        .type = RectType_XZ,
-        .xz   = (XZRect) {
-            .x0 = -5,
-            .z0 = -5,
-            .x1 = 5,
-            .z1 = 5,
-            .k = 5,
-            .mat_index = 2 
-        }
-    };
-
-    static Sphere spheres[2] = {0};
-    spheres[0] = (Sphere) {
-        .mat_index = 6,
-        .pos = vec3(1.4f, -2.3f, -3.5f),
-        .radius = 1.5f
-    };
-    spheres[1] = (Sphere) {
-        .mat_index = 5,
-        .pos = vec3(-1.25f, 2.0f, -2.0f),
-        .radius = 3.0f
-    };
-    scene->sphere_count = array_size(spheres);
-    scene->spheres = spheres;
+    write_xy_rect(triangles + 4, vec2(-d, -d), vec2(d, d),  4.99f, 4);
+    write_xy_rect(triangles + 6, vec2(-5, -5), vec2(5, 5),  5.0f,  2);
+    write_xy_rect(triangles + 8, vec2(-5, -5), vec2(5, 5), -5.0f,  2);
+    write_xz_rect(triangles + 10, vec2(-5, -5), vec2(5, 5), 5.0f,  2);
+    scene->triangles = triangles;
+    scene->triangle_count = array_size(triangles);
+    
+    static TriangleMesh meshes[1] = {0};
+    meshes[0] = make_poly_sphere(2, 7);
+    meshes[0].mat_index = 7;
+    
+    scene->mesh_count = array_size(meshes);
+    scene->meshes = meshes;
+    
+    // static Sphere spheres[2] = {0};
+    // spheres[0] = (Sphere) {
+    //     .mat_index = 6,
+    //     .pos = vec3(1.4f, -2.3f, -3.5f),
+    //     .radius = 1.5f
+    // };
+    // spheres[1] = (Sphere) {
+    //     .mat_index = 5,
+    //     .pos = vec3(-1.25f, 2.0f, -2.0f),
+    //     .radius = 3.0f
+    // };
+    // scene->sphere_count = array_size(spheres);
+    // scene->spheres = spheres;
+    
+    
     
     // Box3 box0 = { 
     //     .min = vec3(0.7f, -3.3f, -5.0f),
@@ -1074,23 +955,10 @@ make_colonel_box(Scene *scene, ImageU32 *image)
     // };
     // add_box(rects + 12, box1, 2, -0.314159265f);
     
-    // static Triangle triangles[1] = {0};
-    // triangles[0] = (Triangle) {
-    //     .mat_index = 3,
-    //     .vertex0 = vec3(-5, -5, -5),  
-    //     .vertex1 = vec3( 5, -5, -5),  
-    //     .vertex2 = vec3(-5,  5,  5),  
-    // };
-    // scene->triangles = triangles;
-    // scene->triangle_count = array_size(triangles);
-     
-     
     scene->camera = camera(vec3(0, -16, 0), image);
 
     scene->material_count = array_size(materials);
     scene->materials = materials;
-    scene->rect_count = array_size(rects);
-    scene->rects = rects;
 }
 
 static void
@@ -1239,8 +1107,8 @@ int main(int argc, char **argv)
     
     RaySettings settings = {0};
     settings.output_filename = "out.png";
-    settings.output_width = 1024;
-    settings.output_height = 1024;
+    settings.output_width = 600;
+    settings.output_height = 600;
     settings.rays_per_pixel = 128;
     settings.max_bounce_count = 8;
     parse_command_line_arguments(&settings, argc, argv);
@@ -1256,16 +1124,9 @@ int main(int argc, char **argv)
 
     // Initialize scene
     Scene scene = {0};
-    if (settings.input_scene)
-    {
-        scene_init_from_file(&scene, &image, settings.input_scene);
-    }
-    else 
-    {
         // make_some_scene(&scene, &image);
-        // make_colonel_box(&scene, &image);
-        init_sample_scene(&scene, &image);
-    }
+        make_cornell_box(&scene, &image);
+        // init_sample_scene(&scene, &image);
     // Record time spend on raycasting
     clock_t start_clock = clock();
 

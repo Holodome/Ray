@@ -457,7 +457,7 @@ vec3_length(Vec3 a)
 inline Vec3 
 normalize(Vec3 a)
 {
-    f32 coef    = reciprocal32(vec3_length(a));
+    f32 coef    = rsqrt32(dot(a, a));
     Vec3 result = vec3_muls(a, coef);
     return result;
 }

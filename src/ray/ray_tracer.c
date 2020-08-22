@@ -11,16 +11,6 @@ ray(Vec3 origin, Vec3 dir, f32 time)
     return result;
 }
 
-Vec3 
-moving_sphere_center(MovingSphere *sphere, f32 time)
-{
-    f32 dt0 = time - sphere->time0;
-    f32 dt1 = sphere->time1 - sphere->time0;
-    Vec3 dcent = vec3_sub(sphere->center1, sphere->center0);
-    Vec3 result = vec3_add(sphere->center0, vec3_muls(dcent, dt0 / dt1));
-    return result;
-}
-
 Ray 
 camera_ray_at(Camera *camera, f32 film_x, f32 film_y, RandomSeries *series)
 {

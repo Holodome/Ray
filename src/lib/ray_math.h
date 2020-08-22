@@ -65,6 +65,12 @@ schlick(f32 cosine, f32 ref_idx)
     return result;
 }
 
+inline f32 
+mix(f32 a, f32 b, f32 t)
+{
+    return a * (1 - t) + b * t;
+}
+
 //
 // Vector2 
 //
@@ -143,7 +149,12 @@ inline Vec3 normalize(Vec3 a);
 inline Vec3 vec3_lerp(Vec3 a, Vec3 b, f32 t);
 
 inline Vec3 vec3_from_vec2(Vec2 xy, f32 z) { return (Vec3){ .x = xy.x, .y = xy.y, .z = z }; }
-inline Vec3 vec3_reflect(Vec3 v, Vec3 normal) { return vec3_sub(v, vec3_muls(normal, 2.0f * dot(v, normal))); }
+
+inline Vec3 
+vec3_reflect(Vec3 v, Vec3 normal) 
+{
+    return vec3_sub(v, vec3_muls(normal, 2.0f * dot(v, normal))); 
+}
 
 inline Vec2 
 unit_sphere_get_uv(Vec3 p)
@@ -158,7 +169,22 @@ unit_sphere_get_uv(Vec3 p)
     return result;    
 }
 
+inline Vec3
+vec3_mix(Vec3 a, Vec3 b, f32 t)
+{
+    Vec3 result = {
+        .x = mix(a.x, b.x, t),  
+        .y = mix(a.y, b.y, t),  
+        .z = mix(a.z, b.z, t),  
+    };
+    return result;
+}
 
+inline Vec3
+triangle_normal(Vec3 v0, Vec3 v1, Vec3 v2)
+{
+    return normalize(cross(vec3_sub(v1, v0), vec3_sub(v2, v0)));
+}
 
 //
 // Vector4

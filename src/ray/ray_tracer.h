@@ -15,7 +15,12 @@ typedef struct {
 inline Ray ray(Vec3 origin, Vec3 dir, f32 time);
 // Gets point of ray with given param
 // Result is addition of origin and direction multiplied by param
-inline Vec3 ray_point_at(Ray ray, f32 param);
+inline Vec3 
+ray_point_at(Ray ray, f32 t)
+{
+    Vec3 result = vec3_add(ray.origin, vec3_muls(ray.dir, t));
+    return result;
+}
 
 struct Texture;
 
@@ -31,7 +36,6 @@ enum {
 
 typedef struct Texture {
     TextureType type;
-    TextureProc *proc;
     union {
         Vec3 solid_color;
         struct 
@@ -46,24 +50,7 @@ typedef struct Texture {
     };
 } Texture;
 
-TEXTURE_PROC(texture_proc_solid_color) { return texture->solid_color; }
-TEXTURE_PROC(texture_proc_checkered)     
-{
-    Vec3 result;
-    
-    // @TODO(hl): -1 - 1 range of abs parameter is mirrored. Find other algorithm
-    if ((mod32(abs32(point.x + 10000.0f), 2.0f) > 1.0f) - (mod32(abs32(point.y + 10000.0f), 2.0f) > 1.0f))
-    {
-        result = texture->checkered1;
-    }
-    else 
-    {
-        result = texture->checkered2;
-    }
-    
-    return result;
-}
-TEXTURE_PROC(texture_proc_image)
+inline TEXTURE_PROC(texture_proc_image)
 {
     Vec3 result;
     
@@ -105,7 +92,6 @@ inline Texture
 texture_solid_color(Vec3 color) 
 { 
     Texture result = { 
-        .proc = texture_proc_solid_color,
         .solid_color = color,
         .type = Texture_Solid
     }; 
@@ -116,7 +102,6 @@ inline Texture
 texture_checkered(Vec3 checkered1, Vec3 checkered2)
 {
     Texture result = {
-        .proc = texture_proc_checkered,
         .checkered1 = checkered1,
         .checkered2 = checkered2,
         .type = Texture_Checkered
@@ -128,7 +113,6 @@ inline Texture
 texture_image(char *filename)
 {
     Texture result = {
-        .proc = texture_proc_image,
         .filename = filename,
         .type = Texture_Image
     };
@@ -170,29 +154,11 @@ typedef struct {
 } Disk;
 
 typedef struct {
-    Vec3 min;
-    Vec3 max;
-    u32 mat_index;
-} Box;
-
-typedef struct {
     Vec3 pos;
     f32 radius;
 
     u32 mat_index;
 } Sphere;
-
-typedef struct {
-    Vec3 center0;
-    Vec3 center1;
-    f32 time0;
-    f32 time1;
-    f32 radius;
-    
-    u32 mat_index;
-} MovingSphere;
-
-inline Vec3 moving_sphere_center(MovingSphere *sphere, f32 time);
 
 typedef struct {
     Vec3 camera_pos;
@@ -216,53 +182,6 @@ inline Ray camera_ray_at(Camera *camera, f32 film_x, f32 film_y, RandomSeries *s
 Camera camera(Vec3 pos, ImageU32 *image);
 
 typedef struct {
-    f32 x0;
-    f32 y0;
-    f32 x1;
-    f32 y1;
-    f32 k;
-    u32 mat_index;
-} XYRect; 
-
-typedef struct {
-    f32 x0;
-    f32 z0;
-    f32 x1;
-    f32 z1;
-    f32 k;
-    u32 mat_index;
-} XZRect; 
-
-typedef struct {
-    f32 y0;
-    f32 z0;
-    f32 y1;
-    f32 z1;
-    f32 k;
-    u32 mat_index;
-} YZRect; 
-
-typedef u8 RectType;
-enum
-{
-    RectType_XY,
-    RectType_XZ,
-    RectType_YZ
-};
-
-typedef struct {
-    RectType type;
-    union 
-    {
-        XYRect xy;
-        XZRect xz;
-        YZRect yz;
-    };
-    
-    f32 rotation_y;
-} Rect;
-
-typedef struct {
     Vec3 vertex0;
     Vec3 vertex1;
     Vec3 vertex2;
@@ -271,6 +190,36 @@ typedef struct {
     
     u32 mat_index;
 } Triangle;
+
+typedef struct {
+    u32   triangle_count;
+    Vec3 *p;
+    Vec3 *n;
+    Vec2 *uvs;
+    u32  *tri_indices;
+    
+    u32 mat_index;
+} TriangleMesh;
+
+typedef u32 ObjectType;
+enum {
+    Object_Sphere,  
+    Object_Plane,  
+    Object_Disk,  
+    Object_Triangle,  
+    Object_TriangleMesh,  
+};
+
+typedef struct {
+    ObjectType type;
+    union {
+        Sphere sphere;
+        Plane  plane;
+        Disk   disk;
+        Triangle triangle;
+        TriangleMesh triangle_mesh;  
+    };
+} Object;
 
 // World that we are simulating
 typedef struct Scene {
@@ -285,20 +234,14 @@ typedef struct Scene {
     u32 plane_count;
     Plane *planes;
     
-    u32 moving_sphere_count;
-    MovingSphere *moving_spheres;
-    
-    u32 rect_count;
-    Rect *rects;
-    
     u32 triangle_count;
     Triangle *triangles;
     
     u32 disk_count;
     Disk *disks;
     
-    u32 box_count;
-    Box *boxes;
+    u32 mesh_count;
+    TriangleMesh *meshes;
 } Scene;
 
 // Data that is passed to raycating function
@@ -322,21 +265,16 @@ typedef struct {
     // UV coordinates of hit position
     Vec2 uv;
     Vec3 hit_point;
-    
-    bool front_face;
 } HitRecord;
 
 inline void 
 hit_record_set_normal(HitRecord *record, Ray ray, Vec3 normal)
 {
-    bool front_face = true;
     if (!(dot(ray.dir, normal) < 0))
     {
-        front_face = false;
         normal = vec3_neg(normal);
     }
     
-    record->front_face = front_face;
     record->normal = normal;
 }
 inline bool has_hit(HitRecord record) { return (record.mat_index != 0); }
