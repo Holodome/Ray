@@ -19,10 +19,10 @@ const f32 tolerance = 0.001f;
 static inline void 
 plane_hit(Plane plane, Ray ray, HitRecord *record)
 {
-    f32 denominator = vec3_dot(plane.normal, ray.dir);
-    if ((denominator < -tolerance) > (denominator > tolerance))
+    f32 denominator = dot(plane.normal, ray.dir);
+    if ((denominator < -tolerance) || (denominator > tolerance))
     {
-        f32 t = (-plane.dist - vec3_dot(plane.normal, ray.origin)) / denominator;
+        f32 t = (-plane.dist - dot(plane.normal, ray.origin)) / denominator;
         if ((t > min_hit_distance) && (t < record->distance))
         {
             record->distance = t;
@@ -40,9 +40,9 @@ static inline void
 sphere_hit(Sphere sphere, Ray ray, HitRecord *record)
 {
     Vec3 sphere_relative_ray_origin = vec3_sub(ray.origin, sphere.pos);
-    f32 a = vec3_dot(ray.dir, ray.dir);
-    f32 b = 2.0f * vec3_dot(sphere_relative_ray_origin, ray.dir);
-    f32 c = vec3_dot(sphere_relative_ray_origin, sphere_relative_ray_origin) - sphere.radius * sphere.radius;
+    f32 a = dot(ray.dir, ray.dir);
+    f32 b = 2.0f * dot(sphere_relative_ray_origin, ray.dir);
+    f32 c = dot(sphere_relative_ray_origin, sphere_relative_ray_origin) - sphere.radius * sphere.radius;
 
     f32 denominator = 2.0f * a;
     f32 root_term = sqrt32(b * b - 4.0f * a * c);
@@ -62,8 +62,8 @@ sphere_hit(Sphere sphere, Ray ray, HitRecord *record)
         {
             record->distance = t;
             record->mat_index = sphere.mat_index;
-            // hit_record_set_normal(record, ray, vec3_normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, record->distance))));
-            record->normal = vec3_normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, record->distance)));
+            // hit_record_set_normal(record, ray, normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, record->distance))));
+            record->normal = normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, record->distance)));
             record->hit_point = ray_point_at(ray, t);
             record->uv = unit_sphere_get_uv(vec3_divs(vec3_sub(record->hit_point, sphere.pos), sphere.radius));
         }
@@ -75,9 +75,9 @@ moving_sphere_hit(MovingSphere sphere, Ray ray, HitRecord *record)
 {
     Vec3 sphere_pos = moving_sphere_center(&sphere, ray.time);
     Vec3 sphere_relative_ray_origin = vec3_sub(ray.origin, sphere_pos);
-    f32 a = vec3_dot(ray.dir, ray.dir);
-    f32 b = 2.0f * vec3_dot(sphere_relative_ray_origin, ray.dir);
-    f32 c = vec3_dot(sphere_relative_ray_origin, sphere_relative_ray_origin) - sphere.radius * sphere.radius;
+    f32 a = dot(ray.dir, ray.dir);
+    f32 b = 2.0f * dot(sphere_relative_ray_origin, ray.dir);
+    f32 c = dot(sphere_relative_ray_origin, sphere_relative_ray_origin) - sphere.radius * sphere.radius;
 
     f32 denominator = 2.0f * a;
     f32 root_term = sqrt32(b * b - 4.0f * a * c);
@@ -97,7 +97,7 @@ moving_sphere_hit(MovingSphere sphere, Ray ray, HitRecord *record)
         {
             record->distance = t;
             record->mat_index = sphere.mat_index;
-            hit_record_set_normal(record, ray, vec3_normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, record->distance))));
+            hit_record_set_normal(record, ray, normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, record->distance))));
             record->hit_point = ray_point_at(ray, t);
             record->uv = unit_sphere_get_uv(vec3_divs(vec3_sub(record->hit_point, sphere_pos), sphere.radius));
         }
@@ -184,7 +184,7 @@ cast_sample_rays(CastState *state)
         Ray ray = camera_ray_at(camera, film_x, film_y, &series);
         
         Vec3 ray_cast_color = vec3(0, 0, 0);
-        Vec3 attenuation = vec3(1, 1, 1);
+        Vec3 attenuation    = vec3(1, 1, 1);
 
         for (u32 bounce_count = 0;
              bounce_count < max_bounce_count;
@@ -358,7 +358,43 @@ cast_sample_rays(CastState *state)
                 }
             }
 
-            // @TODO(hl): Not tested!
+            for (u32 disk_index = 0;
+                 disk_index < scene->disk_count;
+                 ++disk_index)
+            {
+                // @TODO(hl): This is technically test for collision with disk plane, so we can unify functions for doing so
+                Disk disk = scene->disks[disk_index];
+                
+                 f32 denominator = dot(disk.normal, ray.dir);
+                if ((denominator < -tolerance) || (denominator > tolerance))
+                {
+                    Vec3 p010 = vec3_sub(disk.point, ray.origin);
+                    f32 t = dot(p010, disk.normal) / denominator;
+                    if ((t > min_hit_distance) && (t < hit_record.distance))
+                    {
+                        Vec3 hit_point = ray_point_at(ray, t);
+                        Vec3 dist_to_center = vec3_sub(hit_point, disk.point);
+                        if (dot(dist_to_center, dist_to_center) < square(disk.radius))
+                        {
+                            hit_record.distance = t;
+                            hit_record.mat_index = disk.mat_index;
+                            hit_record_set_normal(&hit_record, ray, disk.normal);
+                            hit_record.hit_point = hit_point;
+                            // @TODO(hl): UV
+                        }
+                    }
+                }
+            }
+            
+            for (u32 box_index = 0;
+                 box_index < scene->box_count;
+                 ++box_index)
+            {
+                Box box = scene->boxes[box_index];
+                
+                // @TODO(hl): Think if we need boxes
+            }
+
             for (u32 triangle_index = 0;
                  triangle_index < scene->triangle_count;
                  ++triangle_index)
@@ -368,30 +404,35 @@ cast_sample_rays(CastState *state)
                 Vec3 edge1 = vec3_sub(triangle.vertex1, triangle.vertex0);
                 Vec3 edge2 = vec3_sub(triangle.vertex2, triangle.vertex0);
                 Vec3 h = cross(ray.dir, edge2);
-                f32  a = vec3_dot(edge1, h);
-                if ((a < -tolerance) > (a > tolerance))
+                f32  a = dot(edge1, h);
+#if 1
+// @NOTE(hl): This has no culling
+                if ((a < -tolerance) || (a > tolerance))
+#else 
+// @NOTE(hl): This is culling. Discards back faces
+                if (a > tolerance)
+#endif 
                 {
                     f32  f = 1.0f / a;
                     Vec3 s = vec3_sub(ray.origin, triangle.vertex0);
-                    f32  u = f * vec3_dot(s, h);
+                    f32  u = f * dot(s, h);
                     if ((0 < u) && (u < 1))
                     {
                         Vec3 q = cross(s, edge1);
-                        f32  v = f * vec3_dot(ray.dir, q);
+                        f32  v = f * dot(ray.dir, q);
                         if ((v > 0) && (u + v < 1))
                         {
-                            f32 t = f * vec3_dot(edge2, q);
+                            f32 t = f * dot(edge2, q);
                             if ((t > min_hit_distance) && (t < hit_record.distance))
                             {
-                                Vec3 normal = cross(edge1, edge2);
-                                
+                                Vec3 normal = normalize(cross(edge1, edge2));
+     
                                 hit_record.distance = t;
                                 hit_record.mat_index = triangle.mat_index;
-                                // @TODO(hl): Have normal be per-triangle
-                                hit_record.normal    = normal;
+                                // hit_record.normal    = normal;
+                                hit_record_set_normal(&hit_record, ray, normal);
                                 hit_record.hit_point = ray_point_at(ray, t);
-                                // @TODO(hl): Get UV from vertex
-                                // record->uv = ;
+                                hit_record.uv = vec2(u, v);
                             }
                         }
                     }
@@ -415,21 +456,21 @@ cast_sample_rays(CastState *state)
                     f32 refract_coef;
                     f32 cos_atten;
                     Vec3 actual_normal;
-                    if (vec3_dot(ray.dir, hit_record.normal) > 0)
+                    if (dot(ray.dir, hit_record.normal) > 0)
                     {
                         refract_coef = ref_idx;
-                        cos_atten = ref_idx * vec3_dot(ray.dir, hit_record.normal);
+                        cos_atten = ref_idx * dot(ray.dir, hit_record.normal);
                         actual_normal = vec3_neg(hit_record.normal);
                     }
                     else
                     {
                         actual_normal = hit_record.normal;
                         refract_coef = 1.0f / ref_idx;
-                        cos_atten = -vec3_dot(ray.dir, hit_record.normal);
+                        cos_atten = -dot(ray.dir, hit_record.normal);
                     }
 
                     f32 reflect_prob;
-                    f32 dt = vec3_dot(ray.dir, actual_normal);
+                    f32 dt = dot(ray.dir, actual_normal);
                     f32 discriminant = 1.0f - refract_coef * refract_coef * (1.0f - dt * dt);
                     Vec3 refracted;
 
@@ -445,17 +486,17 @@ cast_sample_rays(CastState *state)
 
                     if (random_unitlateral(&series) <= reflect_prob)
                     {
-                        ray.dir = vec3_normalize(reflected);
+                        ray.dir = normalize(reflected);
                     }
                     else
                     {
-                        ray.dir = vec3_normalize(refracted);
+                        ray.dir = normalize(refracted);
                     }
                 }
                 else
                 {
                     ray_cast_color = vec3_add(ray_cast_color, vec3_mul(attenuation, mat.emit_color));
-                    f32 cos_atten = vec3_dot(vec3_neg(ray.dir), hit_record.normal);
+                    f32 cos_atten = dot(vec3_neg(ray.dir), hit_record.normal);
                     if (cos_atten < 0.0f)
                     {
                         cos_atten = 0.0f;
@@ -468,8 +509,8 @@ cast_sample_rays(CastState *state)
                     attenuation = vec3_mul(attenuation, vec3_muls(reflect_value, cos_atten));
 
                     Vec3 pure_reflection = vec3_reflect(ray.dir, hit_record.normal);
-                    Vec3 scattered_reflection = vec3_normalize(vec3_add(hit_record.normal, random_unit_sphere(&series)));
-                    ray.dir = vec3_normalize(vec3_lerp(scattered_reflection, pure_reflection, mat.scatter));
+                    Vec3 scattered_reflection = normalize(vec3_add(hit_record.normal, random_unit_sphere(&series)));
+                    ray.dir = normalize(vec3_lerp(scattered_reflection, pure_reflection, mat.scatter));
                 }
             }
             else
@@ -564,26 +605,22 @@ void
 init_sample_scene(Scene *scene, ImageU32 *image)
 {
     // @NOTE(hl): Don't malloc arrays because scene settings is always the same
-    static Material materials[8] = {0};
+    static Material materials[11] = {0};
     materials[0].emit_color = vec3(0.3f, 0.4f, 0.5f);
     // materials[1].texture = texture_solid_color(vec3(0.5f, 0.5f, 0.5f));
     materials[1].texture = texture_checkered(vec3(0.5, 0.5, 0.5), vec3(0.2, 0.3, 0.1));
     materials[2].texture = texture_solid_color(vec3(0.7f, 0.5f, 0.3f));
     materials[2].refraction_probability = 1.0f;
     materials[3].emit_color = vec3(15.0f, 15.0f, 15.0f);
-    // materials[4].texture = texture_solid_color(vec3(0.2f, 0.8f, 0.2f));
-    // materials[4].scatter = 0.7f;
     materials[4].texture = texture_image("e:\\dev\\ray\\data\\earthmap.jpg");
     materials[5].texture = texture_solid_color(vec3(0.4f, 0.8f, 0.9f));
     materials[5].scatter = 0.85f;
     materials[6].texture = texture_solid_color(vec3(0.95f, 0.95f, 0.95f));
     materials[6].scatter = 0.99f;
     materials[7].texture = texture_solid_color(vec3(0.75f, 0.33f, 0.75f));
-
-    // static Plane planes[1] = {0};
-    // planes[0].mat_index = 1;
-    // planes[0].normal = vec3(0, 0, 1);
-    // planes[0].dist = 0;
+    materials[8].texture = texture_solid_color(vec3(0.75f, 0.33f, 0.33f));
+    materials[9].texture = texture_solid_color(vec3(0.8f, 0.8f, 0.1f));
+    materials[10].texture = texture_solid_color(vec3(0.8f, 0.1f, 0.8f));
 
     static Sphere spheres[5] = {0};
     spheres[0].pos = vec3(-3, 2, 0);
@@ -605,10 +642,6 @@ init_sample_scene(Scene *scene, ImageU32 *image)
     spheres[4].pos = vec3(1, -3, 1);
     spheres[4].radius = 1.0f;
     spheres[4].mat_index = 2;
-    
-    // spheres[5].pos = vec3(0, 0, -1000);
-    // spheres[5].radius = 1000.0f;
-    // spheres[5].mat_index = 1;
     
     static MovingSphere moving_spheres[1] = {0};
     moving_spheres[0].center0 = vec3(-2, -3, 0);
@@ -632,6 +665,217 @@ init_sample_scene(Scene *scene, ImageU32 *image)
     };
     scene->rect_count = array_size(rects);
     scene->rects = rects;
+    
+    static Disk disks[1] = {0};
+    disks[0] = (Disk) {
+        .mat_index = 8,
+        .point = vec3(-2, -5, 0.1f),
+        .normal = vec3(0, 0, 1),
+        .radius = 1.0f
+    };
+    scene->disk_count = array_size(disks);
+    scene->disks = disks;
+    
+    static Box boxes[1] = {0};
+    boxes[0] = (Box) {
+        .mat_index = 9,
+        .min = vec3(4, -3, 0),
+        .max = vec3(6, -1, 4)
+    };
+    
+    static Triangle triangles[36];
+    triangles[0] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.57735,0.57735,-0.57735),
+        .vertex1 = vec3(0.934172,0.0,-0.356822),
+        .vertex2 = vec3(0.934172,0.0,0.356822),
+        };
+    triangles[1] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.356822,0.934172,0.0),
+        .vertex1 = vec3(0.57735,0.57735,-0.57735),
+        .vertex2 = vec3(0.934172,0.0,0.356822),
+        };
+    triangles[2] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.57735,0.57735,0.57735),
+        .vertex1 = vec3(0.356822,0.934172,0.0),
+        .vertex2 = vec3(0.934172,0.0,0.356822),
+        };
+    triangles[3] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.356822,-0.934172,0.0),
+        .vertex1 = vec3(0.57735,-0.57735,0.57735),
+        .vertex2 = vec3(0.934172,0.0,0.356822),
+        };
+    triangles[4] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.57735,-0.57735,-0.57735),
+        .vertex1 = vec3(0.356822,-0.934172,0.0),
+        .vertex2 = vec3(0.934172,0.0,0.356822),
+        };
+    triangles[5] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.934172,0.0,-0.356822),
+        .vertex1 = vec3(0.57735,-0.57735,-0.57735),
+        .vertex2 = vec3(0.934172,0.0,0.356822),
+        };
+    triangles[6] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(-0.57735,-0.57735,-0.57735),
+        .vertex1 = vec3(-0.934172,0.0,-0.356822),
+        .vertex2 = vec3(-0.934172,0.0,0.356822),
+        };
+    triangles[7] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(-0.356822,-0.934172,0.0),
+        .vertex1 = vec3(-0.57735,-0.57735,-0.57735),
+        .vertex2 = vec3(-0.934172,0.0,0.356822),
+        };
+    triangles[8] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(-0.57735,-0.57735,0.57735),
+        .vertex1 = vec3(-0.356822,-0.934172,0.0),
+        .vertex2 = vec3(-0.934172,0.0,0.356822),
+        };
+    triangles[9] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(-0.356822,0.934172,0.0),
+        .vertex1 = vec3(-0.57735,0.57735,0.57735),
+        .vertex2 = vec3(-0.934172,0.0,0.356822),
+        };
+    triangles[10] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(-0.57735,0.57735,-0.57735),
+        .vertex1 = vec3(-0.356822,0.934172,0.0),
+        .vertex2 = vec3(-0.934172,0.0,0.356822),
+        };
+    triangles[11] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(-0.934172,0.0,-0.356822),
+        .vertex1 = vec3(-0.57735,0.57735,-0.57735),
+        .vertex2 = vec3(-0.934172,0.0,0.356822),
+        };
+    triangles[12] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.0,-0.356822,0.934172),
+        .vertex1 = vec3(-0.57735,-0.57735,0.57735),
+        .vertex2 = vec3(-0.934172,0.0,0.356822),
+        };
+    triangles[13] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.0,0.356822,0.934172),
+        .vertex1 = vec3(0.0,-0.356822,0.934172),
+        .vertex2 = vec3(-0.934172,0.0,0.356822),
+        };
+    triangles[14] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(-0.57735,0.57735,0.57735),
+        .vertex1 = vec3(0.0,0.356822,0.934172),
+        .vertex2 = vec3(-0.934172,0.0,0.356822),
+        };
+    triangles[15] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.0,0.356822,0.934172),
+        .vertex1 = vec3(0.57735,0.57735,0.57735),
+        .vertex2 = vec3(0.934172,0.0,0.356822),
+        };
+    triangles[16] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.0,-0.356822,0.934172),
+        .vertex1 = vec3(0.0,0.356822,0.934172),
+        .vertex2 = vec3(0.934172,0.0,0.356822),
+        };
+    triangles[17] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.57735,-0.57735,0.57735),
+        .vertex1 = vec3(0.0,-0.356822,0.934172),
+        .vertex2 = vec3(0.934172,0.0,0.356822),
+        };
+    triangles[18] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.0,-0.356822,-0.934172),
+        .vertex1 = vec3(0.57735,-0.57735,-0.57735),
+        .vertex2 = vec3(0.934172,0.0,-0.356822),
+        };
+    triangles[19] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.0,0.356822,-0.934172),
+        .vertex1 = vec3(0.0,-0.356822,-0.934172),
+        .vertex2 = vec3(0.934172,0.0,-0.356822),
+        };
+    triangles[20] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.57735,0.57735,-0.57735),
+        .vertex1 = vec3(0.0,0.356822,-0.934172),
+        .vertex2 = vec3(0.934172,0.0,-0.356822),
+        };
+    triangles[21] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.0,0.356822,-0.934172),
+        .vertex1 = vec3(-0.57735,0.57735,-0.57735),
+        .vertex2 = vec3(-0.934172,0.0,-0.356822),
+        };
+    triangles[22] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.0,-0.356822,-0.934172),
+        .vertex1 = vec3(0.0,0.356822,-0.934172),
+        .vertex2 = vec3(-0.934172,0.0,-0.356822),
+        };
+    triangles[23] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(-0.57735,-0.57735,-0.57735),
+        .vertex1 = vec3(0.0,-0.356822,-0.934172),
+        .vertex2 = vec3(-0.934172,0.0,-0.356822),
+        };
+    triangles[24] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(-0.57735,-0.57735,-0.57735),
+        .vertex1 = vec3(-0.356822,-0.934172,0.0),
+        .vertex2 = vec3(0.356822,-0.934172,0.0),
+        };
+    triangles[25] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.0,-0.356822,-0.934172),
+        .vertex1 = vec3(-0.57735,-0.57735,-0.57735),
+        .vertex2 = vec3(0.356822,-0.934172,0.0),
+        };
+    triangles[26] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.57735,-0.57735,-0.57735),
+        .vertex1 = vec3(0.0,-0.356822,-0.934172),
+        .vertex2 = vec3(0.356822,-0.934172,0.0),
+        };
+    triangles[27] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(-0.356822,-0.934172,0.0),
+        .vertex1 = vec3(-0.57735,-0.57735,0.57735),
+        .vertex2 = vec3(0.0,-0.356822,0.934172),
+        };
+    triangles[28] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.356822,-0.934172,0.0),
+        .vertex1 = vec3(-0.356822,-0.934172,0.0),
+        .vertex2 = vec3(0.0,-0.356822,0.934172),
+        };
+    triangles[29] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.57735,-0.57735,0.57735),
+        .vertex1 = vec3(0.356822,-0.934172,0.0),
+        .vertex2 = vec3(0.0,-0.356822,0.934172),
+        };
+    triangles[30] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.356822,0.934172,0.0),
+        .vertex1 = vec3(0.57735,0.57735,0.57735),
+        .vertex2 = vec3(0.0,0.356822,0.934172),
+        };
+    triangles[31] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(-0.356822,0.934172,0.0),
+        .vertex1 = vec3(0.356822,0.934172,0.0),
+        .vertex2 = vec3(0.0,0.356822,0.934172),
+        };
+    triangles[32] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(-0.57735,0.57735,0.57735),
+        .vertex1 = vec3(-0.356822,0.934172,0.0),
+        .vertex2 = vec3(0.0,0.356822,0.934172),
+        };
+    triangles[33] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(-0.356822,0.934172,0.0),
+        .vertex1 = vec3(-0.57735,0.57735,-0.57735),
+        .vertex2 = vec3(0.0,0.356822,-0.934172),
+        };
+    triangles[34] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.356822,0.934172,0.0),
+        .vertex1 = vec3(-0.356822,0.934172,0.0),
+        .vertex2 = vec3(0.0,0.356822,-0.934172),
+        };
+    triangles[35] = (Triangle) { .mat_index = 10, 
+        .vertex0 = vec3(0.57735,0.57735,-0.57735),
+        .vertex1 = vec3(0.356822,0.934172,0.0),
+        .vertex2 = vec3(0.0,0.356822,-0.934172),
+        };
+        
+    
+    Vec3 tr = vec3(-4, -7, 1);
+    for(u32 i = 0; i < array_size(triangles); ++i)
+    {
+        triangles[i].vertex0 = vec3_add(triangles[i].vertex0, tr);
+        triangles[i].vertex1 = vec3_add(triangles[i].vertex1, tr);
+        triangles[i].vertex2 = vec3_add(triangles[i].vertex2, tr);
+    }
+    scene->triangles = triangles;
+    scene->triangle_count = array_size(triangles);
+
     
     scene->camera = camera(vec3_muls(vec3(-1.5, -10, 1.5), 1.5f), image);
 
@@ -731,11 +975,11 @@ make_colonel_box(Scene *scene, ImageU32 *image)
     materials[3].texture = texture_solid_color(vec3(0.12f, 0.45f, 0.15f));
     f32 c = 30.0f;
     materials[4].emit_color = vec3(c, c, c * 0.8f);
-    materials[5].texture = texture_image("e:\\dev\\ray\\data\\earthmap.jpg");
+    materials[5].texture = texture_image("e:\\dev\\ray\\data\\pano.jpg");
     materials[6].texture = texture_solid_color(vec3(0.7f, 0.5f, 0.3f));
     materials[6].refraction_probability = 1.0f;
 
-    static Rect rects[18] = {0};
+    static Rect rects[6] = {0};
     rects[0] = (Rect) { 
         .type = RectType_YZ,
         .yz   = (YZRect) {
@@ -805,30 +1049,41 @@ make_colonel_box(Scene *scene, ImageU32 *image)
         }
     };
 
-    // static Sphere spheres[2] = {0};
-    // spheres[0] = (Sphere) {
-    //     .mat_index = 6,
-    //     .pos = vec3(1.4f, -2.3f, -3.5f),
-    //     .radius = 1.5f
-    // };
-    // spheres[1] = (Sphere) {
-    //     .mat_index = 5,
-    //     .pos = vec3(-1.25f, 2.0f, -3.0f),
-    //     .radius = 2.0f
-    // };
-    // scene->sphere_count = array_size(spheres);
-    // scene->spheres = spheres;
+    static Sphere spheres[2] = {0};
+    spheres[0] = (Sphere) {
+        .mat_index = 6,
+        .pos = vec3(1.4f, -2.3f, -3.5f),
+        .radius = 1.5f
+    };
+    spheres[1] = (Sphere) {
+        .mat_index = 5,
+        .pos = vec3(-1.25f, 2.0f, -2.0f),
+        .radius = 3.0f
+    };
+    scene->sphere_count = array_size(spheres);
+    scene->spheres = spheres;
     
-    Box3 box0 = { 
-        .min = vec3(0.7f, -3.3f, -5.0f),
-        .max = vec3(3.5f, -0.4f, -2.0f)
-    };
-    add_box(rects + 6, box0, 2,  0.261799f * 1.3f);
-    Box3 box1 = {
-        .min = vec3(-2.75f, 0.3f, -5.0f),
-        .max = vec3(  0.2f, 3.3f,  0.95f)
-    };
-    add_box(rects + 12, box1, 2, -0.314159265f);
+    // Box3 box0 = { 
+    //     .min = vec3(0.7f, -3.3f, -5.0f),
+    //     .max = vec3(3.5f, -0.4f, -2.0f)
+    // };
+    // add_box(rects + 6, box0, 2,  0.261799f * 1.3f);
+    // Box3 box1 = {
+    //     .min = vec3(-2.75f, 0.3f, -5.0f),
+    //     .max = vec3(  0.2f, 3.3f,  0.95f)
+    // };
+    // add_box(rects + 12, box1, 2, -0.314159265f);
+    
+    // static Triangle triangles[1] = {0};
+    // triangles[0] = (Triangle) {
+    //     .mat_index = 3,
+    //     .vertex0 = vec3(-5, -5, -5),  
+    //     .vertex1 = vec3( 5, -5, -5),  
+    //     .vertex2 = vec3(-5,  5,  5),  
+    // };
+    // scene->triangles = triangles;
+    // scene->triangle_count = array_size(triangles);
+     
      
     scene->camera = camera(vec3(0, -16, 0), image);
 
@@ -836,6 +1091,34 @@ make_colonel_box(Scene *scene, ImageU32 *image)
     scene->materials = materials;
     scene->rect_count = array_size(rects);
     scene->rects = rects;
+}
+
+static void
+make_some_scene(Scene *scene, ImageU32 *image)
+{
+    scene->camera = camera(vec3(0, -4, 0), image);
+
+    static Material materials[3] = {0};
+    materials[1].texture = texture_image("e:\\dev\\ray\\data\\pano.jpg");
+    f32 c = 30.0f;
+    materials[2].emit_color = vec3(c, c, c * 0.8f);
+ 
+    scene->materials = materials;
+    scene->material_count = array_size(materials);
+    
+    static Sphere spheres[2] = {0};
+    spheres[0] = (Sphere) {
+        .mat_index = 1,
+        .pos = vec3(0, 0, 0),
+        .radius = 10
+    };
+    spheres[1] = (Sphere) {
+        .mat_index = 2,
+        .pos = vec3(0, 0, 4),
+        .radius = 1.0f  
+    };
+    scene->spheres = spheres;
+    scene->sphere_count = array_size(spheres);
 }
 
 static void 
@@ -956,8 +1239,8 @@ int main(int argc, char **argv)
     
     RaySettings settings = {0};
     settings.output_filename = "out.png";
-    settings.output_width = 600;
-    settings.output_height = 600;
+    settings.output_width = 1024;
+    settings.output_height = 1024;
     settings.rays_per_pixel = 128;
     settings.max_bounce_count = 8;
     parse_command_line_arguments(&settings, argc, argv);
@@ -979,7 +1262,9 @@ int main(int argc, char **argv)
     }
     else 
     {
-        make_colonel_box(&scene, &image);
+        // make_some_scene(&scene, &image);
+        // make_colonel_box(&scene, &image);
+        init_sample_scene(&scene, &image);
     }
     // Record time spend on raycasting
     clock_t start_clock = clock();

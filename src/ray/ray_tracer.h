@@ -156,10 +156,24 @@ typedef struct {
 typedef struct {
     Vec3 normal;
     // Distance along normal, from origin
+    // @TODO(hl): Change to point
     f32 dist;
 
     u32 mat_index;
 } Plane;
+
+typedef struct {
+    Vec3 normal;
+    Vec3 point;
+    f32 radius;
+    u32 mat_index;
+} Disk;
+
+typedef struct {
+    Vec3 min;
+    Vec3 max;
+    u32 mat_index;
+} Box;
 
 typedef struct {
     Vec3 pos;
@@ -279,6 +293,12 @@ typedef struct Scene {
     
     u32 triangle_count;
     Triangle *triangles;
+    
+    u32 disk_count;
+    Disk *disks;
+    
+    u32 box_count;
+    Box *boxes;
 } Scene;
 
 // Data that is passed to raycating function
@@ -310,7 +330,7 @@ inline void
 hit_record_set_normal(HitRecord *record, Ray ray, Vec3 normal)
 {
     bool front_face = true;
-    if (!(vec3_dot(ray.dir, normal) < 0))
+    if (!(dot(ray.dir, normal) < 0))
     {
         front_face = false;
         normal = vec3_neg(normal);

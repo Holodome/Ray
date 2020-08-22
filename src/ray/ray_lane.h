@@ -65,9 +65,9 @@ typedef Vec3 LaneVec3;
 #define lane_vec3_sub(a, b)   vec3_sub(a, b)
 #define lane_vec3_mul(a, b)   vec3_mul(a, b)
 #define lane_vec3_div(a, b)   vec3_div(a, b)
-#define lane_vec3_dot(a, b)   vec3_dot(a, b)
+#define lane_vec3_dot(a, b)   dot(a, b)
 #define lane_cross(a, b) cross(a, b)
-#define lane_vec3_normalize(a) vec3_normalize(a)
+#define lane_vec3_normalize(a) normalize(a)
 
 #elif (LANE_WIDTH == 4)
 
@@ -158,7 +158,7 @@ cast_sample_rays(CastState *state)
                 vec3_muls(camera_y, off_y * half_film_h)));
                 
         LaneVec3 ray_origin = camera_pos;
-        LaneVec3 ray_dir    = vec3_normalize(vec3_sub(film_pos, camera_pos));
+        LaneVec3 ray_dir    = normalize(vec3_sub(film_pos, camera_pos));
 
         LaneVec3 ray_cast_color = lane_vec3s(0);
         LaneVec3 attenuation    = lane_vec3s(1);
@@ -240,16 +240,16 @@ cast_sample_rays(CastState *state)
                 Material mat = world->materials[hit_mat_index];
 
                 ray_cast_color  = vec3_add(ray_cast_color, vec3_mul(attenuation, mat.emit_color));
-                f32 cos_atten = vec3_dot(vec3_neg(ray_dir), next_normal);
+                f32 cos_atten = dot(vec3_neg(ray_dir), next_normal);
                 if (cos_atten < 0) cos_atten = 0;
                 attenuation = vec3_mul(attenuation, vec3_muls(mat.reflect_color, cos_atten));
 
                 ray_origin = lane_vec3_add(ray_origin, lane_vec3_mul(ray_dir, lane_vec3s(hit_distance)));
 
                 Vec3 pure_bounce = vec3_reflect(ray_dir, next_normal);
-                Vec3 random_bounce = vec3_normalize(vec3_add(next_normal,
+                Vec3 random_bounce = normalize(vec3_add(next_normal,
                     vec3(random_bilateral(&series), random_bilateral(&series), random_bilateral(&series))));
-                ray_dir = vec3_normalize(vec3_lerp(random_bounce, pure_bounce, mat.scatter));
+                ray_dir = normalize(vec3_lerp(random_bounce, pure_bounce, mat.scatter));
             }
             else
             {
@@ -275,9 +275,9 @@ cast_sample_rays(CastState *state)
             
 
             // LaneVec3 pure_bounce = vec3_reflect(ray_dir, next_normal);
-            // LaneVec3 random_bounce = vec3_normalize(vec3_add(next_normal,
+            // LaneVec3 random_bounce = normalize(vec3_add(next_normal,
             //     vec3(random_bilateral(&series), random_bilateral(&series), random_bilateral(&series))));
-            // ray_dir = vec3_normalize(vec3_lerp(random_bounce, pure_bounce, mat.scatter));
+            // ray_dir = normalize(vec3_lerp(random_bounce, pure_bounce, mat.scatter));
             
             // if(lane_u32_eq(lane_mask, lane_u32(0))) break;
         }

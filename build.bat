@@ -20,6 +20,7 @@ REM Build .lib's if not present
 
 clang -g %BuildOptions% -o ray.exe ../src/ray/ray.c 
 REM clang -g %BuildOptions% -o editor.exe ../src/editor/editor.c 
+REM clang -g -I../src -L./ -luser32 -lkernel32 -lgdi32 -lglfw3 -lopengl32 -std=c++11 -o editor.exe ../src/new_editor/new_editor.cpp
 
 popd 
 

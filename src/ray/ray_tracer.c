@@ -32,7 +32,7 @@ camera_ray_at(Camera *camera, f32 film_x, f32 film_y, RandomSeries *series)
                              vec3_add(vec3_muls(camera->camera_x, off_x * camera->half_film_w),
                                       vec3_muls(camera->camera_y, off_y * camera->half_film_h)));
     Vec3 ray_origin = camera->camera_pos;
-    Vec3 ray_dir = vec3_normalize(vec3_sub(film_pos, camera->camera_pos));
+    Vec3 ray_dir = normalize(vec3_sub(film_pos, camera->camera_pos));
 
     ray.origin = ray_origin;
     ray.dir = ray_dir;
@@ -51,9 +51,9 @@ camera(Vec3 pos, ImageU32 *image)
     camera.camera_pos = pos;
     // @NOTE(hl): Create coordinate system for camera.
     // These are unit vectors of 3 axes of our coordinate system
-    camera.camera_z = vec3_normalize(camera.camera_pos);
-    camera.camera_x = vec3_normalize(cross(vec3(0, 0, 1), camera.camera_z));
-    camera.camera_y = vec3_normalize(cross(camera.camera_z, camera.camera_x));
+    camera.camera_z = normalize(camera.camera_pos);
+    camera.camera_x = normalize(cross(vec3(0, 0, 1), camera.camera_z));
+    camera.camera_y = normalize(cross(camera.camera_z, camera.camera_x));
     camera.film_center = vec3_sub(camera.camera_pos, camera.camera_z);
 
     // Apply image aspect ratio

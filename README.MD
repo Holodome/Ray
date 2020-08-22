@@ -39,3 +39,7 @@ If project grows much more complicated, it is possible to integrate some build s
 ![Screenshot2](screenshots/1-128.jpg)
 ![Screenshot3](screenshots/cornellbox1-8192rp-9m.png)
 ![Screenshot4](screenshots/cornellbox2-8192rp-36m.png)
+
+## Used sources:
+* https://raytracing.github.io
+* https://www.youtube.com/c/MollyRocket/

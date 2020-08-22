@@ -420,7 +420,7 @@ vec4s(f32 s)
 }
 
 inline f32 
-vec3_dot(Vec3 a, Vec3 b)
+dot(Vec3 a, Vec3 b)
 {
     f32 result = a.x * b.x + a.y * b.y + a.z * b.z;
     return result;
@@ -441,7 +441,7 @@ cross(Vec3 a, Vec3 b)
 inline f32 
 vec3_length_sq(Vec3 a)
 {
-    f32 result = vec3_dot(a, a);
+    f32 result = dot(a, a);
     return result;
 }
 
@@ -455,7 +455,7 @@ vec3_length(Vec3 a)
 #if 1 
 
 inline Vec3 
-vec3_normalize(Vec3 a)
+normalize(Vec3 a)
 {
     f32 coef    = reciprocal32(vec3_length(a));
     Vec3 result = vec3_muls(a, coef);
@@ -465,7 +465,7 @@ vec3_normalize(Vec3 a)
 #else 
 
 inline Vec3 
-vec3_normalize(Vec3 a)
+normalize(Vec3 a)
 {
     Vec3 result = {0};
     
@@ -629,7 +629,7 @@ inline Mat4x4
 mat4x4_rotate(f32 angle, Vec3 a) {
 	const f32 c = cos32(angle);
 	const f32 s = sin32(angle);
-	a = vec3_normalize(a);
+	a = normalize(a);
 	
 	const f32 tx = (1.0f - c) * a.x;
 	const f32 ty = (1.0f - c) * a.y;
@@ -676,16 +676,16 @@ mat4x4_look_at(Vec3 pos, Vec3 target)
 {
     Vec3 world_up = {{ 0, 0, 1 }};
     
-    Vec3 camera_z = vec3_normalize(vec3_sub(target, pos));
-    Vec3 camera_x = vec3_normalize(cross(world_up, camera_z));
-    Vec3 camera_y = vec3_normalize(cross(camera_z, camera_x));
+    Vec3 camera_z = normalize(vec3_sub(target, pos));
+    Vec3 camera_x = normalize(cross(world_up, camera_z));
+    Vec3 camera_y = normalize(cross(camera_z, camera_x));
     
     Mat4x4 result = 
     {{
         {camera_x.x, camera_y.x, -camera_z.x, 0}, 
         {camera_x.y, camera_y.y, -camera_y.y, 0}, 
         {camera_x.z, camera_y.y, -camera_y.z, 0}, 
-        {-vec3_dot(camera_x, pos), -vec3_dot(camera_y, pos), vec3_dot(camera_z, pos), 1.0f} 
+        {-dot(camera_x, pos), -dot(camera_y, pos), dot(camera_z, pos), 1.0f} 
     }};
     
     return result;

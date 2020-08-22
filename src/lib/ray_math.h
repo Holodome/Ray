@@ -135,15 +135,15 @@ inline Vec3 vec3_mul(Vec3 a, Vec3 b);
 inline Vec3 vec3_divs(Vec3 a, f32 b);
 inline Vec3 vec3_muls(Vec3 a, f32 b);
 
-inline f32  vec3_dot(Vec3 a, Vec3 b);
+inline f32  dot(Vec3 a, Vec3 b);
 inline Vec3 cross(Vec3 a, Vec3 b);
 inline f32  vec3_length_sq(Vec3 a);
 inline f32  vec3_length(Vec3 a);
-inline Vec3 vec3_normalize(Vec3 a);
+inline Vec3 normalize(Vec3 a);
 inline Vec3 vec3_lerp(Vec3 a, Vec3 b, f32 t);
 
 inline Vec3 vec3_from_vec2(Vec2 xy, f32 z) { return (Vec3){ .x = xy.x, .y = xy.y, .z = z }; }
-inline Vec3 vec3_reflect(Vec3 v, Vec3 normal) { return vec3_sub(v, vec3_muls(normal, 2.0f * vec3_dot(v, normal))); }
+inline Vec3 vec3_reflect(Vec3 v, Vec3 normal) { return vec3_sub(v, vec3_muls(normal, 2.0f * dot(v, normal))); }
 
 inline Vec2 
 unit_sphere_get_uv(Vec3 p)
