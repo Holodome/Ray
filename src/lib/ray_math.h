@@ -10,6 +10,8 @@
 
 #define max(a, b) ({__typeof__(a) _a = a; __typeof__(b) _b = b; (_a > _b) ? (_a) : (_b); })
 #define min(a, b) ({__typeof__(a) _a = a; __typeof__(b) _b = b; (_a < _b) ? (_a) : (_b); })
+#define max3(a, b, c) ({__typeof__(a) _a = a; __typeof__(b) _b = b; __typeof__(c) _c = c; (_a > _b) ? ((_a > _c) ? _a : _c) : ((_b > _c) ? _b : _c ); })
+#define min3(a, b, c) ({__typeof__(a) _a = a; __typeof__(b) _b = b; __typeof__(c) _c = c; (_a < _b) ? ((_a < _c) ? _a : _c) : ((_b < _c) ? _b : _c ); })
 #define swap(a, b) ({__typeof__(a) temp = a; a = b; b = temp; (void)0; })
 
 #if !defined(MATH_H)
@@ -21,16 +23,46 @@
 // > Steam says that 100% of its users have SSE
 #include <xmmintrin.h>
 
-#define HALF_PI32 1.57079632679f
-#define PI32      3.14159265359f
-#define TWO_PI32  6.28318530718f
+// @NOTE(hl): IEEE Floating-point constants.
+// Altough nans and infs can be produced by dividing by zero, it is safer to just initialize them from hex representation
+#define F32_INF  ({ u32 p = 0x7F800000; f32 v = *(f32 *)&p; v; })
+#define F32_MINF ({ u32 p = 0xFF800000; f32 v = *(f32 *)&p; v; })
+#define F32_NANS ({ u32 p = 0x7F800001; f32 v = *(f32 *)&p; v; })
+#define F32_NANQ ({ u32 p = 0x7FC00000; f32 v = *(f32 *)&p; v; })
 
-#define bytes(x)     ((u64)x)
-#define kilobytes(x) (bytes(x) << 10)
-#define megabytes(x) (kilobytes(x) << 10)
+// PI 
+#define PI      3.14159265359f
+// PI * 2 = TAU
+#define TWO_PI  6.28318530718f
+// PI / 2
+#define HALF_PI 1.57079632679f
+// PI / 4
+#define QUAT_PI 0.78539816339f
+// SQRT(1 / 2)
+#define SQRT1OVER2 0.70710678118f
+// SQRT(1 / 3)
+#define SQRT1OVER3 0.57735026919f
+// SQRT(2)
+#define SQRT2       1.41421356237f
+// SQRT(2) / 2
+#define SQRT2_OVER2 0.70710678118f
+// SQRT(2) / 3
+#define SQRT2_OVER3 0.47140452079f
+// SQRT(3)
+#define SQRT3       1.73205080757f
+// SQRT(3) / 2
+#define SQRT3_OVER2 0.86602540378f
+// SQRT(3) / 3
+#define SQRT3_OVER3 0.57735026919f
 
-inline f32 square(f32 a) { return a * a; }
-inline f32 cube(f32 a) { return a * a * a; }
+#define DEG2RAD_MULT 0.01745329251f
+#define RAD2DEG_MULT 57.2957795131f
+#define DEG2RAD(a) ((a) * DEG2RAD_MULT)
+#define RAD2DEG(a) ((a) * RAD2DEG_MULT)
+
+#define BYTES(x)     ((u64)x)
+#define KILOBYTES(x) (BYTES(x) << 10)
+#define MEGABYTES(x) (KILOBYTES(x) << 10)
 
 // @NOTE(hl): Calculates fast 1.0f / x using special instruction, which is way faster than actually dividing
 inline f32 reciprocal32(f32 a);
@@ -40,6 +72,7 @@ inline i32 round32(f32 a);
 inline i32 floor32(f32 a);
 inline i32 ceil32(f32 a);
 inline f32 sqrt32(f32 a);
+// Reciprocal (inverse) square root
 inline f32 rsqrt32(f32 a);
 inline f32 sin32(f32 a);
 inline f32 cos32(f32 a);
@@ -55,6 +88,10 @@ inline f32 clamp01(f32 a);
 inline f32 abs32(f32 a);
 inline f32 max32(f32 a, f32 b);
 inline f32 min32(f32 a, f32 b);
+
+inline f32 square(f32 a) { return a * a; }
+inline f32 cube(f32 a) { return a * a * a; }
+
 // https://en.wikipedia.org/wiki/Schlick%27s_approximation
 inline f32
 schlick(f32 cosine, f32 ref_idx)
@@ -65,6 +102,7 @@ schlick(f32 cosine, f32 ref_idx)
     return result;
 }
 
+// https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/mix.xhtml
 inline f32 
 mix(f32 a, f32 b, f32 t)
 {
@@ -143,13 +181,17 @@ inline Vec3 vec3_muls(Vec3 a, f32 b);
 
 inline f32  dot(Vec3 a, Vec3 b);
 inline Vec3 cross(Vec3 a, Vec3 b);
-inline f32  vec3_length_sq(Vec3 a);
-inline f32  vec3_length(Vec3 a);
+inline f32  length_sq(Vec3 a);
+inline f32  length(Vec3 a);
 inline Vec3 normalize(Vec3 a);
-inline Vec3 vec3_lerp(Vec3 a, Vec3 b, f32 t);
 
+inline Vec3 vec3_lerp(Vec3 a, Vec3 b, f32 t);
+// This is kinda junky, but so is writing giant nested function calls
+inline Vec3 vec3_add3(Vec3 a, Vec3 b, Vec3 c) { return vec3_add(vec3_add(a, b), c); }
+inline Vec3 vec3_add4(Vec3 a, Vec3 b, Vec3 c, Vec3 d) { return vec3_add(vec3_add(vec3_add(a, b), c), d); }
 inline Vec3 vec3_from_vec2(Vec2 xy, f32 z) { return (Vec3){ .x = xy.x, .y = xy.y, .z = z }; }
 
+// https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/reflect.xhtml
 inline Vec3 
 vec3_reflect(Vec3 v, Vec3 normal) 
 {
@@ -163,8 +205,8 @@ unit_sphere_get_uv(Vec3 p)
     f32 theta = asin32(p.z);
     
     Vec2 result = {   
-        .u = 1.0f - (phi + PI32) / TWO_PI32,
-        .v = (theta + HALF_PI32) / PI32
+        .u = 1.0f - (phi + PI) / TWO_PI,
+        .v = (theta + HALF_PI) / PI
     };
     return result;    
 }
@@ -306,20 +348,46 @@ typedef struct {
     Vec3 max;
 } Box3;
 
-Box3 
+inline Box3
+box3(Vec3 min, Vec3 max)
+{
+    Box3 result = (Box3) {
+        .min = min, 
+        .max = max  
+    };
+    return result;
+}
+
+inline Box3 
 box3_join(Box3 a, Box3 b)
 {
     Box3 result;
     
     result.min.x = min(a.min.x, b.min.x);
-    result.min.x = min(a.min.y, b.min.y);
-    result.min.x = min(a.min.z, b.min.z);
+    result.min.y = min(a.min.y, b.min.y);
+    result.min.z = min(a.min.z, b.min.z);
     
     result.max.x = max(a.max.x, b.max.x);
     result.max.x = max(a.max.y, b.max.y);
     result.max.x = max(a.max.z, b.max.z);
     
     return result;    
+}
+
+inline Box3 
+box3_extend(Box3 a, Vec3 p)
+{
+    Box3 result;
+    
+    result.min.x = min(a.min.x, p.x);
+    result.min.y = min(a.min.y, p.y);
+    result.min.z = min(a.min.z, p.z);
+    
+    result.max.x = max(a.max.x, p.x);
+    result.max.y = max(a.max.y, p.y);
+    result.max.z = max(a.max.z, p.z);
+    
+    return result;
 }
 
 #define MATH_H 1

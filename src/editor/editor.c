@@ -103,7 +103,7 @@ main(int argc, char **argv)
     f32 half_height = (f32)image_view.height * 0.5f;
     
     // Mat4x4 projection = mat4x4_orthographic3d(-half_width, half_width, -half_height, half_height, 0.f, 1.0f);
-    Mat4x4 projection = mat4x4_perspective(PI32 / 3.0f, half_width / half_height, 0.1f, 50.0f);
+    Mat4x4 projection = mat4x4_perspective(PI / 3.0f, half_width / half_height, 0.1f, 50.0f);
     Mat4x4 view       = mat4x4_identity();
     
     Vec3 camera_pos = vec3(0, -16, 0);
@@ -140,8 +140,8 @@ main(int argc, char **argv)
             speed = -0.1f * speed_multiplier;
         else if (is_key_pressed(input.keys[Key_D]))
             speed = 0.1f * speed_multiplier;
-        camera_pos.x += speed *  sin32(camera_rotation.y + HALF_PI32);
-        camera_pos.z += speed * -cos32(camera_rotation.y + HALF_PI32);
+        camera_pos.x += speed *  sin32(camera_rotation.y + HALF_PI);
+        camera_pos.z += speed * -cos32(camera_rotation.y + HALF_PI);
 
         if (is_key_pressed(input.keys[Key_Z])) camera_pos.y += 0.2f * speed_multiplier;
         if (is_key_pressed(input.keys[Key_X])) camera_pos.y -= 0.2f * speed_multiplier;

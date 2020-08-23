@@ -5,12 +5,43 @@
 #include "image.c"
 #include "ray/ray_tracer.c"
 
+#include "ray/teapotdata.c"
+
 // #include "ray/scene_file.c"
 
 const f32 min_hit_distance = 0.001f;
 const f32 tolerance        = 0.001f;
 
-static bool
+static bool 
+ray_intersect_aabb(Box3 aabb, Ray ray, f32 tmin, f32 tmax)
+{
+    bool result = true;
+    
+    for(u32 i = 0;
+        i < 3;
+        ++i)
+    {
+        f32 rd = reciprocal32(ray.dir.e[i]);
+        f32 t0 = (aabb.min.e[i] - ray.origin.e[i]) * rd; 
+        f32 t1 = (aabb.max.e[i] - ray.origin.e[i]) * rd; 
+        if (rd < 0.0f)
+        {
+            swap(t0, t1);
+        }
+
+        tmin = max(tmin, t0);
+        tmax = min(tmax, t1);        
+        if (tmax <= tmin)
+        {
+            result = false;
+            break;
+        }
+    }
+    
+    return result;
+}
+
+static bool inline
 ray_intersect_triangle(Ray ray, Vec3 v0, Vec3 v1, Vec3 v2, f32 *dt, f32 *du, f32 *dv)
 {
     bool result = false;
@@ -46,7 +77,45 @@ ray_intersect_triangle(Ray ray, Vec3 v0, Vec3 v1, Vec3 v2, f32 *dt, f32 *du, f32
     return result;
 }
 
-static void __attribute__((noinline))
+static bool 
+ray_intersect_extents(Ray ray, Extents *extents, 
+                      f32 precomputed_numerator  [static BVH_NUM_PLANE_SET_NORMALS], 
+                      f32 precomputed_denominator[static BVH_NUM_PLANE_SET_NORMALS],
+                      f32 *tnear, f32 *tfar, u32 *plane_index)
+{
+    bool result = true;
+    
+    for (u32 i = 0;
+         i < BVH_NUM_PLANE_SET_NORMALS;
+         ++i)
+    {
+        f32 tmin = (extents->d[i][0] - precomputed_numerator[i]) / precomputed_denominator[i];
+        f32 tmax = (extents->d[i][1] - precomputed_numerator[i]) / precomputed_denominator[i];
+        if (precomputed_denominator[i] < 0)
+        {
+            swap(tmin, tmax);
+        }
+     
+        if (tmin > *tnear)
+        {
+            *tnear = tmin;
+            *plane_index = i;
+        }
+        if (tmax < *tfar)
+        {
+            *tfar = tmax;
+        }
+        
+        if (*tnear > *tfar)
+        {
+            result = false;
+            break;       
+        }
+    }
+    return result;
+}
+
+static void __attribute__((flatten)) __attribute__((noinline)) __attribute__((hot))
 cast_sample_rays(CastState *state)
 {
     Scene *scene = state->scene;
@@ -185,37 +254,71 @@ cast_sample_rays(CastState *state)
                 }
             }
             
+            f32 precomputed_numerator[BVH_NUM_PLANE_SET_NORMALS];
+            f32 precomputed_denumerator[BVH_NUM_PLANE_SET_NORMALS];
+            for (u32 i = 0;
+                 i < BVH_NUM_PLANE_SET_NORMALS;
+                 ++i)
+            {
+                precomputed_numerator[i]   = dot(plane_set_normals[i], ray.origin);
+                precomputed_denumerator[i] = dot(plane_set_normals[i], ray.dir);
+            }
+            
             for (u32 mesh_index = 0;
                  mesh_index < scene->mesh_count;
                  ++mesh_index)
             {
                 TriangleMesh mesh = scene->meshes[mesh_index];
                 
-                u32 j = 0;
-                for (u32 triangle_index = 0;
-                     triangle_index < mesh.triangle_count;
-                     ++triangle_index)
+                f32 tnear = F32_MIN;
+                f32 tfar  = F32_MAX;
+                u32 plane_index;
+                if (ray_intersect_extents(ray, &mesh.bvh.extents, 
+                                          precomputed_numerator, precomputed_denumerator, 
+                                          &tnear, &tfar, &plane_index))
                 {
-                    Vec3 v0 = mesh.p[mesh.tri_indices[j]];   
-                    Vec3 v1 = mesh.p[mesh.tri_indices[j + 1]];   
-                    Vec3 v2 = mesh.p[mesh.tri_indices[j + 2]];   
-                    f32 t, u, v;
-                    if (ray_intersect_triangle(ray, v0, v1, v2, &t, &u, &v))
-                    {
-                        if ((t > min_hit_distance) && (t < hit_record.distance))
-                        {
-                            Vec3 normal = triangle_normal(v0, v1, v2);
-                            
-                            hit_record.distance = t;
-                            hit_record.mat_index = mesh.mat_index;
-                            
-                            hit_record_set_normal(&hit_record, ray, normal);
-                            hit_record.hit_point = ray_point_at(ray, t);
-                            hit_record.uv = vec2(u, v);
-                        }
-                    }
+                    // f32 t = tnear;
+                    // if ((t > min_hit_distance) && (t < hit_record.distance))
+                    // {
+                    //     assert(plane_index < BVH_NUM_PLANE_SET_NORMALS);
+                    //     Vec3 normal = plane_set_normals[plane_index];
+                        
+                    //     hit_record.distance = t;
+                    //     hit_record.mat_index = mesh.mat_index;
+                        
+                    //     hit_record_set_normal(&hit_record, ray, normal);
+                    //     hit_record.hit_point = ray_point_at(ray, t);
+                    //     // hit_record.uv = vec2(u, v);
+                    // }
                     
-                    j += 3;
+                    u32 j = 0;
+                    for (u32 triangle_index = 0;
+                        triangle_index < mesh.triangle_count;
+                        ++triangle_index)
+                    {
+                        Vec3 v0 = mesh.p[mesh.tri_indices[j]];   
+                        Vec3 v1 = mesh.p[mesh.tri_indices[j + 1]];   
+                        Vec3 v2 = mesh.p[mesh.tri_indices[j + 2]];   
+                        f32 t, u, v;
+                        if (ray_intersect_triangle(ray, v0, v1, v2, &t, &u, &v))
+                        {
+                            if ((t > min_hit_distance) && (t < hit_record.distance))
+                            {
+                                // @NOTE(hl): This does not interpolate between vertices' normals so model is kinda rough
+                                Vec3 normal = triangle_normal(v0, v1, v2);
+                                // @TODO(hl): Add interpolation
+                                
+                                hit_record.distance = t;
+                                hit_record.mat_index = mesh.mat_index;
+                                
+                                hit_record_set_normal(&hit_record, ray, normal);
+                                hit_record.hit_point = ray_point_at(ray, t);
+                                hit_record.uv = vec2(u, v);
+                            }
+                        }
+                        
+                        j += 3;
+                    }
                 }
             }
 
@@ -431,6 +534,7 @@ static THREAD_PROC_SIGNATURE(render_thread_proc)
 TriangleMesh 
 triangle_mesh(u32 nfaces, u32 *fi, u32 *vi, Vec3 *p, Vec3 *n, Vec2 *st)
 {
+    // @TODO(hl): Use single malloc for all allocations to avoid heap fragmentation or whatever.
     TriangleMesh result = {0};
     
     u32 k = 0, max_vertex_index = 0;
@@ -450,9 +554,34 @@ triangle_mesh(u32 nfaces, u32 *fi, u32 *vi, Vec3 *p, Vec3 *n, Vec2 *st)
         }
         k += fi[i];
     }
+    ++max_vertex_index;
+    result.max_vertex_index = max_vertex_index;
     
     result.p = calloc(max_vertex_index, sizeof(Vec3));
     memcpy(result.p, p, max_vertex_index * sizeof(Vec3));
+    
+    for (u32 j = 0;
+         j < BVH_NUM_PLANE_SET_NORMALS;
+         ++j)
+    {
+        result.bvh.extents.d[j][0] = F32_MAX;
+        result.bvh.extents.d[j][1] = F32_MIN;
+        
+        for (u32 i = 0;
+             i < result.max_vertex_index;
+             ++i)
+        {
+            f32 d = dot(plane_set_normals[j], result.p[i]);
+            if (d < result.bvh.extents.d[j][0])
+            {
+                result.bvh.extents.d[j][0] = d;
+            }
+            if (d > result.bvh.extents.d[j][1])
+            {
+                result.bvh.extents.d[j][1] = d;
+            }
+        }
+    }
     
     result.n = calloc(max_vertex_index, sizeof(Vec3));
     memcpy(result.n, n, max_vertex_index * sizeof(Vec3));
@@ -486,14 +615,15 @@ make_poly_sphere(f32 r, u32 divs)
 {
     // generate points                                                                                                                                                                                      
     u32 numVertices = (divs - 1) * divs + 2; 
+    // @TODO(hl): Memory pool!
     Vec3 *P = calloc(numVertices, sizeof(Vec3)); 
     Vec3 *N = calloc(numVertices, sizeof(Vec3)); 
     Vec2 *st = calloc(numVertices, sizeof(Vec2)); 
  
-    float u = -HALF_PI32; 
-    float v = -PI32; 
-    float du = PI32 / divs; 
-    float dv = 2 * PI32 / divs; 
+    float u = -HALF_PI; 
+    float v = -PI; 
+    float du = PI / divs; 
+    float dv = 2 * PI / divs; 
  
     P[0] = N[0] = vec3(0, 0, -r); 
     u32 k = 1; 
@@ -501,7 +631,7 @@ make_poly_sphere(f32 r, u32 divs)
          i < divs - 1;
          i++) { 
         u += du; 
-        v = -PI32; 
+        v = -PI; 
         for (u32 j = 0; 
              j < divs;
              j++) { 
@@ -509,8 +639,8 @@ make_poly_sphere(f32 r, u32 divs)
             float z = r * sin32(u); 
             float y = r * cos32(u) * sin32(v) ; 
             P[k] = N[k] = vec3(x, y, z); 
-            st[k].x = u / PI32 + 0.5; 
-            st[k].y = v * 0.5 / PI32 + 0.5; 
+            st[k].x = u / PI + 0.5; 
+            st[k].y = v * 0.5 / PI + 0.5; 
             v += dv, k++; 
         } 
     } 
@@ -560,6 +690,117 @@ make_poly_sphere(f32 r, u32 divs)
     
     return triangle_mesh(npolys, faceIndex, vertsIndex, P, N, st); 
 }
+
+Vec3 evalBezierCurve(const Vec3 *P, const float t) 
+{ 
+    float b0 = (1 - t) * (1 - t) * (1 - t); 
+    float b1 = 3 * t * (1 - t) * (1 - t); 
+    float b2 = 3 * t * t * (1 - t); 
+    float b3 = t * t * t; 
+ 
+    return vec3_add(vec3_add(vec3_add(vec3_muls(P[0], b0), 
+                                      vec3_muls(P[1], b1)),
+                             vec3_muls(P[2], b2)),
+                     vec3_muls(P[3], b3)); 
+} 
+ 
+Vec3 evalBezierPatch(const Vec3 *controlPoints, float u, float v) 
+{ 
+    Vec3 uCurve[4]; 
+    for (int i = 0; i < 4; ++i) 
+        uCurve[i] = evalBezierCurve(controlPoints + 4 * i, u); 
+ 
+    return evalBezierCurve(uCurve, v); 
+} 
+ 
+Vec3 derivBezier(const Vec3 *P, float t) 
+{ 
+    return vec3_add(vec3_add(vec3_add(vec3_muls(P[0], -3 * (1 - t) * (1 - t)),
+                                      vec3_muls(P[1],  3 * (1 - t) * (1 - t) - 6 * t * (1 - t))),
+                             vec3_muls(P[2], 6 * t * (1 - t) - 3 * t * t)),
+                    vec3_muls(P[3], 3 * t * t)); 
+} 
+
+Vec3 dUBezier(const Vec3 *controlPoints, float u, float v) 
+{ 
+    Vec3 P[4]; 
+    Vec3 vCurve[4]; 
+    for (int i = 0; i < 4; ++i) { 
+        P[0] = controlPoints[i]; 
+        P[1] = controlPoints[4 + i]; 
+        P[2] = controlPoints[8 + i]; 
+        P[3] = controlPoints[12 + i]; 
+        vCurve[i] = evalBezierCurve(P, v); 
+    } 
+ 
+    return derivBezier(vCurve, u); 
+} 
+
+Vec3 dVBezier(const Vec3 *controlPoints, float u, float v) 
+{ 
+    Vec3 uCurve[4]; 
+    for (int i = 0; i < 4; ++i) { 
+        uCurve[i] = evalBezierCurve(controlPoints + 4 * i, u); 
+    } 
+ 
+    return derivBezier(uCurve, v); 
+} 
+ 
+
+void 
+make_utah_teapot(TriangleMesh *meshes) 
+{ 
+    uint32_t divs = 8; 
+    Vec3 *P = calloc((divs + 1) * (divs + 1), sizeof(Vec3)); 
+    Vec3 *N = calloc((divs + 1) * (divs + 1), sizeof(Vec3)); 
+    Vec2 *st = calloc((divs + 1) * (divs + 1), sizeof(Vec2)); 
+    u32 *nvertices = calloc(divs * divs, sizeof(u32));
+    u32 *vertices = calloc(divs * divs * 4, sizeof(u32));
+ 
+    // face connectivity - all patches are subdivided the same way so there
+    // share the same topology and uvs
+    for (u32 j = 0, k = 0; j < divs; ++j) { 
+        for (u32 i = 0; i < divs; ++i, ++k) { 
+            nvertices[k] = 4; 
+            vertices[k * 4    ] = (divs + 1) * j + i; 
+            vertices[k * 4 + 1] = (divs + 1) * j + i + 1; 
+            vertices[k * 4 + 2] = (divs + 1) * (j + 1) + i + 1; 
+            vertices[k * 4 + 3] = (divs + 1) * (j + 1) + i; 
+        } 
+    } 
+ 
+    Vec3 controlPoints[16]; 
+    for (int np = 0; np < kTeapotNumPatches; ++np)  // kTeapotNumPatches 
+    {
+        // for (u32 np = 0; np < kTeapotNumPatches; ++np) { // kTeapotNumPatches 
+        // set the control points for the current patch
+        for (uint32_t i = 0; i < 16; ++i) 
+            controlPoints[i].e[0] = teapotVertices[teapotPatches[np][i] - 1][0], 
+            controlPoints[i].e[1] = teapotVertices[teapotPatches[np][i] - 1][1], 
+            controlPoints[i].e[2] = teapotVertices[teapotPatches[np][i] - 1][2]; 
+
+        // generate grid
+        for (uint16_t j = 0, k = 0; j <= divs; ++j) { 
+            float v = j / (float)divs; 
+            for (uint16_t i = 0; i <= divs; ++i, ++k) { 
+                float u = i / (float)divs; 
+                P[k] = evalBezierPatch(controlPoints, u, v); 
+                Vec3 dU = dUBezier(controlPoints, u, v); 
+                Vec3 dV = dVBezier(controlPoints, u, v); 
+                N[k] = normalize(cross(dU, dV)); 
+                st[k].x = u; 
+                st[k].y = v; 
+            } 
+        } 
+        
+        for (u32 i = 0; i < (divs + 1) * (divs + 1); ++i)
+        {
+            P[i].z -= 5.0f;
+        }
+        
+        meshes[np] = triangle_mesh(divs * divs, nvertices, vertices, P, N, st);
+    }
+} 
 
 // Returns scene with same objects in it
 // Can be used for testing and comparing results
@@ -898,7 +1139,9 @@ write_xz_rect(Triangle *t, Vec2 xz0, Vec2 xz1, f32 y, u32 mat_index)
 void 
 make_cornell_box(Scene *scene, ImageU32 *image)
 {
-    static Material materials[8] = {0};
+    static Material materials[9] = {0};
+    // materials[0].emit_color = vec3_muls(vec3(0.3f, 0.4f, 0.5f), 5);
+    materials[0].emit_color = vec3(.5f, .5f, .5f);
     materials[1].texture = texture_solid_color(vec3(0.65f, 0.05f, 0.05f));
     materials[2].texture = texture_solid_color(vec3(0.73f, 0.73f, 0.73f));
     materials[3].texture = texture_solid_color(vec3(0.12f, 0.45f, 0.15f));
@@ -908,9 +1151,18 @@ make_cornell_box(Scene *scene, ImageU32 *image)
     materials[6].texture = texture_solid_color(vec3(0.7f, 0.5f, 0.3f));
     materials[6].refraction_probability = 1.0f;
     materials[7].texture = texture_solid_color(vec3(0.8f, 0.8f, 0.1f));
+    materials[8].texture = texture_solid_color(vec3(0.3f, 0.3f, 0.3f));
+
+    // static Plane planes[1] = {0};
+    // planes[0] = (Plane) {
+    //     .normal = vec3(0, 0, 1),
+    //     .mat_index = 8,  
+    //     .dist = 0
+    // };
+    // scene->planes = planes;
+    // scene->plane_count = array_size(planes);
 
     static Triangle triangles[12] = {0};
-    Triangle *r = triangles;
     write_yz_rect(triangles, vec2(-5, -5), vec2(5, 5), -5, 1);
     write_yz_rect(triangles + 2, vec2(-5, -5), vec2(5, 5),  5, 3);
     f32 d = 1.2f;
@@ -921,10 +1173,9 @@ make_cornell_box(Scene *scene, ImageU32 *image)
     scene->triangles = triangles;
     scene->triangle_count = array_size(triangles);
     
-    static TriangleMesh meshes[1] = {0};
-    meshes[0] = make_poly_sphere(2, 7);
-    meshes[0].mat_index = 7;
-    
+    static TriangleMesh meshes[kTeapotNumPatches] = { 0 };
+    make_utah_teapot(meshes);
+    for (u32 i = 0; i < kTeapotNumPatches; ++i) meshes[i].mat_index = 2;
     scene->mesh_count = array_size(meshes);
     scene->meshes = meshes;
     
@@ -955,38 +1206,11 @@ make_cornell_box(Scene *scene, ImageU32 *image)
     // };
     // add_box(rects + 12, box1, 2, -0.314159265f);
     
+    // scene->camera = camera(vec3(0, -16, 4), image);
     scene->camera = camera(vec3(0, -16, 0), image);
 
     scene->material_count = array_size(materials);
     scene->materials = materials;
-}
-
-static void
-make_some_scene(Scene *scene, ImageU32 *image)
-{
-    scene->camera = camera(vec3(0, -4, 0), image);
-
-    static Material materials[3] = {0};
-    materials[1].texture = texture_image("e:\\dev\\ray\\data\\pano.jpg");
-    f32 c = 30.0f;
-    materials[2].emit_color = vec3(c, c, c * 0.8f);
- 
-    scene->materials = materials;
-    scene->material_count = array_size(materials);
-    
-    static Sphere spheres[2] = {0};
-    spheres[0] = (Sphere) {
-        .mat_index = 1,
-        .pos = vec3(0, 0, 0),
-        .radius = 10
-    };
-    spheres[1] = (Sphere) {
-        .mat_index = 2,
-        .pos = vec3(0, 0, 4),
-        .radius = 1.0f  
-    };
-    scene->spheres = spheres;
-    scene->sphere_count = array_size(spheres);
 }
 
 static void 

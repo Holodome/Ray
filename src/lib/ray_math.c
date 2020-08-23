@@ -439,16 +439,16 @@ cross(Vec3 a, Vec3 b)
 }
 
 inline f32 
-vec3_length_sq(Vec3 a)
+length_sq(Vec3 a)
 {
     f32 result = dot(a, a);
     return result;
 }
 
 inline f32 
-vec3_length(Vec3 a)
+length(Vec3 a)
 {
-    f32 result = sqrt32(vec3_length_sq(a));
+    f32 result = sqrt32(length_sq(a));
     return result;
 }
 
@@ -469,7 +469,7 @@ normalize(Vec3 a)
 {
     Vec3 result = {0};
     
-    f32 length_sq = vec3_length_sq(a);
+    f32 length_sq = length_sq(a);
     if(length_sq > square(0.0001f))
     {
         result = vec3_mul(a, vec3s(reciprocal32(sqrt32(length_sq))));

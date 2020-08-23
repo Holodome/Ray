@@ -6,15 +6,8 @@ Tiny CPU raytracer made in C11 for educational purposes
 
 Shippable version consists of several files.
 ray.exe is a command-line program that performs raytracing and saves it to dest file
-TODO add file to arguments
-TODO loading scenes from some format
 editor.exe is a graphics application that provides user-accesible way of setting up scenes 
 for raytracer
-
-Whether to make own scene format or pick ready is still not decided. Making own format will be better, since in many ways this is not commerical raytracer and scenes are much simpler.
-TODO importing materials from different formats. See BRDF databases
-
-TODO have dlls of different versions of raytracer depending on processor characteristics (plain, SSE, AVX, AVX512(??))
 
 ## Compilation 
 
@@ -30,6 +23,12 @@ On windows LLVM is used to produce binary, not MSVC. And since LLVM is aviable o
 Currently compilation in done in what is called 'Unity build' - it consists of only one translation unit. This approach is often said to be bad, but it makes compile times much faster and is easy to maintain in such small project.
 If project grows much more complicated, it is possible to integrate some build system, like cmake and switch to incremental build
 
+## Features
+
+Currently ray tracer is quite simple.
+It supports a few materials: lambertian, diffuse, dielectrics. Materials can have procedural texturing or image texturing.
+Multiple objects in scene - some primitives, like plane, sphere, disk, as well as complex triangle meshes.
+Currently work is done on building acceleration structures for triangle meshes
 
 ## Some screenshots
 
@@ -41,5 +40,6 @@ If project grows much more complicated, it is possible to integrate some build s
 ![Screenshot4](screenshots/cornellbox2-8192rp-36m.png)
 
 ## Used sources:
+* https://www.youtube.com/c/MollyRocket/ 
 * https://raytracing.github.io
-* https://www.youtube.com/c/MollyRocket/
+* https://www.scratchapixel.com/

@@ -191,14 +191,58 @@ typedef struct {
     u32 mat_index;
 } Triangle;
 
+// 7 predifined normals used in BVH.
+// The idea is, rather than to have AABB which is built around 3 normals (x, y, z axes),
+// we have more normals to pick min and max points for.
+// This too simplifies surface, but does not leave so much space wasted in typical AABB
+static Vec3 plane_set_normals[] = {
+    { .x = 1,            .y = 0,            .z = 0          }, 
+    { .x = 0,            .y = 1,            .z = 0          }, 
+    { .x = 0,            .y = 0,            .z = 1          }, 
+    { .x =  SQRT3_OVER3, .y =  SQRT3_OVER3, .z = SQRT3_OVER3}, 
+    { .x = -SQRT3_OVER3, .y =  SQRT3_OVER3, .z = SQRT3_OVER3}, 
+    { .x = -SQRT3_OVER3, .y = -SQRT3_OVER3, .z = SQRT3_OVER3}, 
+    { .x =  SQRT3_OVER3, .y = -SQRT3_OVER3, .z = SQRT3_OVER3}
+};
+#define BVH_NUM_PLANE_SET_NORMALS array_size(plane_set_normals)
+
+typedef struct {
+    // Min and max distances along every normal
+    f32 d[BVH_NUM_PLANE_SET_NORMALS][2];
+} Extents;
+
+typedef struct OctreeNode {
+    struct OctreeNode *children[8];
+    Extents *data;
+    u32     data_size;
+    Extents extents;
+    bool is_leaf;
+    u8 depth;
+} OctreeNode;
+
+typedef struct {
+    Box3 bounds;
+    OctreeNode *root;
+} Octree;
+
+// VBH + octree structure
+typedef struct {
+    Extents extents;
+    Octree *octree;
+} BVH;
+
 typedef struct {
     u32   triangle_count;
     Vec3 *p;
     Vec3 *n;
     Vec2 *uvs;
     u32  *tri_indices;
+    u32 max_vertex_index;
     
     u32 mat_index;
+    
+    // Box3 bb;
+    BVH bvh;
 } TriangleMesh;
 
 typedef u32 ObjectType;
@@ -220,6 +264,7 @@ typedef struct {
         TriangleMesh triangle_mesh;  
     };
 } Object;
+
 
 // World that we are simulating
 typedef struct Scene {
