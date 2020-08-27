@@ -42,4 +42,6 @@ Currently work is done on building acceleration structures for triangle meshes
 ## Used sources:
 * https://www.youtube.com/c/MollyRocket/ 
 * https://raytracing.github.io
-* https://www.scratchapixel.com/
+* https://www.scratchapixel.com/ (this is THE best resource that i found)
+* https://learnopengl.com/ (concepts)
+* https://github.com/mmp/pbrt-v3 (Physically Based Rendering: From Theory to Implementation - the book)

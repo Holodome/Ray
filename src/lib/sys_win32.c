@@ -4,31 +4,11 @@
 
 #include <intrin.h>
 
-#include "editor/renderer/opengl.h"
-#include "thirdparty/wgl.h"
-#include "thirdparty/wglext.h"
-
 typedef struct SysWindow
 {
 	HWND hwnd;
 } SysWindow;
 
-typedef struct SysGLCTX
-{
-	PFNWGLCREATECONTEXTPROC wglCreateContext;
-	PFNWGLDELETECONTEXTPROC wglDeleteContext;
-	PFNWGLGETPROCADDRESSPROC wglGetProcAddress;
-	PFNWGLGETCURRENTDCPROC wglGetCurrentDC;
-	PFNWGLMAKECURRENTPROC wglMakeCurrent;
-	PFNWGLSWAPLAYERBUFFERSPROC wglSwapLayerBuffers;
-	PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB;
-	PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB;
-	PFNWGLMAKECONTEXTCURRENTARBPROC wglMakeContextCurrentARB;
-	PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT;
-	PFNWGLGETSWAPINTERVALEXTPROC wglGetSwapIntervalEXT;
-	
-	HMODULE opengl_dll;
-} SysGLCTX;
 
 //
 //
@@ -122,126 +102,6 @@ sys_create_window(u32 width, u32 height)
 	UpdateWindow(window->hwnd);
 	
 	return window;
-}
-
-static void 
-win32_opengl_set_pixel_format(HDC hdc, SysGLCTX *ctx)
-{
-	int suggested_pixel_format_index = 0;
-	u32 extended_pick = 0;
-	
-	if (ctx->wglChoosePixelFormatARB)
-	{
-		const int attributes[] = {
-			WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
-			WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
-			WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
-			WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB,
-			WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
-			WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB, GL_TRUE,
-			WGL_COLOR_BITS_ARB, 32,
-			WGL_DEPTH_BITS_ARB, 24,
-			WGL_STENCIL_BITS_ARB, 8,
-			WGL_ALPHA_BITS_ARB, 8,
-			WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
-			WGL_SAMPLES_ARB, 4,
-			0
-		};
-		ctx->wglChoosePixelFormatARB(hdc, attributes, 0, 1, 
-									 &suggested_pixel_format_index, &extended_pick);
-	}
-	
-	if (!extended_pick)
-	{
-		PIXELFORMATDESCRIPTOR desired_pixel_format = {0};
-		desired_pixel_format.nSize = sizeof(desired_pixel_format);
-		desired_pixel_format.nVersion = 1;
-		desired_pixel_format.iPixelType = PFD_TYPE_RGBA;
-		desired_pixel_format.dwFlags = PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER,
-		desired_pixel_format.cColorBits = 32;
-		desired_pixel_format.cAlphaBits = 8;
-		desired_pixel_format.cDepthBits = 24;
-		desired_pixel_format.iLayerType = PFD_MAIN_PLANE;
-		
-		suggested_pixel_format_index = ChoosePixelFormat(hdc, &desired_pixel_format);
-	}
-	
-	PIXELFORMATDESCRIPTOR suggested_pixel_format;
-	DescribePixelFormat(hdc, suggested_pixel_format_index,
-						sizeof(suggested_pixel_format), &suggested_pixel_format);
-	SetPixelFormat(hdc, suggested_pixel_format_index, &suggested_pixel_format);
-}
-
-SysGLCTX *
-sys_init_opengl(SysWindow *window, u32 swap_interval)
-{
-	SysGLCTX *ctx = calloc(1, sizeof(SysGLCTX));
-	
-	// Load plain wgl procusrues
-	
-	HMODULE opengl_dll = LoadLibraryA("opengl32.dll");
-	assert(opengl_dll);
-	*(FARPROC *)&ctx->wglCreateContext = GetProcAddress(opengl_dll, "wglCreateContext");
-	*(FARPROC *)&ctx->wglDeleteContext = GetProcAddress(opengl_dll, "wglDeleteContext");
-	*(FARPROC *)&ctx->wglGetProcAddress = GetProcAddress(opengl_dll, "wglGetProcAddress");
-	*(FARPROC *)&ctx->wglGetCurrentDC = GetProcAddress(opengl_dll, "wglGetCurrentDC");
-	*(FARPROC *)&ctx->wglMakeCurrent = GetProcAddress(opengl_dll, "wglMakeCurrent");
-	*(FARPROC *)&ctx->wglSwapLayerBuffers = GetProcAddress(opengl_dll, "wglSwapLayerBuffers");
-	// Load wgl extension procedures
-	WNDCLASSA dummy_window_class = {0};
-	dummy_window_class.lpfnWndProc = DefWindowProcA;
-	dummy_window_class.hInstance = GetModuleHandle(0);
-	dummy_window_class.lpszClassName = "__dummy__";
-	RegisterClassA(&dummy_window_class);
-	HWND dummy_hwnd = CreateWindowA(dummy_window_class.lpszClassName, "", 0,
-									CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-									0, 0, dummy_window_class.hInstance, 0);
-	HDC dummy_window_dc = GetDC(dummy_hwnd);
-	win32_opengl_set_pixel_format(dummy_window_dc, ctx);
-	HGLRC oglrc = ctx->wglCreateContext(dummy_window_dc);
-	ctx->wglMakeCurrent(dummy_window_dc, oglrc);
-	
-	*(FARPROC *)&ctx->wglChoosePixelFormatARB = ctx->wglGetProcAddress("wglChoosePixelFormatARB");
-    *(FARPROC *)&ctx->wglCreateContextAttribsARB = ctx->wglGetProcAddress("wglCreateContextAttribsARB");
-    *(FARPROC *)&ctx->wglMakeContextCurrentARB = ctx->wglGetProcAddress("wglMakeContextCurrentARB");
-    *(FARPROC *)&ctx->wglSwapIntervalEXT = ctx->wglGetProcAddress("wglSwapIntervalEXT");
-    *(FARPROC *)&ctx->wglGetSwapIntervalEXT = ctx->wglGetProcAddress("wglGetSwapIntervalEXT");
-	ctx->wglDeleteContext(oglrc);
-	
-	ReleaseDC(dummy_hwnd, dummy_window_dc);
-	DestroyWindow(dummy_hwnd);
-	
-	HDC main_window_dc = GetDC(window->hwnd);
-    win32_opengl_set_pixel_format(main_window_dc, ctx);
-    const int opengl_attributes[] = {
-        WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
-        WGL_CONTEXT_MINOR_VERSION_ARB, 3,
-        WGL_CONTEXT_FLAGS_ARB, 
-		WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB | WGL_CONTEXT_DEBUG_BIT_ARB,
-	    WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-	    0 // !!!
-    };
-	
-    HGLRC opengl_rc = ctx->wglCreateContextAttribsARB(main_window_dc, 0, opengl_attributes);
-    ctx->wglMakeCurrent(main_window_dc, opengl_rc);
-	
-	ctx->opengl_dll = opengl_dll;
-	
-	return ctx;
-}
-
-struct OpenGLRenderer *
-sys_create_renderer(struct SysGLCTX *ctx)
-{
-	OpenGLRenderer *renderer = calloc(1, sizeof(OpenGLRenderer));
-	
-#define GLProc(name, type) \
-*(PROC *)&renderer->gl. name = ctx->wglGetProcAddress(#name); \
-if (!renderer->gl. name) *(FARPROC *)&renderer->gl. name = GetProcAddress(ctx->opengl_dll, #name); 
-#include "editor/renderer/gl_proc_list.inc"
-#undef GLProc
-	
-	return renderer;
 }
 
 static Key
@@ -465,16 +325,4 @@ void sys_update_input(struct SysWindow *window, Input *input)
 	Vec2 window_size = vec2(client_rect.right - client_rect.left,
 							client_rect.bottom - client_rect.top);
 	input->window_size = window_size;
-}
-
-void 
-sys_swap_buffers(struct SysWindow *window, struct SysGLCTX *gl, u32 swap_interval)
-{
-    u32 current_swap_interval = gl->wglGetSwapIntervalEXT();
-    if (swap_interval != current_swap_interval)
-    {
-        gl->wglSwapIntervalEXT(swap_interval);
-    }
-	
-    gl->wglSwapLayerBuffers(gl->wglGetCurrentDC(), WGL_SWAP_MAIN_PLANE);
 }

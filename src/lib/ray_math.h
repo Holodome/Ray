@@ -1,5 +1,7 @@
+// This fily conatins common math definition, like trigonometrical functions, vector types and operations, 
+// math constants and other miscellaneous stuff, like constants
+//
 
-// @NOTE(hl): Put this outside of include guards
 #ifdef max
 #undef max 
 #endif 
@@ -8,11 +10,13 @@
 #undef min
 #endif 
 
-#define max(a, b) ({__typeof__(a) _a = a; __typeof__(b) _b = b; (_a > _b) ? (_a) : (_b); })
-#define min(a, b) ({__typeof__(a) _a = a; __typeof__(b) _b = b; (_a < _b) ? (_a) : (_b); })
+// @NOTE(hl): Relies on GCC/clang extension https://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html#Statement-Exprs
+// In C++ this would be done with templates
+#define max(a, b)     ({__typeof__(a) _a = a; __typeof__(b) _b = b; (_a > _b) ? (_a) : (_b); })
+#define min(a, b)     ({__typeof__(a) _a = a; __typeof__(b) _b = b; (_a < _b) ? (_a) : (_b); })
 #define max3(a, b, c) ({__typeof__(a) _a = a; __typeof__(b) _b = b; __typeof__(c) _c = c; (_a > _b) ? ((_a > _c) ? _a : _c) : ((_b > _c) ? _b : _c ); })
 #define min3(a, b, c) ({__typeof__(a) _a = a; __typeof__(b) _b = b; __typeof__(c) _c = c; (_a < _b) ? ((_a < _c) ? _a : _c) : ((_b < _c) ? _b : _c ); })
-#define swap(a, b) ({__typeof__(a) temp = a; a = b; b = temp; (void)0; })
+#define swap(a, b)    ({__typeof__(a) temp = a; a = b; b = temp; (void)0; })
 
 #if !defined(MATH_H)
 
@@ -88,7 +92,7 @@ inline f32 clamp01(f32 a);
 inline f32 abs32(f32 a);
 inline f32 max32(f32 a, f32 b);
 inline f32 min32(f32 a, f32 b);
-
+// Simplifies writing some math expressions
 inline f32 square(f32 a) { return a * a; }
 inline f32 cube(f32 a) { return a * a * a; }
 
@@ -96,9 +100,15 @@ inline f32 cube(f32 a) { return a * a * a; }
 inline f32
 schlick(f32 cosine, f32 ref_idx)
 {
-    f32 r0 = (1.0f - ref_idx) / (1.0f + ref_idx);
-    r0 = r0 * r0;
+    f32 r0 = square((1.0f - ref_idx) / (1.0f + ref_idx));
+#if 1
     f32 result = r0 + (1.0f - r0) * pow32((1.0f - cosine), 5.0f);
+#else 
+    // This version doesn't use powf function, so it SHOULD be faster
+    f32 multiplier = 1 - cosine;
+    multiplier = multiplier * multiplier * multiplier * multiplier * multiplier;
+    f32 result = r0 + (1.0f - r0) * multiplier;
+#endif 
     return result;
 }
 
@@ -192,12 +202,16 @@ inline Vec3 vec3_add4(Vec3 a, Vec3 b, Vec3 c, Vec3 d) { return vec3_add(vec3_add
 inline Vec3 vec3_from_vec2(Vec2 xy, f32 z) { return (Vec3){ .x = xy.x, .y = xy.y, .z = z }; }
 
 // https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/reflect.xhtml
+// Note that this function is explicitly inlinded in code, and there is no direct usage of function itself. This is reference to alogirithm.
+// Inlining is done because dot of direction and normal is often precomputated
 inline Vec3 
-vec3_reflect(Vec3 v, Vec3 normal) 
+reflect(Vec3 v, Vec3 normal) 
 {
     return vec3_sub(v, vec3_muls(normal, 2.0f * dot(v, normal))); 
 }
 
+// Returns UV coordinates from coordinates of point on unit sphere 
+// P should be normalized
 inline Vec2 
 unit_sphere_get_uv(Vec3 p)
 {
@@ -219,6 +233,34 @@ vec3_mix(Vec3 a, Vec3 b, f32 t)
         .y = mix(a.y, b.y, t),  
         .z = mix(a.z, b.z, t),  
     };
+    return result;
+}
+
+inline Vec3 
+refract(Vec3 v, Vec3 n, f32 ior)
+{
+    f32 cosi = clamp(-1, 1, dot(v, n));
+    f32 etai = 1;
+    f32 etat = ior;
+    
+    if (cosi < 0)
+    {
+        cosi = -cosi;
+    }
+    else 
+    {
+        swap(etai, etat);
+        n = vec3_neg(n);
+    }
+    
+    f32 eta = etai / etat;
+    f32 k = 1 - eta * eta * (1 - cosi * cosi);
+    
+    Vec3 result = {0};
+    if (k >= 0)
+    {
+        result = vec3_add(vec3_muls(v, eta), vec3_muls(n, eta * cosi - sqrt32(k)));
+    }
     return result;
 }
 
@@ -286,7 +328,6 @@ typedef union {
     Vec4 v[4];
 } Mat4x4;
 
-inline Mat4x4 mat4x4(void);
 inline Mat4x4 mat4x4d(f32 d);
 inline Mat4x4 mat4x4_identity(void);
 inline Mat4x4 mat4x4_translate(Vec3 v);
@@ -300,6 +341,10 @@ inline Mat4x4 mat4x4_orthographic2d(f32 l, f32 r, f32 b, f32 t);
 inline Mat4x4 mat4x4_perspective(f32 fovy, f32 aspect, f32 near, f32 far);
 inline Mat4x4 mat4x4_look_at(Vec3 pos, Vec3 target);
 inline Mat4x4 mat4x4_mul(Mat4x4 a, Mat4x4 b);
+inline Mat4x4 mat4x4_muls(Mat4x4 m, f32 a);
+inline Vec4   mat4x4_mul_vec4(Mat4x4 m, Vec4 v);
+inline Mat4x4 mat4x4_transpose(Mat4x4 m);
+inline Mat4x4 mat4x4_inverse(Mat4x4 m);
 
 //
 // Rect2
@@ -332,8 +377,8 @@ inline f32 rect2_center_y(Rect2 r);
 inline void rect2_store_pointsa(Rect2 rect, Vec2 points[4]);
 // Wrties all rect coreners in corresponding parameters
 inline void rect2_store_points(Rect2 rect,
-                   Vec2 top_left[static 1], Vec2 bottom_left[static 1],
-				   Vec2 top_right[static 1], Vec2 bottom_right[static 1]);
+							   Vec2 top_left[static 1], Vec2 bottom_left[static 1],
+							   Vec2 top_right[static 1], Vec2 bottom_right[static 1]);
 // Checks if point is inside of the rect
 inline bool rect2_collide_point(Rect2 rect, Vec2 point);
 // Checks if two rects intersect

@@ -28,11 +28,7 @@ popd
 if %ERRORLEVEL% neq 0 goto :end
 
 if not exist .\data mkdir data 
-pushd data 
 
-..\build\ray.exe
-start out.png
-
-popd 
+build\ray.exe -out data\out.png -open -size 1024 1024
 
 :end

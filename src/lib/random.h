@@ -1,4 +1,4 @@
-// Contains series of random number generation function
+// Contains series of random number generation helper functions
 //
 #if !defined(RANDOM_H)
 

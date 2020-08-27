@@ -5,6 +5,7 @@
 #include "ray/ray_tracer.h"
 // #include "ray/scene_file.h"
 #include "lib/sys.h"
+#include "lib/memory_pool.h"
 
 // Single work order from multithreaded rendering system
 typedef struct {

@@ -1,7 +1,41 @@
-// Contains definitaions for things that should be usable eveywhere
-// These are more plasant to write types and some macros
+// Contains definitaions for things that are used eveywhere
+// These are more pleasant to write types and some helper macros
 // 
 #if !defined(COMMON_H)
+
+// Used in debug builds
+#ifndef RAY_INTERNAL 
+#define RAY_INTERNAL 1
+#endif 
+
+// Detect compiler
+// @NOTE(hl): Check for clang first because when compiling clang on windows, it likes to define _MSC_VER as well.
+#if defined(__clang__)
+#define COMPILER_LLVM 1
+#elif defined(_MSC_VER)
+#define COMPILER_MSVC 1
+#elif defined(__GUNC__)
+#define COMPILER_GCC 1
+#else
+#error "Unsupported compiler"
+#endif
+
+#ifndef COMPILER_MSVC
+#define COMPILER_MSVC 0
+#endif 
+#ifndef COMPILER_LLVM
+#define COMPILER_LLVM 0
+#endif 
+#ifndef COMPILER_GCC
+#define COMPILER_GCC 0
+#endif 
+
+// Support for gcc __attribute__ syntax
+#if COMPILER_LLVM || COMPILER_GCC
+#define ATTRIBUTE(x) __attribute__((x))
+#else 
+#define ATTRIBUTE(x) 
+#endif 
 
 #include <stdbool.h>
 
@@ -45,36 +79,7 @@ typedef intptr_t  imm;
 
 #define UMM_MAX UINTPTR_MAX
 #define IMM_MAX INTPTR_MAX
-
-#define array_size(a) (sizeof(a) / sizeof(*(a)))
-
-// @NOTE(hl): stb_sprintf is way faster than any built-in snprintf function
-#include "thirdparty/stb_sprintf.h"
-
-#define format_string(dest, size, ...)               stbsp_snprintf(dest, size, __VA_ARGS__)
-#define format_string_list(dest, size, format, args) stbsp_vsnprintf(dest, size, format, args)
-
-inline char *
-cstring_copy(u64 dest_size, char *dest, char *source)
-{
-	while (dest_size-- && *source)
-	{
-		*dest++ = *source++;
-	}
-	*dest = 0;
-	return dest;
-}
-
-inline char *
-cstring_copy_n(u64 dest_size, char *dest, char *source, u64 source_size)
-{
-	while (dest_size-- && source_size-- && *source)
-	{
-		*dest++ = *source++;
-	}
-	*dest = 0;
-	return dest;
-}
+#define IMM_MIN INTPTR_MIN
 
 #include <assert.h>
 
@@ -83,6 +88,15 @@ cstring_copy_n(u64 dest_size, char *dest, char *source, u64 source_size)
 
 #include <ctype.h>
 #include <time.h>
+
+// Evaluates to size of array created on stack. If pointer is being passed instead of array, clang and gcc warn about this.
+#define array_size(a) (sizeof(a) / sizeof(*(a)))
+
+// @NOTE(hl): stb_sprintf is way faster than any built-in snprintf function
+#include "thirdparty/stb_sprintf.h"
+
+#define format_string(dest, size, ...)               stbsp_snprintf(dest, size, __VA_ARGS__)
+#define format_string_list(dest, size, format, args) stbsp_vsnprintf(dest, size, format, args)
 
 #define COMMON_H 1
 #endif

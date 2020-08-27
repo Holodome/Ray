@@ -129,9 +129,7 @@ typedef struct {
 
 u32    sys_get_processor_count(void);
 Thread sys_create_thread(ThreadProc *proc, void *param);
-// @NOTE(hl): Needs to be inlined in case compiler does something stupid.
-// Exits calling thread
-__attribute__((always_inline)) void sys_exit_thread(void);
+void sys_exit_thread(void);
 
 // Interlocked add. Returns contents of value before addition
 // @NOTE(hl): Although this is not os function, but x64 instruction wrapper, we put it in sys

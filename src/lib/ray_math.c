@@ -712,6 +712,42 @@ mat4x4_mul(Mat4x4 a, Mat4x4 b)
 	return result;
 }
 
+Mat4x4 
+mat4x4_muls(Mat4x4 m, f32 a)
+{
+    Mat4x4 result;
+    for(u32 i = 0; 
+        i < 4;
+        ++i)
+    {
+		for(u32 j = 0;
+            j < 4;
+            ++j)
+        {
+            result.e[i][j] = m.e[i][j] * a;
+        }
+    }
+    return result;
+}
+
+Vec4 
+mat4x4_mul_vec4(Mat4x4 m, Vec4 v)
+{
+    Vec4 result;
+    
+    for (u32 i = 0;
+         i < 4;
+         ++i)
+    {
+        result.e[i] = (v.e[0] * m.e[0][i] + 
+                       v.e[1] * m.e[1][i] +
+                       v.e[2] * m.e[2][i] +
+                       v.e[3] * m.e[3][i]);
+    }    
+    
+    return result;
+}
+
 inline Mat4x4 
 mat4x4_perspective(f32 fovy, f32 aspect, f32 near, f32 far)
 {
@@ -725,6 +761,83 @@ mat4x4_perspective(f32 fovy, f32 aspect, f32 near, f32 far)
 	result.e[2][3] = -1.0f;
 	result.e[3][2] = -2.0f* far * near / (far - near);
     
+    return result;
+}
+
+Mat4x4 
+mat4x4_transpose(Mat4x4 m) 
+{
+    Mat4x4 result = {{
+        { m.e[0][0], m.e[1][0], m.e[2][0], m.e[3][0] },
+        { m.e[0][1], m.e[1][1], m.e[2][1], m.e[3][1] },
+        { m.e[0][2], m.e[1][2], m.e[2][2], m.e[3][2] },
+        { m.e[0][3], m.e[1][3], m.e[2][3], m.e[3][3] }
+    }};
+    
+    return result;
+}
+
+Mat4x4
+mat4x4_inverse(Mat4x4 m)
+{
+    f32 coef00 = m.e[2][2] * m.e[3][3] - m.e[3][2] * m.e[2][3];
+    f32 coef02 = m.e[1][2] * m.e[3][3] - m.e[3][2] * m.e[1][3];
+    f32 coef03 = m.e[1][2] * m.e[2][3] - m.e[2][2] * m.e[1][3];
+    f32 coef04 = m.e[2][1] * m.e[3][3] - m.e[3][1] * m.e[2][3];
+    f32 coef06 = m.e[1][1] * m.e[3][3] - m.e[3][1] * m.e[1][3];
+    f32 coef07 = m.e[1][1] * m.e[2][3] - m.e[2][1] * m.e[1][3];
+    f32 coef08 = m.e[2][1] * m.e[3][2] - m.e[3][1] * m.e[2][2];
+    f32 coef10 = m.e[1][1] * m.e[3][2] - m.e[3][1] * m.e[1][2];
+    f32 coef11 = m.e[1][1] * m.e[2][2] - m.e[2][1] * m.e[1][2];
+    f32 coef12 = m.e[2][0] * m.e[3][3] - m.e[3][0] * m.e[2][3];
+    f32 coef14 = m.e[1][0] * m.e[3][3] - m.e[3][0] * m.e[1][3];
+    f32 coef15 = m.e[1][0] * m.e[2][3] - m.e[2][0] * m.e[1][3];
+    f32 coef16 = m.e[2][0] * m.e[3][2] - m.e[3][0] * m.e[2][2];
+    f32 coef18 = m.e[1][0] * m.e[3][2] - m.e[3][0] * m.e[1][2];
+    f32 coef19 = m.e[1][0] * m.e[2][2] - m.e[2][0] * m.e[1][2];
+    f32 coef20 = m.e[2][0] * m.e[3][1] - m.e[3][0] * m.e[2][1];
+    f32 coef22 = m.e[1][0] * m.e[3][1] - m.e[3][0] * m.e[1][1];
+    f32 coef23 = m.e[1][0] * m.e[2][1] - m.e[2][0] * m.e[1][1];
+    
+    Vec4 fac0 = { .x = coef00, .y = coef00, .z = coef02, .w = coef03 };
+    Vec4 fac1 = { .x = coef04, .y = coef04, .z = coef06, .w = coef07 };
+    Vec4 fac2 = { .x = coef08, .y = coef08, .z = coef10, .w = coef11 };
+    Vec4 fac3 = { .x = coef12, .y = coef12, .z = coef14, .w = coef15 };
+    Vec4 fac4 = { .x = coef16, .y = coef16, .z = coef18, .w = coef19 };
+    Vec4 fac5 = { .x = coef20, .y = coef20, .z = coef22, .w = coef23 };
+    
+    Vec4 vec0 = { .x = m.e[1][0], .y = m.e[0][0], .z = m.e[0][0], .w = m.e[0][0] };
+    Vec4 vec1 = { .x = m.e[1][1], .y = m.e[0][1], .z = m.e[0][1], .w = m.e[0][1] };
+    Vec4 vec2 = { .x = m.e[1][2], .y = m.e[0][2], .z = m.e[0][2], .w = m.e[0][2] };
+    Vec4 vec3 = { .x = m.e[1][3], .y = m.e[0][3], .z = m.e[0][3], .w = m.e[0][3] };
+    
+    Vec4 inv0 = vec4_add(vec4_sub(vec4_mul(vec1, fac0), vec4_mul(vec2, fac1)), vec4_mul(vec3, fac2));
+    Vec4 inv1 = vec4_add(vec4_sub(vec4_mul(vec0, fac0), vec4_mul(vec2, fac3)), vec4_mul(vec3, fac4));
+    Vec4 inv2 = vec4_add(vec4_sub(vec4_mul(vec0, fac1), vec4_mul(vec1, fac3)), vec4_mul(vec3, fac5));
+    Vec4 inv3 = vec4_add(vec4_sub(vec4_mul(vec0, fac2), vec4_mul(vec1, fac4)), vec4_mul(vec2, fac5));
+    
+    const Vec4 sign_a = { .x = 1, .y =-1, .z = 1, .w = -1 };
+    const Vec4 sign_b = { .x =-1, .y = 1, .z =-1, .w =  1 };
+    
+    Mat4x4 inverse;
+    for(u32 i = 0; 
+        i < 4;
+        ++i)
+    {
+        inverse.e[0][i] = inv0.e[i] * sign_a.e[i];
+        inverse.e[1][i] = inv1.e[i] * sign_b.e[i];
+        inverse.e[2][i] = inv2.e[i] * sign_a.e[i];
+        inverse.e[3][i] = inv3.e[i] * sign_b.e[i];
+    }
+    
+    Vec4 row0 = { .x = inverse.e[0][0], .y = inverse.e[1][0], .z = inverse.e[2][0], .w = inverse.e[3][0] };
+    Vec4 m0   = { .x = m.e[0][0],       .y = m.e[0][1],       .z = m.e[0][2],       .w = m.e[0][3]       };
+    Vec4 dot0 = vec4_mul(m0, row0);
+    f32 dot1 = (dot0.x + dot0.y) + (dot0.z + dot0.w);
+    
+    f32 one_over_det = 1 / dot1;
+    
+    Mat4x4 result = mat4x4_muls(inverse, one_over_det);
     return result;
 }
 
