@@ -303,6 +303,7 @@ inline Vec4 vec4_mul(Vec4 a, Vec4 b);
 inline Vec4 vec4_divs(Vec4 a, f32 b);
 inline Vec4 vec4_muls(Vec4 a, f32 b);
 
+inline Vec4 vec4_from_vec3(Vec3 xyz, f32 w) { return (Vec4) { .x = xyz.x, .y = xyz.y, .z = xyz.z, .w = w }; }
 
 //
 // Color converters
@@ -322,27 +323,55 @@ inline u32 rgba_pack_4x8(Vec4 a);
 // 4x4 Matrix 
 //
 
-
+// For SIMD, SSE requires alignment by 16
+#if COMPILER_LLVM || COMPILER_GCC
+__attribute__((aligned(16)))
+#elif COMPILER_MSVC
+__declspec(align(16))
+#else 
+#error "!"
+#endif 
 typedef union {
 	f32  e[4][4];
     Vec4 v[4];
 } Mat4x4;
 
+// Initializes matrix with single scalar scale value
 inline Mat4x4 mat4x4d(f32 d);
+// Returns identity matrix
 inline Mat4x4 mat4x4_identity(void);
+// Creates translation matrix
 inline Mat4x4 mat4x4_translate(Vec3 v);
+// Creates scale matrix
 inline Mat4x4 mat4x4_scale(Vec3 v);
+// Creates rotation matrix per each axis
+// @TODO(hl): Check if they work
 inline Mat4x4 mat4x4_rotate_x(f32 angle);
 inline Mat4x4 mat4x4_rotate_y(f32 angle);
 inline Mat4x4 mat4x4_rotate_z(f32 angle);
+// Creates rotation matrix from arbitrary axis
 inline Mat4x4 mat4x4_rotate(f32 angle, Vec3 v);
+// Returns orthographic projection matrix
 inline Mat4x4 mat4x4_orthographic3d(f32 l, f32 r, f32 b, f32 t, f32 n, f32 f);
+// Returns orthographic projection matrix
 inline Mat4x4 mat4x4_orthographic2d(f32 l, f32 r, f32 b, f32 t);
+// Returns perspective projection matrix
 inline Mat4x4 mat4x4_perspective(f32 fovy, f32 aspect, f32 near, f32 far);
+// Returns look at matrix. Asume UP is {0, 0, 1}
 inline Mat4x4 mat4x4_look_at(Vec3 pos, Vec3 target);
+// Multiplies two matrices
+// https://en.wikipedia.org/wiki/Matrix_multiplication
 inline Mat4x4 mat4x4_mul(Mat4x4 a, Mat4x4 b);
+// Performs matrix scalar multiplication
 inline Mat4x4 mat4x4_muls(Mat4x4 m, f32 a);
-inline Vec4   mat4x4_mul_vec4(Mat4x4 m, Vec4 v);
+// Performs matrix multiplication with vector.
+inline Vec3   mat4x4_mul_vec3(Mat4x4 m, Vec3 v);
+// Performs 3x3 matrix multiplication with vector.
+// Altough it takes as parameter 4x4 matrix, function uses only 3x3 lower part of it 
+// (without translation, only scale and rotation are applied)
+// This is useful in applying matrix to vector as direction, not as point
+inline Vec3   mat4x4_as_3x3_mul_vec3(Mat4x4 m, Vec3 v);
+// Performs matrix transposition
 inline Mat4x4 mat4x4_transpose(Mat4x4 m);
 inline Mat4x4 mat4x4_inverse(Mat4x4 m);
 

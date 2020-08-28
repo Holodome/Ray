@@ -29,6 +29,6 @@ if %ERRORLEVEL% neq 0 goto :end
 
 if not exist .\data mkdir data 
 
-build\ray.exe -out data\out.png -open -size 1024 1024
+build\ray.exe -out data\out.png -open
 
 :end

@@ -730,23 +730,29 @@ mat4x4_muls(Mat4x4 m, f32 a)
     return result;
 }
 
-Vec4 
-mat4x4_mul_vec4(Mat4x4 m, Vec4 v)
+Vec3
+mat4x4_mul_vec3(Mat4x4 m, Vec3 v)
 {
-    Vec4 result;
-    
-    for (u32 i = 0;
-         i < 4;
-         ++i)
-    {
-        result.e[i] = (v.e[0] * m.e[0][i] + 
-                       v.e[1] * m.e[1][i] +
-                       v.e[2] * m.e[2][i] +
-                       v.e[3] * m.e[3][i]);
-    }    
-    
+    f32 a = v.e[0] * m.e[0][0] + v.e[1] * m.e[1][0] + v.e[2] * m.e[2][0] + m.e[3][0]; 
+    f32 b = v.e[0] * m.e[0][1] + v.e[1] * m.e[1][1] + v.e[2] * m.e[2][1] + m.e[3][1]; 
+    f32 c = v.e[0] * m.e[0][2] + v.e[1] * m.e[1][2] + v.e[2] * m.e[2][2] + m.e[3][2]; 
+    f32 w = v.e[0] * m.e[0][3] + v.e[1] * m.e[1][3] + v.e[2] * m.e[2][3] + m.e[3][3]; 
+
+    Vec3 result = vec3(a / w, b / w, c / w);
     return result;
 }
+
+Vec3   
+mat4x4_as_3x3_mul_vec3(Mat4x4 m, Vec3 v)
+{
+    f32 a = v.e[0] * m.e[0][0] + v.e[1] * m.e[1][0] + v.e[2] * m.e[2][0]; 
+    f32 b = v.e[0] * m.e[0][1] + v.e[1] * m.e[1][1] + v.e[2] * m.e[2][1]; 
+    f32 c = v.e[0] * m.e[0][2] + v.e[1] * m.e[1][2] + v.e[2] * m.e[2][2]; 
+    
+    Vec3 result = vec3(a, b, c);
+    return result;    
+}
+
 
 inline Mat4x4 
 mat4x4_perspective(f32 fovy, f32 aspect, f32 near, f32 far)

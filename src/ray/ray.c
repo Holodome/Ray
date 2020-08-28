@@ -91,7 +91,7 @@ ray_intersect_extents(Ray ray, Extents *extents,
 }
 
 static Vec3  
-ray_cast(CastState *state, Ray ray, HitRecord *hit_record)
+ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
 {    
     Scene *scene = state->scene;
     
@@ -103,8 +103,8 @@ ray_cast(CastState *state, Ray ray, HitRecord *hit_record)
 		 i < BVH_NUM_PLANE_SET_NORMALS;
 		 ++i)
     {
-        precomputed_numerator[i]   = dot(plane_set_normals[i], ray.origin);
-        precomputed_denumerator[i] = dot(plane_set_normals[i], ray.direction);
+        precomputed_numerator[i]   = dot(plane_set_normals[i], ray_init.origin);
+        precomputed_denumerator[i] = dot(plane_set_normals[i], ray_init.direction);
     }
     
     // Iterate scene objects
@@ -118,8 +118,15 @@ ray_cast(CastState *state, Ray ray, HitRecord *hit_record)
         {
             case Object_Sphere:
             {
+                // Ray ray = make_ray(mat4x4_mul_vec3(object.transform.w2o, ray_init.origin), 
+                //                    mat4x4_as_3x3_mul_vec3(object.transform.w2o, ray_init.direction),
+                //                    ray_init.time);
+                Ray ray = ray_init;
+                ray.origin = mat4x4_mul_vec3(object.transform.w2o, ray_init.origin);
+                
+                Vec3 sphere_pos = {0};
                 Sphere sphere = object.sphere;
-                Vec3 sphere_relative_ray_origin = vec3_sub(ray.origin, sphere.pos);
+                Vec3 sphere_relative_ray_origin = vec3_sub(ray.origin, sphere_pos);
                 f32 a = dot(ray.direction, ray.direction);
                 f32 b = 2.0f * dot(sphere_relative_ray_origin, ray.direction);
                 f32 c = dot(sphere_relative_ray_origin, sphere_relative_ray_origin) - sphere.radius * sphere.radius;
@@ -150,15 +157,17 @@ ray_cast(CastState *state, Ray ray, HitRecord *hit_record)
                         hit_record->normal = normal;
                         //hit_record->ray_dir_normal_dot = dot(hit_record->normal, ray.direction);
                         hit_record->hit_point = ray_point_at(ray, t);
-                        hit_record->uv = unit_sphere_get_uv(vec3_divs(vec3_sub(hit_record->hit_point, sphere.pos),
+                        hit_record->uv = unit_sphere_get_uv(vec3_divs(vec3_sub(hit_record->hit_point, sphere_pos),
                                                                     sphere.radius));
                     }
                 }
+                hit_record->hit_point = ray_point_at(ray_init, hit_record->distance);
             } break;
             case Object_Plane:
             {
                 Plane plane = object.plane;
                 
+                Ray ray = ray_init;
                 f32 denominator = dot(plane.normal, ray.direction);
                 if ((denominator < -tolerance) || (denominator > tolerance))
                 {
@@ -180,6 +189,7 @@ ray_cast(CastState *state, Ray ray, HitRecord *hit_record)
             {
                 Disk disk = object.disk;
                 
+                Ray ray = ray_init;
                 f32 denominator = dot(disk.normal, ray.direction);
                 if ((denominator < -tolerance) || (denominator > tolerance))
                 {
@@ -205,6 +215,7 @@ ray_cast(CastState *state, Ray ray, HitRecord *hit_record)
             {
                 Triangle triangle = object.triangle;
                 
+                Ray ray = ray_init;
                 f32 t, u, v;
                 if (ray_intersect_triangle(ray, triangle.vertex0, triangle.vertex1, triangle.vertex2, &t, &u, &v))
                 {
@@ -220,25 +231,21 @@ ray_cast(CastState *state, Ray ray, HitRecord *hit_record)
             } break;
             case Object_Cylinder:
             {
-                Cylinder cylinder = object.cylinder;
             } break;
             case Object_Cone:
             {
-                Cone cone = object.cone;
             } break;
             case Object_Hyperboloid:
             {
-                Hyperboloid hyperboloid = object.hyperboloid;
             } break;
             case Object_Paraboloid:
             {
-                Paraboloid paraboloid = object.paraboloid;
             } break;
             case Object_TriangleMesh:
             {
                 TriangleMesh mesh = object.triangle_mesh;
-                
                  
+                Ray ray = ray_init;
                 f32 tnear = F32_MIN;
                 f32 tfar  = F32_MAX;
                 u32 plane_index;
@@ -733,18 +740,19 @@ init_sample_scene(Scene *scene, ImageU32 *image)
 	MemoryPool texture_pool = memory_pool(malloc(texture_pool_size), texture_pool_size);
 	
     Texture *textures = memory_pool_alloc_array(&texture_pool, Texture, 100);
-	
-    texture_init_solid(textures + 0, vec3(0.5, 0.5, 0.5));
-    texture_init_solid(textures + 1, vec3(0.2, 0.3, 0.1));
-    texture_init_checkered(textures + 2, textures + 0, textures + 1);
-    texture_init_solid(textures + 3, vec3(0.7, 0.5, 0.3));
-	texture_init_image(textures + 4, "data/earthmap.jpg");
-    texture_init_solid(textures + 5, vec3(0.4f, 0.8f, 0.9f));
-    texture_init_solid(textures + 6, vec3(0.95f, 0.95f, 0.95f));
-    texture_init_solid(textures + 7, vec3(0.75f, 0.33f, 0.75f));
-    texture_init_solid(textures + 8, vec3(0.75f, 0.33f, 0.33f));
-    texture_init_solid(textures + 9, vec3(0.8f, 0.8f, 0.1f));
-    texture_init_solid(textures + 10, vec3(0.8f, 0.1f, 0.8f));
+	Texture *current_texture = textures;
+    
+    texture_init_solid(current_texture++, vec3(0.5, 0.5, 0.5));
+    texture_init_solid(current_texture++, vec3(0.2, 0.3, 0.1));
+    texture_init_checkered(current_texture++, textures + 0, textures + 1);
+    texture_init_solid(current_texture++, vec3(0.7, 0.5, 0.3));
+	texture_init_image(current_texture++, "data/earthmap.jpg");
+    texture_init_solid(current_texture++, vec3(0.4f, 0.8f, 0.9f));
+    texture_init_solid(current_texture++, vec3(0.95f, 0.95f, 0.95f));
+    texture_init_solid(current_texture++, vec3(0.75f, 0.33f, 0.75f));
+    texture_init_solid(current_texture++, vec3(0.75f, 0.33f, 0.33f));
+    texture_init_solid(current_texture++, vec3(0.8f, 0.8f, 0.1f));
+    texture_init_solid(current_texture++, vec3(0.8f, 0.1f, 0.8f));
 	
     
     // @NOTE(hl): Don't malloc arrays because scene settings is always the same
@@ -770,27 +778,22 @@ init_sample_scene(Scene *scene, ImageU32 *image)
         .normal = vec3(0, 0, 1),
         .dist = 0,
     }, 1);
-    object_init_sphere(current_object++, empty_transform(), (Sphere) {
-        .pos = vec3(-3, 2, 0),
-        .radius = 2.0f
-    }, 6);
-    object_init_sphere(current_object++, empty_transform(), (Sphere) {
-        .pos = vec3(3, -2, 0),
+    // object_init_sphere(current_object++, make_transform_translate(vec3(-3, 2, 0)), (Sphere) {
+    //     .radius = 2.0f
+    // }, 6);
+    object_init_sphere(current_object++, make_transform_translate(vec3(3, -2, 0)), (Sphere) {
         .radius = 1.0f
     }, 3);
-    object_init_sphere(current_object++, empty_transform(), (Sphere) {
-        .pos = vec3(-2, -1, 2),
+    object_init_sphere(current_object++, make_transform_translate(vec3(-2, -1, 2)), (Sphere) {
         .radius = 1.0f
     }, 4);
-    object_init_sphere(current_object++, empty_transform(), (Sphere) {
-        .pos = vec3(1, -1, 3),
+    object_init_sphere(current_object++, make_transform_translate(vec3(1, -1, 3)), (Sphere) {
         .radius = 1.0f
     }, 5);
-    object_init_sphere(current_object++, empty_transform(), (Sphere) {
-        .pos = vec3(1, -3, 1),
+    object_init_sphere(current_object++, make_transform_translate(vec3(1, -3, 1)), (Sphere) {
         .radius = 1.0f
     }, 2);
-    object_init_disk(current_object++, empty_transform(), (Disk) {
+    object_init_disk(current_object++, make_transform_translate(vec3(-3, 2, 0)), (Disk) {
         .point = vec3(-2, -5, 0.1f),
         .normal = vec3(0, 0, 1),
         .radius = 1.0f
@@ -798,7 +801,7 @@ init_sample_scene(Scene *scene, ImageU32 *image)
     scene->objects = objects;
     scene->object_count = current_object - objects;
        
-    scene->camera = make_camera(vec3_muls(vec3(-1.5, -10, 1.5), 1.5f), image);
+    scene->camera = make_camera(vec3_muls(vec3(-1.5, -10, 1.8), 1.5f), image);
 	
     scene->material_count = array_size(materials);
     scene->materials = materials;
@@ -996,7 +999,7 @@ parse_command_line_arguments(RaySettings *settings, u32 argc, char **argv)
         {
             if (cursor + 1 >= argument_count)
             {
-                fprintf(stderr, "[ERROR] Argument -out takes exactly 1 position argument\n");
+                fprintf(stderr, "[ERROR] Argument -out takes exactly 1 positional argument\n");
                 break;
             }
             
@@ -1009,7 +1012,7 @@ parse_command_line_arguments(RaySettings *settings, u32 argc, char **argv)
         {
             if (cursor + 2 >= argument_count)
             {
-                fprintf(stderr, "[ERROR] Argument -size takes exactly 2 position arguments\n");
+                fprintf(stderr, "[ERROR] Argument -size takes exactly 2 positional arguments\n");
                 break;
             }
             
@@ -1024,7 +1027,7 @@ parse_command_line_arguments(RaySettings *settings, u32 argc, char **argv)
         {
             if (cursor + 1 >= argument_count)
             {
-                fprintf(stderr, "[ERROR] Argument -scene takes exactly 1 position argument\n");
+                fprintf(stderr, "[ERROR] Argument -scene takes exactly 1 positional argument\n");
                 break;
             }
             
@@ -1037,7 +1040,7 @@ parse_command_line_arguments(RaySettings *settings, u32 argc, char **argv)
         {
             if (cursor + 1 >= argument_count)
             {
-                fprintf(stderr, "[ERROR] Argument -rpp takes exactly 1 position argument\n");
+                fprintf(stderr, "[ERROR] Argument -rpp takes exactly 1 positional argument\n");
                 break;
             }
             
@@ -1050,7 +1053,7 @@ parse_command_line_arguments(RaySettings *settings, u32 argc, char **argv)
         {
             if (cursor + 1 >= argument_count)
             {
-                fprintf(stderr, "[ERROR] Argument -mbc takes exactly 1 position argument\n");
+                fprintf(stderr, "[ERROR] Argument -mbc takes exactly 1 positional argument\n");
                 break;
             }
             
@@ -1072,7 +1075,8 @@ parse_command_line_arguments(RaySettings *settings, u32 argc, char **argv)
     }
 }
 
-int main(int argc, char **argv)
+int 
+main(int argc, char **argv)
 {
     printf("Ray started!\n");
     
@@ -1085,7 +1089,7 @@ int main(int argc, char **argv)
     parse_command_line_arguments(&settings, argc, argv);
     printf("SETTINGS:\n");
     printf("Output image: %s (%ux%u)\n", settings.output_filename, settings.output_width, settings.output_height);
-    printf("Scene: %s", settings.input_scene ? : "default\n");
+    printf("Scene: %s", settings.input_scene ? settings.input_scene : "default\n");
     printf("Rays per pixel: %u, Max bounce count: %u\n", settings.rays_per_pixel, settings.max_bounce_count);
     printf("\n");
     
@@ -1171,7 +1175,9 @@ int main(int argc, char **argv)
          core_index < core_count;
          ++core_index)
     {
+#if !D
         sys_create_thread(render_thread_proc, &queue);
+#endif 
     }
 	
     // Main thread work
@@ -1181,8 +1187,6 @@ int main(int argc, char **argv)
         {
             // Simple status alert
             f32 percent = (f32)queue.tile_retired_count / (f32)total_tile_count;
-            // f32 time_passed = (f32)(clock() - start_clock);
-            // f32 time_left   = time_passed * (1.0f / percent - 1);
             printf("\rRaycasting %d%%", round32(100 * percent));
             fflush(stdout);
         }

@@ -5,6 +5,10 @@
 #include "lib/random.h"
 #include "image.h"
 
+//
+// Ray
+//
+
 typedef struct {
     Vec3 origin;
     // Normalized direction vector
@@ -43,6 +47,10 @@ ray_point_at(Ray ray, f32 t)
     return result;
 }
 
+//
+// Camera
+//
+
 typedef struct {
     Vec3 camera_pos;
     Vec3 camera_x;
@@ -64,8 +72,11 @@ typedef struct {
 inline Camera make_camera(Vec3 pos, ImageU32 *image);
 inline Ray camera_ray_at(Camera *camera, f32 film_x, f32 film_y, RandomSeries *series);
 
+
 //
 // Texture interface.
+//
+
 // Texture is essentially a function that returns color of given point on surface,
 // so textures can be thought about as lambdas. However, calling function is perfomance-critical,
 // so in places, where ne need to get color from texture, we do swtich (texture_type) instead.
@@ -127,6 +138,10 @@ void texture_init_image(Texture *texture, char *filename);
 // Returns texture color in given position
 Vec3 sample_texture(Texture *texture, Vec2 uv, Vec3 hit_point);
 
+//
+// Materials
+//
+
 // Material, that every object in scene has
 typedef struct {
     // Lambertian reflection
@@ -163,7 +178,7 @@ typedef struct {
 } Disk;
 
 typedef struct {
-    Vec3 pos;
+    // Vec3 pos;
     f32 radius;
 } Sphere;
 
@@ -196,6 +211,10 @@ typedef struct {
 
 typedef struct {
 } Hyperboloid;
+
+//
+// BVH
+// @TODO(hl): Cleanup
 
 // 7 predifined normals used in BVH.
 // The idea is, rather than to have AABB which is built around 3 normals (x, y, z axes),
@@ -249,18 +268,22 @@ typedef struct {
     BVH bvh;
 } TriangleMesh;
 
+//
+// Transform
+//
+
 typedef struct {
-    Mat4x4 object_to_world;
-    Mat4x4 world_to_object;
+    Mat4x4 o2w;
+    Mat4x4 w2o;
 } Transform;
 
-#define empty_transform() ( (Transform){ .object_to_world = mat4x4_identity(), .world_to_object = mat4x4_identity() } )
+#define empty_transform() ( (Transform){ .o2w = mat4x4_identity(), .w2o = mat4x4_identity() } )
 inline Transform 
 make_transform_o2w(Mat4x4 object_to_world)
 {
     Transform result = {
-        .object_to_world = object_to_world,
-        .world_to_object = mat4x4_inverse(object_to_world)
+        .o2w = (object_to_world),
+        .w2o = (mat4x4_inverse(object_to_world))
     };
     return result; 
 }
@@ -278,6 +301,17 @@ make_transform(Vec3 translation, Vec3 rotation, Vec3 scale)
     Transform result = make_transform_o2w(o2w);
     return result;    
 }
+
+inline Transform 
+make_transform_translate(Vec3 translation)
+{
+    Transform result = make_transform_o2w(mat4x4_translate(translation));
+    return result;
+}
+
+//
+// Objects
+//
 
 typedef u8 ObjectType;
 enum {
@@ -309,6 +343,7 @@ typedef struct {
     };
 } Object;
 
+// @TODO(hl): Move mat_index parameter to front
 void object_init_sphere(Object *object, Transform transform, Sphere sphere, u32 mat_index);
 void object_init_plane(Object *object, Transform transform, Plane plane, u32 mat_index);
 void object_init_disk(Object *object, Transform transform, Disk disk, u32 mat_index);
@@ -319,28 +354,16 @@ void object_init_hyperboloid(Object *object, Transform transform, Hyperboloid hy
 void object_init_paraboloid(Object *object, Transform transform, Paraboloid paraboloid, u32 mat_index);
 void object_init_triangle_mesh(Object *object, Transform transform, TriangleMesh mesh, u32 mat_index);
 
-// World that we are simulating
+//
+// Scene
+//
+
 typedef struct Scene {
     Camera camera;
 	
     u32 material_count;
     Material *materials;
 	
-    u32 sphere_count;
-    Sphere *spheres;
-	
-    u32 plane_count;
-    Plane *planes;
-    
-    u32 triangle_count;
-    Triangle *triangles;
-    
-    u32 disk_count;
-    Disk *disks;
-    
-    u32 mesh_count;
-    TriangleMesh *meshes;
-    
     u32 object_count;
     Object *objects;
 } Scene;
