@@ -90,6 +90,7 @@ ray_intersect_extents(Ray ray, Extents *extents,
     return result;
 }
 
+ATTRIBUTE(noinline)
 static Vec3  
 ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
 {    
@@ -114,22 +115,31 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
     {
         Object object = scene->objects[object_index];
         
+        // Translate ray from world space to object space
+        Ray ray = make_ray(mat4x4_mul_vec3(object.transform.w2o, ray_init.origin), 
+                           mat4x4_as_3x3_mul_vec3(object.transform.w2o, ray_init.direction),
+                           ray_init.time);
+            
+        // Precompute dot products of normals with ray.
+        // When using instancing, each object rotates ray in his object space, 
+        // so dots have to be done with each transfromed ray.
+        // @TODO(hl): Think if we can use per-transform precomputed rays              
+        for (u32 i = 0;
+		     i < BVH_NUM_PLANE_SET_NORMALS;
+		     ++i)
+        {
+            precomputed_numerator[i]   = dot(plane_set_normals[i], ray.origin);
+            precomputed_denumerator[i] = dot(plane_set_normals[i], ray.direction);
+        }
+        
         switch(object.type)
         {
             case Object_Sphere:
             {
-                // Ray ray = make_ray(mat4x4_mul_vec3(object.transform.w2o, ray_init.origin), 
-                //                    mat4x4_as_3x3_mul_vec3(object.transform.w2o, ray_init.direction),
-                //                    ray_init.time);
-                Ray ray = ray_init;
-                ray.origin = mat4x4_mul_vec3(object.transform.w2o, ray_init.origin);
-                
-                Vec3 sphere_pos = {0};
                 Sphere sphere = object.sphere;
-                Vec3 sphere_relative_ray_origin = vec3_sub(ray.origin, sphere_pos);
                 f32 a = dot(ray.direction, ray.direction);
-                f32 b = 2.0f * dot(sphere_relative_ray_origin, ray.direction);
-                f32 c = dot(sphere_relative_ray_origin, sphere_relative_ray_origin) - sphere.radius * sphere.radius;
+                f32 b = 2.0f * dot(ray.origin, ray.direction);
+                f32 c = dot(ray.origin, ray.origin) - sphere.radius * sphere.radius;
                 
                 f32 denominator = 2.0f * a;
                 f32 root_term = sqrt32(b * b - 4.0f * a * c);
@@ -150,24 +160,20 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
                         hit_record->distance = t;
                         hit_record->mat_index = object.mat_index;
                         // hit_record_set_normal(&hit_record, ray, normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, hit_record->distance))));
-                        Vec3 normal = normalize(vec3_add(sphere_relative_ray_origin,
-                                                        vec3_muls(ray.direction, hit_record->distance)));
+                        Vec3 normal = normalize(vec3_add(ray.origin, vec3_muls(ray.direction, hit_record->distance)));
                         // @NOTE(hl): This should be extracted from previous computations
                         hit_record_set_normal(hit_record, ray, normal);
                         hit_record->normal = normal;
                         //hit_record->ray_dir_normal_dot = dot(hit_record->normal, ray.direction);
                         hit_record->hit_point = ray_point_at(ray, t);
-                        hit_record->uv = unit_sphere_get_uv(vec3_divs(vec3_sub(hit_record->hit_point, sphere_pos),
-                                                                    sphere.radius));
+                        hit_record->uv = unit_sphere_get_uv(vec3_divs(hit_record->hit_point, sphere.radius));
                     }
                 }
-                hit_record->hit_point = ray_point_at(ray_init, hit_record->distance);
             } break;
             case Object_Plane:
             {
                 Plane plane = object.plane;
                 
-                Ray ray = ray_init;
                 f32 denominator = dot(plane.normal, ray.direction);
                 if ((denominator < -tolerance) || (denominator > tolerance))
                 {
@@ -176,7 +182,6 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
                     {
                         hit_record->distance = t;
                         hit_record->mat_index = object.mat_index;
-                        // hit_record->ray_dir_normal_dot = denominator;
                         hit_record_set_normal(hit_record, ray, plane.normal);
                         hit_record->hit_point = ray_point_at(ray, t);
                         // @TODO(hl): These are not normalized!!
@@ -189,23 +194,22 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
             {
                 Disk disk = object.disk;
                 
-                Ray ray = ray_init;
+                Vec3 disk_point = {0};
                 f32 denominator = dot(disk.normal, ray.direction);
                 if ((denominator < -tolerance) || (denominator > tolerance))
                 {
-                    Vec3 p010 = vec3_sub(disk.point, ray.origin);
+                    Vec3 p010 = vec3_sub(disk_point, ray.origin);
                     f32 t = dot(p010, disk.normal) / denominator;
                     if ((t > min_hit_distance) && (t < hit_record->distance))
                     {
                         Vec3 hit_point = ray_point_at(ray, t);
-                        Vec3 dist_to_center = vec3_sub(hit_point, disk.point);
+                        Vec3 dist_to_center = vec3_sub(hit_point, disk_point);
                         if (dot(dist_to_center, dist_to_center) < square(disk.radius))
                         {
                             hit_record->distance = t;
                             hit_record->mat_index = object.mat_index;
-                            //hit_record->ray_dir_normal_dot = denominator;
+                            hit_record->hit_point = ray_point_at(ray, hit_record->distance);
                             hit_record_set_normal(hit_record, ray, disk.normal);
-                            hit_record->hit_point = hit_point;
                             // @TODO(hl): UV
                         }
                     }
@@ -215,7 +219,6 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
             {
                 Triangle triangle = object.triangle;
                 
-                Ray ray = ray_init;
                 f32 t, u, v;
                 if (ray_intersect_triangle(ray, triangle.vertex0, triangle.vertex1, triangle.vertex2, &t, &u, &v))
                 {
@@ -223,8 +226,8 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
                     {
                         hit_record->distance = t;
                         hit_record->mat_index = object.mat_index;
+                        hit_record->hit_point = ray_point_at(ray, hit_record->distance);
                         hit_record_set_normal(hit_record, ray, triangle.normal);
-                        hit_record->hit_point = ray_point_at(ray, t);
                         hit_record->uv = vec2(u, v);
                     }
                 }
@@ -245,13 +248,12 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
             {
                 TriangleMesh mesh = object.triangle_mesh;
                  
-                Ray ray = ray_init;
                 f32 tnear = F32_MIN;
                 f32 tfar  = F32_MAX;
                 u32 plane_index;
                 if (ray_intersect_extents(ray, &mesh.bvh.extents, 
-                                        precomputed_numerator, precomputed_denumerator, 
-                                        &tnear, &tfar, &plane_index))
+                                          precomputed_numerator, precomputed_denumerator, 
+                                          &tnear, &tfar, &plane_index))
                 {
 #if 0 
                     // This code path for testing intersection with just bounding volume
@@ -296,8 +298,8 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
                                 hit_record->distance = t;
                                 hit_record->mat_index = object.mat_index;
                                 //hit_record->ray_dir_normal_dot = dot(normal, ray.direction);
+                                hit_record->hit_point = ray_point_at(ray, hit_record->distance);
                                 hit_record_set_normal(hit_record, ray, normal);
-                                hit_record->hit_point = ray_point_at(ray, t);
                                 hit_record->uv = vec2(u, v);
                             }
                         }
@@ -308,12 +310,16 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
                 }
             } break;
         }
+    
+        // @NOTE(hl): Assuming scale between object and world space is not changed, 
+        // hit distance is the same. Thus, we can just use it to computate hit point    
+        hit_record->hit_point = ray_point_at(ray_init, hit_record->distance);
     }
     
     return ray_cast_color;
 }
 
-ATTRIBUTE(flatten) ATTRIBUTE(hot)
+ATTRIBUTE(flatten) ATTRIBUTE(hot) ATTRIBUTE(noinline)
 static void 
 cast_sample_rays(CastState *state)
 {
@@ -546,8 +552,8 @@ triangle_mesh(u32 nfaces, u32 *fi, u32 *vi, Vec3 *p, Vec3 *n, Vec2 *st)
          plane_normal_index < BVH_NUM_PLANE_SET_NORMALS;
          ++plane_normal_index)
     {
-        f32 dmin = F32_MAX;
-        f32 dmax = F32_MIN;
+        f32 dmin = F32_INF;
+        f32 dmax = F32_MINF;
         
         for (u32 vertex_index = 0;
              vertex_index < result.max_vertex_index;
@@ -676,9 +682,11 @@ make_poly_sphere(f32 r, u32 divs)
     return triangle_mesh(npolys, faceIndex, vertsIndex, P, N, st); 
 }
 
-void 
-make_utah_teapot(TriangleMesh *meshes) 
+Object * 
+make_utah_teapot(Object *objects) 
 { 
+    Object *current_object = objects;
+    
     uint32_t divs = 8; 
     Vec3 *P = calloc((divs + 1) * (divs + 1), sizeof(Vec3)); 
     Vec3 *N = calloc((divs + 1) * (divs + 1), sizeof(Vec3)); 
@@ -724,11 +732,13 @@ make_utah_teapot(TriangleMesh *meshes)
         
         for (u32 i = 0; i < (divs + 1) * (divs + 1); ++i)
         {
-            P[i].z -= 5.0f;
+            // P[i].z += 5.0f;
         }
-        
-        meshes[np] = triangle_mesh(divs * divs, nvertices, vertices, P, N, st);
+        Transform transform = make_transform_translate(vec3(-1, -1 , 1));
+        object_init_triangle_mesh(current_object++, transform, triangle_mesh(divs * divs, nvertices, vertices, P, N, st), 2);
     }
+    
+    return current_object;
 } 
 
 // Returns scene with same objects in it
@@ -781,27 +791,30 @@ init_sample_scene(Scene *scene, ImageU32 *image)
     // object_init_sphere(current_object++, make_transform_translate(vec3(-3, 2, 0)), (Sphere) {
     //     .radius = 2.0f
     // }, 6);
-    object_init_sphere(current_object++, make_transform_translate(vec3(3, -2, 0)), (Sphere) {
-        .radius = 1.0f
-    }, 3);
-    object_init_sphere(current_object++, make_transform_translate(vec3(-2, -1, 2)), (Sphere) {
-        .radius = 1.0f
-    }, 4);
-    object_init_sphere(current_object++, make_transform_translate(vec3(1, -1, 3)), (Sphere) {
-        .radius = 1.0f
-    }, 5);
-    object_init_sphere(current_object++, make_transform_translate(vec3(1, -3, 1)), (Sphere) {
-        .radius = 1.0f
-    }, 2);
-    object_init_disk(current_object++, make_transform_translate(vec3(-3, 2, 0)), (Disk) {
-        .point = vec3(-2, -5, 0.1f),
-        .normal = vec3(0, 0, 1),
-        .radius = 1.0f
-    }, 8);    
+    // object_init_sphere(current_object++, make_transform_translate(vec3(3, -2, 0)), (Sphere) {
+    //     .radius = 1.0f
+    // }, 3);
+    // object_init_sphere(current_object++, make_transform_translate(vec3(-2, -1, 2)), (Sphere) {
+    //     .radius = 1.0f
+    // }, 4);
+    // object_init_sphere(current_object++, make_transform_translate(vec3(1, -1, 3)), (Sphere) {
+    //     .radius = 1.0f
+    // }, 5);
+    // object_init_sphere(current_object++, make_transform_translate(vec3(1, -3, 1)), (Sphere) {
+    //     .radius = 1.0f
+    // }, 2);
+    // object_init_disk(current_object++, make_transform_translate(vec3(-2, -5, 0.1f)), (Disk) {
+    //     .normal = vec3(0, 0, 1),
+    //     .radius = 1.0f
+    // }, 8);    
+    
+    // object_init_triangle_mesh(current_object++, make_transform_translate(vec3(-3, 2, 0)), make_poly_sphere(2, 10), 5);    
+    current_object = make_utah_teapot(current_object);
     scene->objects = objects;
     scene->object_count = current_object - objects;
-       
-    scene->camera = make_camera(vec3_muls(vec3(-1.5, -10, 1.8), 1.5f), image);
+    printf("Object count %u\n", scene->object_count);
+    
+    scene->camera = make_camera(vec3_muls(vec3(-1.5, -10, 3), 1.5f), image);
 	
     scene->material_count = array_size(materials);
     scene->materials = materials;
@@ -1175,9 +1188,7 @@ main(int argc, char **argv)
          core_index < core_count;
          ++core_index)
     {
-#if !D
         sys_create_thread(render_thread_proc, &queue);
-#endif 
     }
 	
     // Main thread work
