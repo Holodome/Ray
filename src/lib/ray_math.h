@@ -18,9 +18,10 @@
 #define min3(a, b, c) ({__typeof__(a) _a = a; __typeof__(b) _b = b; __typeof__(c) _c = c; (_a < _b) ? ((_a < _c) ? _a : _c) : ((_b < _c) ? _b : _c ); })
 #define swap(a, b)    ({__typeof__(a) temp = a; a = b; b = temp; (void)0; })
 
-#if !defined(MATH_H)
+#if !defined(RAY_MATH_H)
 
 #include "common.h"
+#include <math.h>
 
 // SSE extensions. We assume everyone has them. 
 // https://store.steampowered.com/hwsurvey/Steam-Hardware-Software-Survey-Welcome-to-Steam?platform=pc 
@@ -29,10 +30,10 @@
 
 // @NOTE(hl): IEEE Floating-point constants.
 // Altough nans and infs can be produced by dividing by zero, it is safer to just initialize them from hex representation
-#define F32_INF  ({ u32 p = 0x7F800000; f32 v = *(f32 *)&p; v; })
-#define F32_MINF ({ u32 p = 0xFF800000; f32 v = *(f32 *)&p; v; })
-#define F32_NANS ({ u32 p = 0x7F800001; f32 v = *(f32 *)&p; v; })
-#define F32_NANQ ({ u32 p = 0x7FC00000; f32 v = *(f32 *)&p; v; })
+#define F32_INF  ({ u32 p = 0x7F800000; *(f32 *)&p; })
+#define F32_MINF ({ u32 p = 0xFF800000; *(f32 *)&p; })
+#define F32_NANS ({ u32 p = 0x7F800001; *(f32 *)&p; })
+#define F32_NANQ ({ u32 p = 0x7FC00000; *(f32 *)&p; })
 
 // PI 
 #define PI      3.14159265359f
@@ -334,6 +335,7 @@ __declspec(align(16))
 typedef union {
 	f32  e[4][4];
     Vec4 v[4];
+    f32  a[16];
 } Mat4x4;
 
 // Initializes matrix with single scalar scale value
@@ -437,13 +439,13 @@ box3_join(Box3 a, Box3 b)
 {
     Box3 result;
     
-    result.min.x = min(a.min.x, b.min.x);
-    result.min.y = min(a.min.y, b.min.y);
-    result.min.z = min(a.min.z, b.min.z);
+    result.min.x = min32(a.min.x, b.min.x);
+    result.min.y = min32(a.min.y, b.min.y);
+    result.min.z = min32(a.min.z, b.min.z);
     
-    result.max.x = max(a.max.x, b.max.x);
-    result.max.x = max(a.max.y, b.max.y);
-    result.max.x = max(a.max.z, b.max.z);
+    result.max.x = max32(a.max.x, b.max.x);
+    result.max.y = max32(a.max.y, b.max.y);
+    result.max.z = max32(a.max.z, b.max.z);
     
     return result;    
 }
@@ -453,16 +455,32 @@ box3_extend(Box3 a, Vec3 p)
 {
     Box3 result;
     
-    result.min.x = min(a.min.x, p.x);
-    result.min.y = min(a.min.y, p.y);
-    result.min.z = min(a.min.z, p.z);
+    result.min.x = min32(a.min.x, p.x);
+    result.min.y = min32(a.min.y, p.y);
+    result.min.z = min32(a.min.z, p.z);
     
-    result.max.x = max(a.max.x, p.x);
-    result.max.y = max(a.max.y, p.y);
-    result.max.z = max(a.max.z, p.z);
+    result.max.x = max32(a.max.x, p.x);
+    result.max.y = max32(a.max.y, p.y);
+    result.max.z = max32(a.max.z, p.z);
     
     return result;
 }
 
-#define MATH_H 1
+//
+// Quaternion
+//
+
+typedef union {
+    struct {
+        f32 x, y, z, w;
+    };
+    Vec4 v;
+    Vec3 xyz;
+    f32 e[4];
+} Quat4;
+
+inline Quat4 quat4(f32 x, f32 y, f32 z, f32 w) { return (Quat4){ .x = x, .y = y, .z = z, .w = w }; }
+inline Quat4 quat4_identity(void) { return quat4(0, 0, 0, 1); }
+
+#define RAY_MATH_H 1
 #endif

@@ -282,8 +282,8 @@ inline Transform
 make_transform_o2w(Mat4x4 object_to_world)
 {
     Transform result = {
-        .o2w = (object_to_world),
-        .w2o = (mat4x4_inverse(object_to_world))
+        .o2w = object_to_world,
+        .w2o = mat4x4_inverse(object_to_world)
     };
     return result; 
 }
@@ -389,13 +389,17 @@ typedef struct {
     // UV coordinates of hit position
     Vec2 uv;
     Vec3 hit_point;
+    bool is_front_face;
 } HitRecord;
 
 inline void 
 hit_record_set_normal(HitRecord *record, Ray ray, Vec3 normal)
 {
+    record->is_front_face = true;
+    
     if (!(dot(ray.direction, normal) < 0))
     {
+        record->is_front_face = false;
         normal = vec3_neg(normal);
     }
     

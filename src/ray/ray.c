@@ -89,6 +89,12 @@ ray_intersect_extents(Ray ray, Extents *extents,
     }
     return result;
 }
+Vec3 calc(Mat4x4 m, Vec3 v)
+{
+    return vec3(m.e[0][0] * v.x + m.e[0][1] * v.y + m.e[0][2] * v.z,
+                m.e[1][0] * v.x + m.e[1][1] * v.y + m.e[1][2] * v.z,
+                m.e[2][0] * v.x + m.e[2][1] * v.y + m.e[2][2] * v.z);
+}
 
 ATTRIBUTE(noinline)
 static Vec3  
@@ -100,25 +106,21 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
     
     f32 precomputed_numerator[BVH_NUM_PLANE_SET_NORMALS];
     f32 precomputed_denumerator[BVH_NUM_PLANE_SET_NORMALS];
-    for (u32 i = 0;
-		 i < BVH_NUM_PLANE_SET_NORMALS;
-		 ++i)
-    {
-        precomputed_numerator[i]   = dot(plane_set_normals[i], ray_init.origin);
-        precomputed_denumerator[i] = dot(plane_set_normals[i], ray_init.direction);
-    }
     
     // Iterate scene objects
     for (u32 object_index = 0;
          object_index < scene->object_count;
          ++object_index)
     {
+        bool has_hit = false;
+        
         Object object = scene->objects[object_index];
         
         // Translate ray from world space to object space
         Ray ray = make_ray(mat4x4_mul_vec3(object.transform.w2o, ray_init.origin), 
                            mat4x4_as_3x3_mul_vec3(object.transform.w2o, ray_init.direction),
                            ray_init.time);
+        // Ray ray = ray_init;
             
         // Precompute dot products of normals with ray.
         // When using instancing, each object rotates ray in his object space, 
@@ -162,11 +164,12 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
                         // hit_record_set_normal(&hit_record, ray, normalize(vec3_add(sphere_relative_ray_origin, vec3_muls(ray.dir, hit_record->distance))));
                         Vec3 normal = normalize(vec3_add(ray.origin, vec3_muls(ray.direction, hit_record->distance)));
                         // @NOTE(hl): This should be extracted from previous computations
-                        hit_record_set_normal(hit_record, ray, normal);
+                        // hit_record_set_normal(hit_record, ray, normal);
                         hit_record->normal = normal;
                         //hit_record->ray_dir_normal_dot = dot(hit_record->normal, ray.direction);
                         hit_record->hit_point = ray_point_at(ray, t);
                         hit_record->uv = unit_sphere_get_uv(vec3_divs(hit_record->hit_point, sphere.radius));
+                        has_hit = true;
                     }
                 }
             } break;
@@ -182,11 +185,13 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
                     {
                         hit_record->distance = t;
                         hit_record->mat_index = object.mat_index;
-                        hit_record_set_normal(hit_record, ray, plane.normal);
+                        hit_record->normal = plane.normal;
+                        // hit_record_set_normal(hit_record, ray, plane.normal);
                         hit_record->hit_point = ray_point_at(ray, t);
                         // @TODO(hl): These are not normalized!!
                         hit_record->uv.u = hit_record->hit_point.x;
                         hit_record->uv.v = hit_record->hit_point.y;
+                        has_hit = true;
                     }
                 }
             } break;
@@ -209,8 +214,10 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
                             hit_record->distance = t;
                             hit_record->mat_index = object.mat_index;
                             hit_record->hit_point = ray_point_at(ray, hit_record->distance);
-                            hit_record_set_normal(hit_record, ray, disk.normal);
+                            hit_record->normal = disk.normal;
+                            // hit_record_set_normal(hit_record, ray, disk.normal);
                             // @TODO(hl): UV
+                            has_hit = true;
                         }
                     }
                 }
@@ -227,8 +234,10 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
                         hit_record->distance = t;
                         hit_record->mat_index = object.mat_index;
                         hit_record->hit_point = ray_point_at(ray, hit_record->distance);
-                        hit_record_set_normal(hit_record, ray, triangle.normal);
+                        hit_record->normal = triangle.normal;
+                        // hit_record_set_normal(hit_record, ray, triangle.normal);
                         hit_record->uv = vec2(u, v);
+                        has_hit = true;
                     }
                 }
             } break;
@@ -297,10 +306,11 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
                                 
                                 hit_record->distance = t;
                                 hit_record->mat_index = object.mat_index;
-                                //hit_record->ray_dir_normal_dot = dot(normal, ray.direction);
                                 hit_record->hit_point = ray_point_at(ray, hit_record->distance);
-                                hit_record_set_normal(hit_record, ray, normal);
+                                hit_record->normal = normal;
+                                // hit_record_set_normal(hit_record, ray, normal);
                                 hit_record->uv = vec2(u, v);
+                                has_hit = true;
                             }
                         }
                         
@@ -310,10 +320,17 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
                 }
             } break;
         }
-    
-        // @NOTE(hl): Assuming scale between object and world space is not changed, 
-        // hit distance is the same. Thus, we can just use it to computate hit point    
-        hit_record->hit_point = ray_point_at(ray_init, hit_record->distance);
+        
+        if (has_hit)
+        {
+            // @NOTE(hl): Assuming scale between object and world space is not changed, 
+            // hit distance is the same. Thus, we can just use it to computate hit point    
+            // hit_record->hit_point = ray_point_at(ray_init, hit_record->distance);
+            hit_record->hit_point = mat4x4_mul_vec3(object.transform.o2w, hit_record->hit_point);
+            
+            hit_record->normal = normalize(mat4x4_as_3x3_mul_vec3(object.transform.o2w, hit_record->normal));
+            hit_record_set_normal(hit_record, ray_init, hit_record->normal);
+        }
     }
     
     return ray_cast_color;
@@ -366,31 +383,17 @@ cast_sample_rays(CastState *state)
                     Vec3 reflected = reflect(ray.direction, hit_record.normal);
                     // Coefficient in Snells law between glass and air
                     f32 ref_idx = 1.5f;
-                    // sin(Theta0) / sin(Theta1) - different when light goes in or out of glass
-                    f32 refract_coef;
-                    f32 cos_atten;
-                    Vec3 actual_normal;
-                    if (dot(ray.direction, hit_record.normal) > 0)
-                    {
-                        refract_coef = ref_idx;
-                        cos_atten = ref_idx * dot(ray.direction, hit_record.normal);
-                        actual_normal = vec3_neg(hit_record.normal);
-                    }
-                    else
-                    {
-                        actual_normal = hit_record.normal;
-                        refract_coef = 1.0f / ref_idx;
-                        cos_atten = -dot(ray.direction, hit_record.normal);
-                    }
+                    f32 cos_atten = min(-dot(ray.direction, hit_record.normal), 1.0f);
+                    f32 etai_over_etat = (hit_record.is_front_face ? (1.0f / ref_idx) : ref_idx);
 					
                     f32 reflect_prob;
-                    f32 dt = dot(ray.direction, actual_normal);
-                    f32 discriminant = 1.0f - refract_coef * refract_coef * (1.0f - dt * dt);
+                    f32 dt = dot(ray.direction, hit_record.normal);
+                    f32 discriminant = 1.0f - etai_over_etat * etai_over_etat * (1.0f - dt * dt);
                     Vec3 refracted;
 					
                     if (discriminant > 0.0f)
                     {
-                        refracted = vec3_sub(vec3_muls(vec3_sub(ray.direction, vec3_muls(actual_normal, dt)), refract_coef), vec3_muls(actual_normal, sqrt32(discriminant)));
+                        refracted = vec3_sub(vec3_muls(vec3_sub(ray.direction, vec3_muls(hit_record.normal, dt)), etai_over_etat), vec3_muls(hit_record.normal, sqrt32(discriminant)));
                         reflect_prob = schlick(cos_atten, ref_idx);
                     }
                     else
@@ -730,12 +733,11 @@ make_utah_teapot(Object *objects)
             } 
         } 
         
-        for (u32 i = 0; i < (divs + 1) * (divs + 1); ++i)
-        {
-            // P[i].z += 5.0f;
-        }
-        Transform transform = make_transform_translate(vec3(-1, -1 , 1));
-        object_init_triangle_mesh(current_object++, transform, triangle_mesh(divs * divs, nvertices, vertices, P, N, st), 2);
+        Vec3 rot = vec3_lerp(vec3(0, 0, 0), vec3(0.13f, -0.8f, -PI * 0.34), 1.0);
+        // Transform transform = make_transform(vec3(-1, -1 , 1), vec3(0.13f, -0.2f, -QUAT_PI), vec3(1, 1, 1));
+        // Transform transform = make_transform(vec3(0, 0, 0), vec3(0.13f, -0.2f, -QUAT_PI), vec3(1, 1, 1));
+        Transform transform = make_transform(vec3(0, 2, 0), rot, vec3(1, 1, 1));
+        object_init_triangle_mesh(current_object++, transform, triangle_mesh(divs * divs, nvertices, vertices, P, N, st), 5);
     }
     
     return current_object;
@@ -788,25 +790,25 @@ init_sample_scene(Scene *scene, ImageU32 *image)
         .normal = vec3(0, 0, 1),
         .dist = 0,
     }, 1);
-    // object_init_sphere(current_object++, make_transform_translate(vec3(-3, 2, 0)), (Sphere) {
-    //     .radius = 2.0f
-    // }, 6);
-    // object_init_sphere(current_object++, make_transform_translate(vec3(3, -2, 0)), (Sphere) {
-    //     .radius = 1.0f
-    // }, 3);
-    // object_init_sphere(current_object++, make_transform_translate(vec3(-2, -1, 2)), (Sphere) {
-    //     .radius = 1.0f
-    // }, 4);
-    // object_init_sphere(current_object++, make_transform_translate(vec3(1, -1, 3)), (Sphere) {
-    //     .radius = 1.0f
-    // }, 5);
-    // object_init_sphere(current_object++, make_transform_translate(vec3(1, -3, 1)), (Sphere) {
-    //     .radius = 1.0f
-    // }, 2);
-    // object_init_disk(current_object++, make_transform_translate(vec3(-2, -5, 0.1f)), (Disk) {
-    //     .normal = vec3(0, 0, 1),
-    //     .radius = 1.0f
-    // }, 8);    
+    object_init_sphere(current_object++, make_transform_translate(vec3(-3, 2, 0)), (Sphere) {
+        .radius = 2.0f
+    }, 6);
+    object_init_sphere(current_object++, make_transform_translate(vec3(3, -2, 0)), (Sphere) {
+        .radius = 1.0f
+    }, 3);
+    object_init_sphere(current_object++, make_transform_translate(vec3(-2, -1, 2)), (Sphere) {
+        .radius = 1.0f
+    }, 4);
+    object_init_sphere(current_object++, make_transform_translate(vec3(1, -1, 3)), (Sphere) {
+        .radius = 1.0f
+    }, 5);
+    object_init_sphere(current_object++, make_transform_translate(vec3(1, -3, 1)), (Sphere) {
+        .radius = 1.0f
+    }, 2);
+    object_init_disk(current_object++, make_transform_translate(vec3(-2, -5, 0.1f)), (Disk) {
+        .normal = vec3(0, 0, 1),
+        .radius = 1.0f
+    }, 8);    
     
     // object_init_triangle_mesh(current_object++, make_transform_translate(vec3(-3, 2, 0)), make_poly_sphere(2, 10), 5);    
     current_object = make_utah_teapot(current_object);
@@ -814,7 +816,7 @@ init_sample_scene(Scene *scene, ImageU32 *image)
     scene->object_count = current_object - objects;
     printf("Object count %u\n", scene->object_count);
     
-    scene->camera = make_camera(vec3_muls(vec3(-1.5, -10, 3), 1.5f), image);
+    scene->camera = make_camera(vec3_muls(vec3(-1.5, -6, 1.5), 1.5f), image);
 	
     scene->material_count = array_size(materials);
     scene->materials = materials;
@@ -1087,6 +1089,8 @@ parse_command_line_arguments(RaySettings *settings, u32 argc, char **argv)
         }
     }
 }
+
+
 
 int 
 main(int argc, char **argv)

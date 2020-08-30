@@ -773,13 +773,27 @@ mat4x4_perspective(f32 fovy, f32 aspect, f32 near, f32 far)
 Mat4x4 
 mat4x4_transpose(Mat4x4 m) 
 {
+#if 1
     Mat4x4 result = {{
         { m.e[0][0], m.e[1][0], m.e[2][0], m.e[3][0] },
         { m.e[0][1], m.e[1][1], m.e[2][1], m.e[3][1] },
         { m.e[0][2], m.e[1][2], m.e[2][2], m.e[3][2] },
         { m.e[0][3], m.e[1][3], m.e[2][3], m.e[3][3] }
     }};
-    
+#else 
+    Mat4x4 result;
+    for(u32 i = 0; 
+        i < 4;
+        ++i)
+    {
+		for(u32 j = 0;
+            j < 4;
+            ++j)
+        {
+            result.e[i][j] = m.e[j][i];
+        }
+    }
+#endif 
     return result;
 }
 
@@ -841,7 +855,7 @@ mat4x4_inverse(Mat4x4 m)
     Vec4 dot0 = vec4_mul(m0, row0);
     f32 dot1 = (dot0.x + dot0.y) + (dot0.z + dot0.w);
     
-    f32 one_over_det = 1 / dot1;
+    f32 one_over_det = 1.0f / dot1;
     
     Mat4x4 result = mat4x4_muls(inverse, one_over_det);
     return result;
