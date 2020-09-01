@@ -5,7 +5,7 @@
 #include "ray/ray_tracer.h"
 // #include "ray/scene_file.h"
 #include "lib/sys.h"
-#include "lib/memory_pool.h"
+#include "lib/memory_arena.h"
 
 // Single work order from multithreaded rendering system
 typedef struct {
@@ -32,6 +32,7 @@ typedef struct {
     u32 max_bounce_count;
     
     bool open_image_after_done;
+    u32 thread_count;
 } RaySettings;
 
 // Per-program work queue

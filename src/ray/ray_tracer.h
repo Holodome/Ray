@@ -3,6 +3,8 @@
 #include "lib/common.h"
 #include "lib/ray_math.h"
 #include "lib/random.h"
+#include "lib/memory_arena.h"
+
 #include "image.h"
 
 //
@@ -52,10 +54,13 @@ ray_point_at(Ray ray, f32 t)
 //
 
 typedef struct {
+    // @TODO(hl): Use matrix for this???
     Vec3 camera_pos;
     Vec3 camera_x;
     Vec3 camera_y;
     Vec3 camera_z;
+    // 
+    
     f32 film_w;
     f32 film_h;
     f32 half_film_w;
@@ -254,7 +259,8 @@ typedef struct {
 // VBH + octree structure
 typedef struct {
     Extents extents;
-    Octree *octree;
+    // @TODO(hl): Implement octree
+    // Octree *octree;
 } BVH;
 
 typedef struct {
@@ -272,6 +278,7 @@ typedef struct {
 // Transform
 //
 
+// @TODO(hl): Make transforms be able to scale (may need to change intersection algorithms)
 typedef struct {
     Mat4x4 o2w;
     Mat4x4 w2o;
@@ -289,10 +296,10 @@ make_transform_o2w(Mat4x4 object_to_world)
 }
 
 inline Transform
-make_transform(Vec3 translation, Vec3 rotation, Vec3 scale)
+make_transform(Vec3 translation, Vec3 rotation)
 {
     // Operations are done in SRT order
-    Mat4x4 o2w = mat4x4_scale(scale);
+    Mat4x4 o2w = mat4x4_identity();
     o2w = mat4x4_mul(o2w, mat4x4_rotate(rotation.x, vec3(1, 0, 0)));
     o2w = mat4x4_mul(o2w, mat4x4_rotate(rotation.y, vec3(0, 1, 0)));
     o2w = mat4x4_mul(o2w, mat4x4_rotate(rotation.z, vec3(0, 0, 1)));
@@ -359,13 +366,15 @@ void object_init_triangle_mesh(Object *object, Transform transform, TriangleMesh
 //
 
 typedef struct Scene {
-    Camera camera;
-	
+	MemoryArena arena;
+    
     u32 material_count;
     Material *materials;
 	
     u32 object_count;
     Object *objects;
+    
+    Camera camera;
 } Scene;
 
 // Data that is passed to raycating function

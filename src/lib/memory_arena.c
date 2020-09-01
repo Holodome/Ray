@@ -1,8 +1,8 @@
-#include "memory_pool.h"
+#include "memory_arena.h"
 
 
 TemporaryMemory
-temporary_memory_begin(MemoryPool *pool)
+temporary_memory_begin(MemoryArena *pool)
 {
 	TemporaryMemory result = {0};
 	result.pool = pool;
@@ -19,26 +19,26 @@ temporary_memory_end(TemporaryMemory temporary_memory)
 	--temporary_memory.pool->temp_count;
 }
 
-MemoryPool
-memory_pool(void *storage, u64 storage_size)
+MemoryArena
+memory_arena(void *storage, u64 storage_size)
 {
-	MemoryPool result = {0};
+	MemoryArena result = {0};
 	result.base = (u8 *)storage;
 	result.size = storage_size;
 	return result;
 }
 
-MemoryPool
-memory_pool_dyn(u64 minimum_block_size)
+MemoryArena
+memory_arena_dyn(u64 minimum_block_size)
 {
-	MemoryPool result = {0};
+	MemoryArena result = {0};
 	result.is_dynamically_growing = true;
 	result.minimum_block_size     = minimum_block_size;
 	return result;
 }
 
 void
-memory_pool_clear(MemoryPool *pool)
+memory_arena_clear(MemoryArena *pool)
 {
 	assert(!pool->temp_count);
 	assert(!pool->is_dynamically_growing);
@@ -46,7 +46,7 @@ memory_pool_clear(MemoryPool *pool)
 }
 
 static u64
-memory_pool_get_alignment_offset(MemoryPool *pool, u64 alignment)
+memory_arena_get_alignment_offset(MemoryArena *pool, u64 alignment)
 {
 	assert(is_power_of_two(alignment));
 	u64 alignment_mask = alignment - 1;
@@ -64,21 +64,21 @@ memory_pool_get_alignment_offset(MemoryPool *pool, u64 alignment)
 
 
 static u64
-memory_pool_get_effective_size_for(MemoryPool *pool, u64 size_requested, MemoryPoolAllocationParams params)
+memory_arena_get_effective_size_for(MemoryArena *pool, u64 size_requested, MemoryArenaAllocationParams params)
 {
 	u64 size = size_requested;
-	u64 alignemnt_offset = memory_pool_get_alignment_offset(pool, params.alignment);
+	u64 alignemnt_offset = memory_arena_get_alignment_offset(pool, params.alignment);
 
 	size += alignemnt_offset;
 	return size;
 }
 
 void *
-memory_pool_alloc(MemoryPool *pool, u64 size_requested, MemoryPoolAllocationParams params)
+memory_arena_alloc(MemoryArena *pool, u64 size_requested, MemoryArenaAllocationParams params)
 {
 	void *result = 0;
 
-	u64 size = memory_pool_get_effective_size_for(pool, size_requested, params);
+	u64 size = memory_arena_get_effective_size_for(pool, size_requested, params);
 	if ((pool->used + size) > pool->size)
 	{
 		if (pool->is_dynamically_growing)
@@ -100,7 +100,7 @@ memory_pool_alloc(MemoryPool *pool, u64 size_requested, MemoryPoolAllocationPara
 
 	assert((pool->used + size_requested) <= pool->size);
 
-	u64 alignment_offset = memory_pool_get_alignment_offset(pool, params.alignment);
+	u64 alignment_offset = memory_arena_get_alignment_offset(pool, params.alignment);
 	result = pool->base + pool->used + alignment_offset;
 	pool->used += size;
 

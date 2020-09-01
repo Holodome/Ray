@@ -347,10 +347,10 @@ f32 utah_teapot_vertices[UTAH_TEAPOT_NUM_VERTICES][3] = {
 Vec3 
 eval_bezier_curve(Vec3 p[static 4], f32 t)
 {
-    float b0 = (1 - t) * (1 - t) * (1 - t); 
-    float b1 = 3 * t * (1 - t) * (1 - t); 
-    float b2 = 3 * t * t * (1 - t); 
-    float b3 = t * t * t; 
+    f32 b0 = (1 - t) * (1 - t) * (1 - t); 
+    f32 b1 = 3 * t * (1 - t) * (1 - t); 
+    f32 b2 = 3 * t * t * (1 - t); 
+    f32 b3 = t * t * t; 
  
     Vec3 result = vec3_add4(vec3_muls(p[0], b0),
                             vec3_muls(p[1], b1),
@@ -359,6 +359,20 @@ eval_bezier_curve(Vec3 p[static 4], f32 t)
     return result;
 }
 
+Vec3 
+deriv_bezier(Vec3 p[static 4], f32 t)
+{
+    f32 b0 = -3 * (1 - t) * (1 - t); 
+    f32 b1 = 3 * (1 - t) * (1 - t) - 6 * t * (1 - t); 
+    f32 b2 = 6 * t * (1 - t) - 3 * t * t; 
+    f32 b3 = 3 * t * t; 
+ 
+    Vec3 result = vec3_add4(vec3_muls(p[0], b0),
+                            vec3_muls(p[1], b1),
+                            vec3_muls(p[2], b2),
+                            vec3_muls(p[3], b3));
+    return result;
+}
 
 Vec3 
 eval_bezier_patch(Vec3 control_p[static 16], f32 u, f32 v)
@@ -373,21 +387,6 @@ eval_bezier_patch(Vec3 control_p[static 16], f32 u, f32 v)
     return eval_bezier_curve(u_curve, v); 
 } 
  
-
-Vec3 
-deriv_bezier(Vec3 p[static 4], f32 t)
-{
-    float b0 = -3 * (1 - t) * (1 - t); 
-    float b1 = 3 * (1 - t) * (1 - t) - 6 * t * (1 - t); 
-    float b2 = 6 * t * (1 - t) - 3 * t * t; 
-    float b3 = 3 * t * t; 
- 
-    Vec3 result = vec3_add4(vec3_muls(p[0], b0),
-                            vec3_muls(p[1], b1),
-                            vec3_muls(p[2], b2),
-                            vec3_muls(p[3], b3));
-    return result;
-}
 
 Vec3 
 deirv_u_bezier(Vec3 control_p[static 16], f32 u, f32 v)

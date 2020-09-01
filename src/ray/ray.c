@@ -2,7 +2,7 @@
 
 #include "lib/ray_math.c"
 #include "lib/sys.c"
-#include "lib/memory_pool.c"
+#include "lib/memory_arena.c"
 
 #include "image.c"
 #include "ray/ray_tracer.c"
@@ -257,8 +257,8 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
             {
                 TriangleMesh mesh = object.triangle_mesh;
                  
-                f32 tnear = F32_MIN;
-                f32 tfar  = F32_MAX;
+                f32 tnear = F32_MINF;
+                f32 tfar  = F32_INF;
                 u32 plane_index;
                 if (ray_intersect_extents(ray, &mesh.bvh.extents, 
                                           precomputed_numerator, precomputed_denumerator, 
@@ -297,11 +297,12 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
                                 // @NOTE(hl): This does not interpolate between vertices' normals so model is kinda rough
                                 Vec3 normal = triangle_normal(v0, v1, v2);
 #else 
-                                // @TODO(hl): This is busted
                                 Vec3 n0 = mesh.n[mesh.tri_indices[triangle_index * 3]]; 
                                 Vec3 n1 = mesh.n[mesh.tri_indices[triangle_index * 3 + 1]]; 
                                 Vec3 n2 = mesh.n[mesh.tri_indices[triangle_index * 3 + 2]]; 
                                 Vec3 normal = vec3_add3(vec3_muls(n0, 1 - u - v), vec3_muls(n1, u), vec3_muls(n2, v)); 
+                                // Vec3 normal = n0;
+                                normal = normalize(normal);
 #endif  
                                 
                                 hit_record->distance = t;
@@ -309,6 +310,7 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
                                 hit_record->hit_point = ray_point_at(ray, hit_record->distance);
                                 hit_record->normal = normal;
                                 // hit_record_set_normal(hit_record, ray, normal);
+                                // @TODO(hl): This have to be interpolation between triangle vertices uvs too
                                 hit_record->uv = vec2(u, v);
                                 has_hit = true;
                             }
@@ -377,7 +379,7 @@ cast_sample_rays(CastState *state)
                 ray.origin = hit_record.hit_point;
 				
                 // Decide if we want to refract or reflect
-                // Check if refraction_probability != 0 (it is OK to compare floats against constants)
+                // Check if refraction_probability != 0 (it is OK to compare f32s against constants)
                 if ((mat.refraction_probability != 0.0f)) //&& (random_unitlateral(&series) <= mat.refraction_probability))
                 {
                     Vec3 reflected = reflect(ray.direction, hit_record.normal);
@@ -578,14 +580,12 @@ triangle_mesh(u32 nfaces, u32 *fi, u32 *vi, Vec3 *p, Vec3 *n, Vec2 *st)
     }
     
     result.n = calloc(max_vertex_index, sizeof(Vec3));
-    memcpy(result.n, n, max_vertex_index * sizeof(Vec3));
-    
     result.uvs = calloc(max_vertex_index, sizeof(Vec2));
+    memcpy(result.n, n, max_vertex_index * sizeof(Vec3));
     memcpy(result.uvs, st, max_vertex_index * sizeof(Vec2));
     
     result.tri_indices = calloc(result.triangle_count * 3, sizeof(u32));
-    u32 l = 0;
-    for (u32 i = 0, k = 0; 
+    for (u32 i = 0, k = 0, l = 0; 
          i < nfaces;
          ++i)
     {
@@ -593,9 +593,18 @@ triangle_mesh(u32 nfaces, u32 *fi, u32 *vi, Vec3 *p, Vec3 *n, Vec2 *st)
              j < fi[i] - 2;
              ++j)
         {
-            result.tri_indices[l] = vi[k];
+            // result.n[l]     = n[k]        ;
+            // result.n[l + 1] = n[k + j + 1];
+            // result.n[l + 2] = n[k + j + 2];
+                        
+            result.tri_indices[l]     = vi[k];
             result.tri_indices[l + 1] = vi[k + j + 1];
             result.tri_indices[l + 2] = vi[k + j + 2];
+            
+            // result.uvs[l]     = st[k];
+            // result.uvs[l + 1] = st[k + j + 1];
+            // result.uvs[l + 2] = st[k + j + 2];
+            
             l += 3;
         }
         k += fi[i];
@@ -614,10 +623,10 @@ make_poly_sphere(f32 r, u32 divs)
     Vec3 *N = calloc(numVertices, sizeof(Vec3)); 
     Vec2 *st = calloc(numVertices, sizeof(Vec2)); 
 	
-    float u = -HALF_PI; 
-    float v = -PI; 
-    float du = PI / divs; 
-    float dv = 2 * PI / divs; 
+    f32 u = -HALF_PI; 
+    f32 v = -PI; 
+    f32 du = PI / divs; 
+    f32 dv = 2 * PI / divs; 
 	
     P[0] = N[0] = vec3(0, 0, -r); 
     u32 k = 1; 
@@ -629,9 +638,9 @@ make_poly_sphere(f32 r, u32 divs)
         for (u32 j = 0; 
              j < divs;
              j++) { 
-            float x = r * cos32(u) * cos32(v); 
-            float z = r * sin32(u); 
-            float y = r * cos32(u) * sin32(v) ; 
+            f32 x = r * cos32(u) * cos32(v); 
+            f32 z = r * sin32(u); 
+            f32 y = r * cos32(u) * sin32(v) ; 
             P[k] = N[k] = vec3(x, y, z); 
             st[k].x = u / PI + 0.5; 
             st[k].y = v * 0.5 / PI + 0.5; 
@@ -715,18 +724,21 @@ make_utah_teapot(Object *objects)
         // for (u32 np = 0; np < kTeapotNumPatches; ++np) { // kTeapotNumPatches 
         // set the control points for the current patch
         for (uint32_t i = 0; i < 16; ++i) 
-            controlPoints[i].e[0] = utah_teapot_vertices[utah_teapot_patches[np][i] - 1][0], 
-		controlPoints[i].e[1] = utah_teapot_vertices[utah_teapot_patches[np][i] - 1][1], 
-		controlPoints[i].e[2] = utah_teapot_vertices[utah_teapot_patches[np][i] - 1][2]; 
-		
+        {
+            controlPoints[i].e[0] = utah_teapot_vertices[utah_teapot_patches[np][i] - 1][0];
+            controlPoints[i].e[1] = utah_teapot_vertices[utah_teapot_patches[np][i] - 1][1];
+            controlPoints[i].e[2] = utah_teapot_vertices[utah_teapot_patches[np][i] - 1][2]; 
+        }
+        
         // generate grid
         for (uint16_t j = 0, k = 0; j <= divs; ++j) { 
-            float v = j / (float)divs; 
+            f32 v = j / (f32)divs; 
             for (uint16_t i = 0; i <= divs; ++i, ++k) { 
-                float u = i / (float)divs; 
+                f32 u = i / (f32)divs; 
                 P[k] = eval_bezier_patch(controlPoints, u, v); 
                 Vec3 dU = deirv_u_bezier(controlPoints, u, v); 
                 Vec3 dV = deriv_v_bezier(controlPoints, u, v); 
+                // @TODO(hl): This is busted, OR the code for getting normals from mesh is busted.
                 N[k] = normalize(cross(dU, dV)); 
                 st[k].x = u; 
                 st[k].y = v; 
@@ -736,7 +748,7 @@ make_utah_teapot(Object *objects)
         Vec3 rot = vec3_lerp(vec3(0, 0, 0), vec3(0.13f, -0.8f, -PI * 0.34), 1.0);
         // Transform transform = make_transform(vec3(-1, -1 , 1), vec3(0.13f, -0.2f, -QUAT_PI), vec3(1, 1, 1));
         // Transform transform = make_transform(vec3(0, 0, 0), vec3(0.13f, -0.2f, -QUAT_PI), vec3(1, 1, 1));
-        Transform transform = make_transform(vec3(0, 2, 0), rot, vec3(1, 1, 1));
+        Transform transform = make_transform(vec3(0, 2, 0), rot);
         object_init_triangle_mesh(current_object++, transform, triangle_mesh(divs * divs, nvertices, vertices, P, N, st), 5);
     }
     
@@ -749,9 +761,9 @@ void
 init_sample_scene(Scene *scene, ImageU32 *image)
 {
 	u32 texture_pool_size = MEGABYTES(1);
-	MemoryPool texture_pool = memory_pool(malloc(texture_pool_size), texture_pool_size);
+	MemoryArena texture_pool = memory_arena(malloc(texture_pool_size), texture_pool_size);
 	
-    Texture *textures = memory_pool_alloc_array(&texture_pool, Texture, 100);
+    Texture *textures = memory_arena_alloc_array(&texture_pool, Texture, 100);
 	Texture *current_texture = textures;
     
     texture_init_solid(current_texture++, vec3(0.5, 0.5, 0.5));
@@ -790,27 +802,27 @@ init_sample_scene(Scene *scene, ImageU32 *image)
         .normal = vec3(0, 0, 1),
         .dist = 0,
     }, 1);
-    object_init_sphere(current_object++, make_transform_translate(vec3(-3, 2, 0)), (Sphere) {
-        .radius = 2.0f
-    }, 6);
-    object_init_sphere(current_object++, make_transform_translate(vec3(3, -2, 0)), (Sphere) {
-        .radius = 1.0f
-    }, 3);
-    object_init_sphere(current_object++, make_transform_translate(vec3(-2, -1, 2)), (Sphere) {
-        .radius = 1.0f
-    }, 4);
-    object_init_sphere(current_object++, make_transform_translate(vec3(1, -1, 3)), (Sphere) {
-        .radius = 1.0f
-    }, 5);
-    object_init_sphere(current_object++, make_transform_translate(vec3(1, -3, 1)), (Sphere) {
-        .radius = 1.0f
-    }, 2);
-    object_init_disk(current_object++, make_transform_translate(vec3(-2, -5, 0.1f)), (Disk) {
-        .normal = vec3(0, 0, 1),
-        .radius = 1.0f
-    }, 8);    
+    // object_init_sphere(current_object++, make_transform_translate(vec3(-3, 2, 0)), (Sphere) {
+    //     .radius = 2.0f
+    // }, 6);
+    // object_init_sphere(current_object++, make_transform_translate(vec3(3, -2, 0)), (Sphere) {
+    //     .radius = 1.0f
+    // }, 3);
+    // object_init_sphere(current_object++, make_transform_translate(vec3(-2, -1, 2)), (Sphere) {
+    //     .radius = 1.0f
+    // }, 4);
+    // object_init_sphere(current_object++, make_transform_translate(vec3(1, -1, 3)), (Sphere) {
+    //     .radius = 1.0f
+    // }, 5);
+    // object_init_sphere(current_object++, make_transform_translate(vec3(1, -3, 1)), (Sphere) {
+    //     .radius = 1.0f
+    // }, 2);
+    // object_init_disk(current_object++, make_transform_translate(vec3(-2, -5, 0.1f)), (Disk) {
+    //     .normal = vec3(0, 0, 1),
+    //     .radius = 1.0f
+    // }, 8);    
     
-    // object_init_triangle_mesh(current_object++, make_transform_translate(vec3(-3, 2, 0)), make_poly_sphere(2, 10), 5);    
+    // object_init_triangle_mesh(current_object++, make_transform_translate(vec3(-3, 2, 0)), make_poly_sphere(1, 10), 5);    
     current_object = make_utah_teapot(current_object);
     scene->objects = objects;
     scene->object_count = current_object - objects;
@@ -822,9 +834,8 @@ init_sample_scene(Scene *scene, ImageU32 *image)
     scene->materials = materials;
 }
 
-#if 0 
-void 
-write_yz_rect(Triangle *t, Vec2 yz0, Vec2 yz1, f32 x, u32 mat_index)
+Object *
+write_yz_rect(Object *objects, Vec2 yz0, Vec2 yz1, f32 x, u32 mat_index)
 {
     Vec3 v00 = vec3(x, yz0.x, yz0.y);
     Vec3 v01 = vec3(x, yz0.x, yz1.y);
@@ -833,24 +844,23 @@ write_yz_rect(Triangle *t, Vec2 yz0, Vec2 yz1, f32 x, u32 mat_index)
     
     Vec3 normal = normalize(cross(vec3_sub(v01, v00), vec3_sub(v10, v00)));
     
-    *t++ = (Triangle) {
+    object_init_triangle(objects++, empty_transform(), (Triangle) {
         .vertex0 = v00,
         .vertex1 = v01,
         .vertex2 = v11,
         .normal = normal,
-        .mat_index = mat_index
-    };
-    *t++ = (Triangle) {
+    }, mat_index);
+    object_init_triangle(objects++, empty_transform(), (Triangle) {
         .vertex0 = v00,
         .vertex1 = v11,
         .vertex2 = v10,
         .normal = normal,
-        .mat_index = mat_index
-    };
+    }, mat_index);
+    return objects;
 }
 
-void 
-write_xy_rect(Triangle *t, Vec2 xy0, Vec2 xy1, f32 z, u32 mat_index)
+Object * 
+write_xy_rect(Object *objects, Vec2 xy0, Vec2 xy1, f32 z, u32 mat_index)
 {
     Vec3 v00 = vec3(xy0.x, xy0.y, z);
     Vec3 v01 = vec3(xy0.x, xy1.y, z);
@@ -859,24 +869,23 @@ write_xy_rect(Triangle *t, Vec2 xy0, Vec2 xy1, f32 z, u32 mat_index)
     
     Vec3 normal = normalize(cross(vec3_sub(v01, v00), vec3_sub(v10, v00)));
     
-    *t++ = (Triangle) {
+    object_init_triangle(objects++, empty_transform(), (Triangle) {
         .vertex0 = v00,
         .vertex1 = v01,
         .vertex2 = v11,
         .normal = normal,
-        .mat_index = mat_index
-    };
-    *t++ = (Triangle) {
+    }, mat_index);
+    object_init_triangle(objects++, empty_transform(), (Triangle) {
         .vertex0 = v00,
         .vertex1 = v11,
         .vertex2 = v10,
         .normal = normal,
-        .mat_index = mat_index
-    };
+    }, mat_index);
+    return objects;
 }
 
-void 
-write_xz_rect(Triangle *t, Vec2 xz0, Vec2 xz1, f32 y, u32 mat_index)
+Object *  
+write_xz_rect(Object *objects, Vec2 xz0, Vec2 xz1, f32 y, u32 mat_index)
 {
     Vec3 v00 = vec3(xz0.x, y, xz0.y);
     Vec3 v01 = vec3(xz0.x, y, xz1.y);
@@ -885,99 +894,98 @@ write_xz_rect(Triangle *t, Vec2 xz0, Vec2 xz1, f32 y, u32 mat_index)
     
     Vec3 normal = normalize(cross(vec3_sub(v01, v00), vec3_sub(v10, v00)));
     
-    *t++ = (Triangle) {
+    object_init_triangle(objects++, empty_transform(), (Triangle) {
         .vertex0 = v00,
         .vertex1 = v01,
         .vertex2 = v11,
         .normal = normal,
-        .mat_index = mat_index
-    };
-    *t++ = (Triangle) {
+    }, mat_index);
+    object_init_triangle(objects++, empty_transform(), (Triangle) {
         .vertex0 = v00,
         .vertex1 = v11,
         .vertex2 = v10,
         .normal = normal,
-        .mat_index = mat_index
-    };
+    }, mat_index);
+    return objects;
 }
 
-void 
-make_cornell_box(Scene *scene, ImageU32 *image)
-{
-    static Material materials[9] = {0};
-    // materials[0].emit_color = vec3_muls(vec3(0.3f, 0.4f, 0.5f), 5);
-    // materials[0].emit_color = vec3(.5f, .5f, .5f);
-    // materials[1].texture = texture_solid_color(vec3(0.65f, 0.05f, 0.05f));
-    // materials[2].texture = texture_solid_color(vec3(0.73f, 0.73f, 0.73f));
-    // materials[3].texture = texture_solid_color(vec3(0.12f, 0.45f, 0.15f));
-    // f32 c = 30.0f;
-    // materials[4].emit_color = vec3(c, c, c * 0.8f);
-    // materials[5].texture = texture_image("e:\\dev\\ray\\data\\pano.jpg");
-    // materials[6].texture = texture_solid_color(vec3(0.7f, 0.5f, 0.3f));
-    // materials[6].refraction_probability = 1.0f;
-    // materials[7].texture = texture_solid_color(vec3(0.8f, 0.8f, 0.1f));
-    // materials[8].texture = texture_solid_color(vec3(0.3f, 0.3f, 0.3f));
+// void 
+// make_cornell_box(Scene *scene, ImageU32 *image)
+// {
+//     static Material materials[9] = {0};
+//     // materials[0].emit_color = vec3_muls(vec3(0.3f, 0.4f, 0.5f), 5);
+//     // materials[0].emit_color = vec3(.5f, .5f, .5f);
+//     // materials[1].texture = texture_solid_color(vec3(0.65f, 0.05f, 0.05f));
+//     // materials[2].texture = texture_solid_color(vec3(0.73f, 0.73f, 0.73f));
+//     // materials[3].texture = texture_solid_color(vec3(0.12f, 0.45f, 0.15f));
+//     // f32 c = 30.0f;
+//     // materials[4].emit_color = vec3(c, c, c * 0.8f);
+//     // materials[5].texture = texture_image("e:\\dev\\ray\\data\\pano.jpg");
+//     // materials[6].texture = texture_solid_color(vec3(0.7f, 0.5f, 0.3f));
+//     // materials[6].refraction_probability = 1.0f;
+//     // materials[7].texture = texture_solid_color(vec3(0.8f, 0.8f, 0.1f));
+//     // materials[8].texture = texture_solid_color(vec3(0.3f, 0.3f, 0.3f));
 	
-    // static Plane planes[1] = {0};
-    // planes[0] = (Plane) {
-    //     .normal = vec3(0, 0, 1),
-    //     .mat_index = 8,  
-    //     .dist = 0
-    // };
-    // scene->planes = planes;
-    // scene->plane_count = array_size(planes);
+//     // static Plane planes[1] = {0};
+//     // planes[0] = (Plane) {
+//     //     .normal = vec3(0, 0, 1),
+//     //     .mat_index = 8,  
+//     //     .dist = 0
+//     // };
+//     // scene->planes = planes;
+//     // scene->plane_count = array_size(planes);
 	
-    static Triangle triangles[12] = {0};
-    write_yz_rect(triangles, vec2(-5, -5), vec2(5, 5), -5, 1);
-    write_yz_rect(triangles + 2, vec2(-5, -5), vec2(5, 5),  5, 3);
-    f32 d = 1.2f;
-    write_xy_rect(triangles + 4, vec2(-d, -d), vec2(d, d),  4.99f, 4);
-    write_xy_rect(triangles + 6, vec2(-5, -5), vec2(5, 5),  5.0f,  2);
-    write_xy_rect(triangles + 8, vec2(-5, -5), vec2(5, 5), -5.0f,  2);
-    write_xz_rect(triangles + 10, vec2(-5, -5), vec2(5, 5), 5.0f,  2);
-    scene->triangles = triangles;
-    scene->triangle_count = array_size(triangles);
+//     static Triangle triangles[12] = {0};
+//     write_yz_rect(triangles, vec2(-5, -5), vec2(5, 5), -5, 1);
+//     write_yz_rect(triangles + 2, vec2(-5, -5), vec2(5, 5),  5, 3);
+//     f32 d = 1.2f;
+//     write_xy_rect(triangles + 4, vec2(-d, -d), vec2(d, d),  4.99f, 4);
+//     write_xy_rect(triangles + 6, vec2(-5, -5), vec2(5, 5),  5.0f,  2);
+//     write_xy_rect(triangles + 8, vec2(-5, -5), vec2(5, 5), -5.0f,  2);
+//     write_xz_rect(triangles + 10, vec2(-5, -5), vec2(5, 5), 5.0f,  2);
+//     scene->triangles = triangles;
+//     scene->triangle_count = array_size(triangles);
     
-    static TriangleMesh meshes[UTAH_TEAPOT_NUM_PATCHES] = { 0 };
-    make_utah_teapot(meshes);
-    for (u32 i = 0; i < UTAH_TEAPOT_NUM_PATCHES; ++i) meshes[i].mat_index = 2;
-    scene->mesh_count = array_size(meshes);
-    scene->meshes = meshes;
+//     static TriangleMesh meshes[UTAH_TEAPOT_NUM_PATCHES] = { 0 };
+//     make_utah_teapot(meshes);
+//     for (u32 i = 0; i < UTAH_TEAPOT_NUM_PATCHES; ++i) meshes[i].mat_index = 2;
+//     scene->mesh_count = array_size(meshes);
+//     scene->meshes = meshes;
     
-    // static Sphere spheres[2] = {0};
-    // spheres[0] = (Sphere) {
-    //     .mat_index = 6,
-    //     .pos = vec3(1.4f, -2.3f, -3.5f),
-    //     .radius = 1.5f
-    // };
-    // spheres[1] = (Sphere) {
-    //     .mat_index = 5,
-    //     .pos = vec3(-1.25f, 2.0f, -2.0f),
-    //     .radius = 3.0f
-    // };
-    // scene->sphere_count = array_size(spheres);
-    // scene->spheres = spheres;
+//     // static Sphere spheres[2] = {0};
+//     // spheres[0] = (Sphere) {
+//     //     .mat_index = 6,
+//     //     .pos = vec3(1.4f, -2.3f, -3.5f),
+//     //     .radius = 1.5f
+//     // };
+//     // spheres[1] = (Sphere) {
+//     //     .mat_index = 5,
+//     //     .pos = vec3(-1.25f, 2.0f, -2.0f),
+//     //     .radius = 3.0f
+//     // };
+//     // scene->sphere_count = array_size(spheres);
+//     // scene->spheres = spheres;
     
     
     
-    // Box3 box0 = { 
-    //     .min = vec3(0.7f, -3.3f, -5.0f),
-    //     .max = vec3(3.5f, -0.4f, -2.0f)
-    // };
-    // add_box(rects + 6, box0, 2,  0.261799f * 1.3f);
-    // Box3 box1 = {
-    //     .min = vec3(-2.75f, 0.3f, -5.0f),
-    //     .max = vec3(  0.2f, 3.3f,  0.95f)
-    // };
-    // add_box(rects + 12, box1, 2, -0.314159265f);
+//     // Box3 box0 = { 
+//     //     .min = vec3(0.7f, -3.3f, -5.0f),
+//     //     .max = vec3(3.5f, -0.4f, -2.0f)
+//     // };
+//     // add_box(rects + 6, box0, 2,  0.261799f * 1.3f);
+//     // Box3 box1 = {
+//     //     .min = vec3(-2.75f, 0.3f, -5.0f),
+//     //     .max = vec3(  0.2f, 3.3f,  0.95f)
+//     // };
+//     // add_box(rects + 12, box1, 2, -0.314159265f);
     
-    // scene->camera = camera(vec3(0, -16, 4), image);
-    scene->camera = make_camera(vec3(0, -16, 0), image);
+//     // scene->camera = camera(vec3(0, -16, 4), image);
+//     scene->camera = make_camera(vec3(0, -16, 0), image);
 	
-    scene->material_count = array_size(materials);
-    scene->materials = materials;
-}
-#endif 
+//     scene->material_count = array_size(materials);
+//     scene->materials = materials;
+// }
+
 static void 
 parse_command_line_arguments(RaySettings *settings, u32 argc, char **argv)
 {
@@ -1007,6 +1015,7 @@ parse_command_line_arguments(RaySettings *settings, u32 argc, char **argv)
             printf(option_format, "-rpp <n>", "speciifes Rays Per Pixel. Default is 128");
             printf(option_format, "-mbc <n>", "speciifes Max Bounce Count. Default is 8");
             printf(option_format, "-open", "open output image after done");
+            printf(option_format, "-threads <n>", "force specific number of threads (minimum is 1). If not set, use all available");
             
             exit(0);
         }
@@ -1082,6 +1091,24 @@ parse_command_line_arguments(RaySettings *settings, u32 argc, char **argv)
             settings->open_image_after_done = true;
             ++cursor;
         }
+        else if (!strcmp(arg, "-threads"))
+        {
+            if (cursor + 1 >= argument_count)
+            {
+                fprintf(stderr, "[ERROR] Argument -threads takes exactly 1 positional argument\n");
+                break;
+            }
+            
+            i32 value = atoi(arguments[cursor + 1]);
+            if (value < 1)
+            {
+                fprintf(stderr, "[ERROR] Argument -threads expects argument to be at least 1 (requested: %d). Falling back to 1.\n", value);  
+                value = 1;
+            }
+            settings->thread_count = value;
+            
+            cursor += 2;
+        }
         else 
         {
             fprintf(stderr, "[ERROR] Unexpected argument '%s'!\n", arg);
@@ -1123,7 +1150,18 @@ main(int argc, char **argv)
     clock_t start_clock = clock();
 	
     // Get core count to initialize threads
-    u32 core_count = sys_get_processor_count();
+    u32 core_count = settings.thread_count;
+    u32 threads_available_count = sys_get_processor_count();
+    if (core_count == 0)
+    {
+        core_count = threads_available_count;
+    }
+    else if (core_count > threads_available_count)
+    {
+        fprintf(stderr, "[ERROR] Requested thread count (%u) exceeds available (%u). Falling back to limit\n", core_count, threads_available_count);
+        core_count = threads_available_count;
+    }
+    
     // Decide how image is divided in tiles that will be given to threads
     u32 tile_width = 64, tile_height = 64;
     // Calculate tile count
@@ -1177,8 +1215,10 @@ main(int argc, char **argv)
             order->one_past_ymax = one_past_ymax;
             // Set random series of each tile to be dependent on tile position, just to make images with same settings
             // have same 'random' values
-            order->random_series = (RandomSeries){tile_x * 12098 + tile_y * 23771 +
-					tile_count_x * 29103 + tile_count_y * 34298};
+            order->random_series = (RandomSeries){
+                tile_x * 12098 + tile_y * 23771 +
+				tile_count_x * 29103 + tile_count_y * 34298
+            };
         }
     }
 	

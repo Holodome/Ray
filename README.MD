@@ -2,6 +2,8 @@
 
 Tiny CPU raytracer made in C11 for educational purposes
 
+> The project is on hiatus, major develpment is slowed due to lack of free time
+
 ## Structure 
 
 Shippable version consists of several files.
@@ -12,11 +14,6 @@ for raytracer
 ## Compilation 
 
 Compilation is similar on all platforms: run build scripts, it will compile and put everything in build directory.
-
-ON WINDOWS:
-run build.bat
-ON MACOS:
-run build.sh
 
 On windows LLVM is used to produce binary, not MSVC. And since LLVM is aviable on all other platforms, program makes use of some of clang's language extensions that make programming much more saner. Current version of code cannot be compiled with MSVC.
 
@@ -40,6 +37,7 @@ Currently work is done on building acceleration structures for triangle meshes
 ![Screenshot4](screenshots/cornellbox2-8192rp-36m.png)
 
 ## Used sources:
+
 * https://www.youtube.com/c/MollyRocket/ 
 * https://raytracing.github.io
 * https://www.scratchapixel.com/ (this is THE best resource that i found)

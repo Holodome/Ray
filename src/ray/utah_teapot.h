@@ -15,5 +15,7 @@ Vec3 deriv_bezier(Vec3 p[static 4], f32 t);
 Vec3 deirv_u_bezier(Vec3 control_p[static 16], f32 u, f32 v);
 Vec3 deriv_v_bezier(Vec3 control_p[static 16], f32 u, f32 v);
 
+
+
 #define UTAH_TEAPOT_H 1
 #endif

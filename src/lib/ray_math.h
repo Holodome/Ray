@@ -82,6 +82,7 @@ inline f32 rsqrt32(f32 a);
 inline f32 sin32(f32 a);
 inline f32 cos32(f32 a);
 inline f32 asin32(f32 a);
+inline f32 acos32(f32 a) { return __builtin_acosf(a); }
 inline f32 atan232(f32 y, f32 x);
 inline f32 tan32(f32 a);
 inline f32 mod32(f32 a, f32 b);
@@ -304,6 +305,21 @@ inline Vec4 vec4_mul(Vec4 a, Vec4 b);
 inline Vec4 vec4_divs(Vec4 a, f32 b);
 inline Vec4 vec4_muls(Vec4 a, f32 b);
 
+inline f32 
+vec4_dot(Vec4 a, Vec4 b)
+{
+    return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+}
+
+inline Vec4
+vec4_normalize(Vec4 a)
+{
+    f32 coef    = rsqrt32(vec4_dot(a, a));
+    Vec4 result = vec4_muls(a, coef);
+    return result;
+}
+
+
 inline Vec4 vec4_from_vec3(Vec3 xyz, f32 w) { return (Vec4) { .x = xyz.x, .y = xyz.y, .z = xyz.z, .w = w }; }
 
 //
@@ -481,6 +497,61 @@ typedef union {
 
 inline Quat4 quat4(f32 x, f32 y, f32 z, f32 w) { return (Quat4){ .x = x, .y = y, .z = z, .w = w }; }
 inline Quat4 quat4_identity(void) { return quat4(0, 0, 0, 1); }
+inline Quat4 quat4_add(Quat4 a, Quat4 b) { Quat4 result; result.v = vec4_add(a.v, b.v); return result; }
+inline Quat4 quat4_sub(Quat4 a, Quat4 b) { Quat4 result; result.v = vec4_sub(a.v, b.v); return result; }
+inline Quat4 quat4_divs(Quat4 q, f32 s) { Quat4 result; result.v = vec4_divs(q.v, s); return result; }
+inline Quat4 quat4_muls(Quat4 q, f32 s) { Quat4 result; result.v = vec4_muls(q.v, s); return result; }
+inline Quat4 quat4_normalize(Quat4 q) { Quat4 result; result.v = vec4_normalize(q.v); return result; }
+inline f32 quat4_dot(Quat4 a, Quat4 b) { return dot(a.xyz, b.xyz) + a.w * b.w; }
+
+inline Mat4x4 
+mat4x4_from_quat4(Quat4 q)
+{
+    f32 xx = q.x * q.x;    
+    f32 yy = q.y * q.y;    
+    f32 zz = q.z * q.z;
+    f32 xy = q.x * q.y;    
+    f32 xz = q.x * q.z;    
+    f32 yz = q.y * q.z;    
+    f32 wx = q.w * q.x;    
+    f32 wy = q.w * q.y;    
+    f32 wz = q.w * q.z;
+    
+    Mat4x4 result = mat4x4_identity();
+    result.e[0][0] = 1 - 2 * (yy + zz);
+    result.e[0][1] = 2 * (xy + wz);
+    result.e[0][2] = 2 * (xz - wy);
+    result.e[1][0] = 2 * (xy - wz);
+    result.e[1][1] = 1 - 2 * (xx + zz);
+    result.e[1][2] = 2 * (yz + wx);
+    result.e[2][0] = 2 * (xz + wy);
+    result.e[2][1] = 2 * (yz - wx);
+    result.e[2][2] = 1 - 2 * (xx + yy);  
+    return result;    
+}
+
+// Spherical interpolation
+inline Quat4 
+quat4_slerp(Quat4 a, Quat4 b, f32 t)
+{
+    Quat4 result;
+    
+    f32 cos_theta = quat4_dot(a, b);
+    if (cos_theta > 0.9995f)
+    {
+        // This is essentially a mix
+        result = quat4_normalize(quat4_add(quat4_muls(a, 1 - t), quat4_muls(b, t)));
+    }
+    else 
+    {
+        f32 theta = acos32(clamp(cos_theta, -1, 1));
+        f32 thetap = theta * t;
+        Quat4 qperp = quat4_normalize(quat4_sub(b, quat4_muls(a, cos_theta)));
+        result = quat4_add(quat4_muls(a, cos32(thetap)), quat4_muls(qperp, sin32(thetap)));
+    }
+    
+    return result;
+}
 
 #define RAY_MATH_H 1
 #endif
