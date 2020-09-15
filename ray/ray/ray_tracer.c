@@ -117,7 +117,7 @@ texture_init_image(Texture *texture, char *filename)
     memset(texture, 0, sizeof(*texture));
     
     texture->type = Texture_Image;
-    texture->image.filename = filename;
+    texture->meta.image.filename = filename;
     image_u32_load(&texture->image.image, filename);
 }
 
@@ -206,7 +206,7 @@ sample_texture(Texture *texture, Vec2 uv, Vec3 hit_point)
 
 
 void 
-object_init_sphere(Object *object, Transform transform, Sphere sphere, u32 mat_index)
+object_init_sphere(Object *object, Transform transform, u32 mat_index, Sphere sphere)
 {
     memset(object, 0, sizeof(*object));
 
@@ -217,7 +217,7 @@ object_init_sphere(Object *object, Transform transform, Sphere sphere, u32 mat_i
 }
 
 void 
-object_init_plane(Object *object, Transform transform, Plane plane, u32 mat_index)
+object_init_plane(Object *object, Transform transform, u32 mat_index, Plane plane)
 {
     memset(object, 0, sizeof(*object));
 
@@ -228,7 +228,7 @@ object_init_plane(Object *object, Transform transform, Plane plane, u32 mat_inde
 }
 
 void 
-object_init_disk(Object *object, Transform transform, Disk disk, u32 mat_index)
+object_init_disk(Object *object, Transform transform, u32 mat_index, Disk disk)
 {
     memset(object, 0, sizeof(*object));
 
@@ -239,7 +239,7 @@ object_init_disk(Object *object, Transform transform, Disk disk, u32 mat_index)
 }
 
 void 
-object_init_triangle(Object *object, Transform transform, Triangle triangle, u32 mat_index)
+object_init_triangle(Object *object, Transform transform, u32 mat_index, Triangle triangle)
 {
     memset(object, 0, sizeof(*object));
 
@@ -250,7 +250,7 @@ object_init_triangle(Object *object, Transform transform, Triangle triangle, u32
 }
 
 void 
-object_init_cylinder(Object *object, Transform transform, Cylinder cylinder, u32 mat_index)
+object_init_cylinder(Object *object, Transform transform, u32 mat_index, Cylinder cylinder)
 {
     memset(object, 0, sizeof(*object));
 
@@ -261,7 +261,7 @@ object_init_cylinder(Object *object, Transform transform, Cylinder cylinder, u32
 }
 
 void 
-object_init_cone(Object *object, Transform transform, Cone cone, u32 mat_index)
+object_init_cone(Object *object, Transform transform, u32 mat_index, Cone cone)
 {
     memset(object, 0, sizeof(*object));
 
@@ -272,7 +272,7 @@ object_init_cone(Object *object, Transform transform, Cone cone, u32 mat_index)
 }
 
 void 
-object_init_hyperboloid(Object *object, Transform transform, Hyperboloid hyperboloid, u32 mat_index)
+object_init_hyperboloid(Object *object, Transform transform, u32 mat_index, Hyperboloid hyperboloid)
 {
     memset(object, 0, sizeof(*object));
 
@@ -283,7 +283,7 @@ object_init_hyperboloid(Object *object, Transform transform, Hyperboloid hyperbo
 }
 
 void 
-object_init_paraboloid(Object *object, Transform transform, Paraboloid paraboloid, u32 mat_index)
+object_init_paraboloid(Object *object, Transform transform, u32 mat_index, Paraboloid paraboloid)
 {
     memset(object, 0, sizeof(*object));
 
@@ -294,7 +294,7 @@ object_init_paraboloid(Object *object, Transform transform, Paraboloid paraboloi
 }
 
 void 
-object_init_triangle_mesh(Object *object, Transform transform, TriangleMesh mesh, u32 mat_index)
+object_init_triangle_mesh(Object *object, Transform transform, u32 mat_index, TriangleMesh mesh)
 {
     memset(object, 0, sizeof(*object));
 

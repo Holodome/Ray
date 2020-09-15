@@ -1,7 +1,7 @@
 #include "image.h"
 
-#include "thirdparty/stb_image_write.h"
-#include "thirdparty/stb_image.h"
+#include "stb_image_write.h"
+#include "stb_image.h"
 
 
 void 

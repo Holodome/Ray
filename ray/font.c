@@ -1,6 +1,6 @@
 #include "font.h"
 
-#include "thirdparty/stb_truetype.h"
+#include "stb_truetype.h"
 
 #include "editor/renderer/opengl.h"
 

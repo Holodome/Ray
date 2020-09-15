@@ -1,15 +1,13 @@
 #include "ray/ray.h"
 
 #include "lib/ray_math.c"
-#include "lib/sys.c"
+#include "lib/threading.c"
 #include "lib/memory_arena.c"
 
 #include "image.c"
 #include "ray/ray_tracer.c"
 
 #include "ray/utah_teapot.c"
-
-// #include "ray/scene_file.c"
 
 const f32 min_hit_distance = 0.001f;
 const f32 tolerance        = 0.001f;
@@ -68,7 +66,9 @@ ray_intersect_extents(Ray ray, Extents *extents,
         f32 tmax = (extents->dmax[i] - precomputed_numerator[i]) / precomputed_denominator[i];
         if (precomputed_denominator[i] < 0)
         {
-            swap(tmin, tmax);
+            f32 temp = tmin;
+            tmin = tmax;
+            tmax = temp;
         }
 		
         if (tmin > *tnear)
@@ -89,22 +89,16 @@ ray_intersect_extents(Ray ray, Extents *extents,
     }
     return result;
 }
-Vec3 calc(Mat4x4 m, Vec3 v)
-{
-    return vec3(m.e[0][0] * v.x + m.e[0][1] * v.y + m.e[0][2] * v.z,
-                m.e[1][0] * v.x + m.e[1][1] * v.y + m.e[1][2] * v.z,
-                m.e[2][0] * v.x + m.e[2][1] * v.y + m.e[2][2] * v.z);
-}
 
 ATTRIBUTE(noinline)
 static Vec3  
-ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
+ray_cast(CastState *state, Ray ws_ray, HitRecord *hit_record)
 {    
     Scene *scene = state->scene;
     
     Vec3 ray_cast_color = {0};
     
-    f32 precomputed_numerator[BVH_NUM_PLANE_SET_NORMALS];
+    f32 precomputed_numerator  [BVH_NUM_PLANE_SET_NORMALS];
     f32 precomputed_denumerator[BVH_NUM_PLANE_SET_NORMALS];
     
     // Iterate scene objects
@@ -117,10 +111,10 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
         Object object = scene->objects[object_index];
         
         // Translate ray from world space to object space
-        Ray ray = make_ray(mat4x4_mul_vec3(object.transform.w2o, ray_init.origin), 
-                           mat4x4_as_3x3_mul_vec3(object.transform.w2o, ray_init.direction),
-                           ray_init.time);
-        // Ray ray = ray_init;
+        // os for object space
+        Vec3 os_origin = mat4x4_mul_vec3(object.transform.w2o, ws_ray.origin);
+        Vec3 os_direction = mat4x4_as_3x3_mul_vec3(object.transform.w2o, ws_ray.direction); 
+        Ray ray = make_ray(os_origin, os_direction, ws_ray.time);
             
         // Precompute dot products of normals with ray.
         // When using instancing, each object rotates ray in his object space, 
@@ -188,9 +182,16 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
                         hit_record->normal = plane.normal;
                         // hit_record_set_normal(hit_record, ray, plane.normal);
                         hit_record->hit_point = ray_point_at(ray, t);
-                        // @TODO(hl): These are not normalized!!
-                        hit_record->uv.u = hit_record->hit_point.x;
-                        hit_record->uv.v = hit_record->hit_point.y;
+                        // @TODO(hl): Check if it is faster to do  x - floor(x) 
+#if 1
+                        hit_record->uv.u = mod32(hit_record->hit_point.x, 1.0f);
+                        hit_record->uv.v = mod32(hit_record->hit_point.y, 1.0f);
+#else   
+                        f32 hx = hit_record->hit_point.x;
+                        f32 hy = hit_record->hit_point.y;
+                        hit_record->uv.u = hx - floor;
+                        hit_record->uv.v = hx - floor;                        
+#endif 
                         has_hit = true;
                     }
                 }
@@ -215,8 +216,17 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
                             hit_record->mat_index = object.mat_index;
                             hit_record->hit_point = ray_point_at(ray, hit_record->distance);
                             hit_record->normal = disk.normal;
-                            // hit_record_set_normal(hit_record, ray, disk.normal);
-                            // @TODO(hl): UV
+                            
+                            // @TODO(hl): Check this!
+                            f32 phi_max = TWO_PI;
+                            f32 phi = atan232(hit_point.y, hit_point.x);
+                            if (phi < 0) 
+                            {
+                                phi += TWO_PI;
+                            }
+                            
+                            hit_record->uv.u = phi / phi_max;
+                            hit_record->uv.v = 1.0f - (length(dist_to_center) / disk.radius);
                             has_hit = true;
                         }
                     }
@@ -325,13 +335,13 @@ ray_cast(CastState *state, Ray ray_init, HitRecord *hit_record)
         
         if (has_hit)
         {
-            // @NOTE(hl): Assuming scale between object and world space is not changed, 
-            // hit distance is the same. Thus, we can just use it to computate hit point    
-            // hit_record->hit_point = ray_point_at(ray_init, hit_record->distance);
-            hit_record->hit_point = mat4x4_mul_vec3(object.transform.o2w, hit_record->hit_point);
+            // Transform point and normal from object space to world-space
+            Vec3 ws_p = mat4x4_mul_vec3(object.transform.o2w, hit_record->hit_point);
+            Vec3 ws_n = normalize(mat4x4_as_3x3_mul_vec3(object.transform.o2w, hit_record->normal));
             
-            hit_record->normal = normalize(mat4x4_as_3x3_mul_vec3(object.transform.o2w, hit_record->normal));
-            hit_record_set_normal(hit_record, ray_init, hit_record->normal);
+            hit_record->hit_point = ws_p;
+            // Since normal is in world space
+            hit_record_set_normal(hit_record, ws_ray, ws_n);
         }
     }
     
@@ -749,7 +759,7 @@ make_utah_teapot(Object *objects)
         // Transform transform = make_transform(vec3(-1, -1 , 1), vec3(0.13f, -0.2f, -QUAT_PI), vec3(1, 1, 1));
         // Transform transform = make_transform(vec3(0, 0, 0), vec3(0.13f, -0.2f, -QUAT_PI), vec3(1, 1, 1));
         Transform transform = make_transform(vec3(0, 2, 0), rot);
-        object_init_triangle_mesh(current_object++, transform, triangle_mesh(divs * divs, nvertices, vertices, P, N, st), 5);
+        object_init_triangle_mesh(current_object++, transform, 5, triangle_mesh(divs * divs, nvertices, vertices, P, N, st));
     }
     
     return current_object;
@@ -777,10 +787,10 @@ init_sample_scene(Scene *scene, ImageU32 *image)
     texture_init_solid(current_texture++, vec3(0.75f, 0.33f, 0.33f));
     texture_init_solid(current_texture++, vec3(0.8f, 0.8f, 0.1f));
     texture_init_solid(current_texture++, vec3(0.8f, 0.1f, 0.8f));
-	
+	texture_init_uv(current_texture++);
     
     // @NOTE(hl): Don't malloc arrays because scene settings is always the same
-    static Material materials[11] = {0};
+    static Material materials[12] = {0};
     materials[0].emit_color = vec3(0.3f, 0.4f, 0.5f);
     materials[1].texture = textures + 2;
     materials[2].texture = textures + 3;
@@ -795,35 +805,36 @@ init_sample_scene(Scene *scene, ImageU32 *image)
     materials[8].texture = textures + 8;
     materials[9].texture = textures + 9;
     materials[10].texture = textures + 10;
+    materials[11].texture = textures + 11;
     
     static Object objects[100] = {0};
     Object *current_object = objects;
-    object_init_plane(current_object++, empty_transform(), (Plane) {
+    object_init_plane(current_object++, empty_transform(), 1, (Plane) {
         .normal = vec3(0, 0, 1),
         .dist = 0,
-    }, 1);
-    // object_init_sphere(current_object++, make_transform_translate(vec3(-3, 2, 0)), (Sphere) {
+    });
+    // object_init_sphere(current_object++, make_transform_translate(vec3(-3, 2, 0)), 6, (Sphere) {
     //     .radius = 2.0f
-    // }, 6);
-    // object_init_sphere(current_object++, make_transform_translate(vec3(3, -2, 0)), (Sphere) {
+    // });
+    // object_init_sphere(current_object++, make_transform_translate(vec3(3, -2, 0)), 3, (Sphere) {
     //     .radius = 1.0f
-    // }, 3);
-    // object_init_sphere(current_object++, make_transform_translate(vec3(-2, -1, 2)), (Sphere) {
+    // });
+    // object_init_sphere(current_object++, make_transform_translate(vec3(-2, -1, 2)), 4, (Sphere) {
     //     .radius = 1.0f
-    // }, 4);
-    // object_init_sphere(current_object++, make_transform_translate(vec3(1, -1, 3)), (Sphere) {
+    // });
+    // object_init_sphere(current_object++, make_transform_translate(vec3(1, -1, 3)), 5, (Sphere) {
     //     .radius = 1.0f
-    // }, 5);
-    // object_init_sphere(current_object++, make_transform_translate(vec3(1, -3, 1)), (Sphere) {
+    // });
+    // object_init_sphere(current_object++, make_transform_translate(vec3(1, -3, 1)), 2, (Sphere) {
     //     .radius = 1.0f
-    // }, 2);
-    // object_init_disk(current_object++, make_transform_translate(vec3(-2, -5, 0.1f)), (Disk) {
-    //     .normal = vec3(0, 0, 1),
-    //     .radius = 1.0f
-    // }, 8);    
+    // });
+    object_init_disk(current_object++, make_transform_translate(vec3(-2, -5, 0.1f)), 11, (Disk) {
+        .normal = vec3(0, 0, 1),
+        .radius = 1.0f
+    });    
     
     // object_init_triangle_mesh(current_object++, make_transform_translate(vec3(-3, 2, 0)), make_poly_sphere(1, 10), 5);    
-    current_object = make_utah_teapot(current_object);
+    // current_object = make_utah_teapot(current_object);
     scene->objects = objects;
     scene->object_count = current_object - objects;
     printf("Object count %u\n", scene->object_count);
@@ -844,18 +855,18 @@ write_yz_rect(Object *objects, Vec2 yz0, Vec2 yz1, f32 x, u32 mat_index)
     
     Vec3 normal = normalize(cross(vec3_sub(v01, v00), vec3_sub(v10, v00)));
     
-    object_init_triangle(objects++, empty_transform(), (Triangle) {
+    object_init_triangle(objects++, empty_transform(), mat_index, (Triangle) {
         .vertex0 = v00,
         .vertex1 = v01,
         .vertex2 = v11,
         .normal = normal,
-    }, mat_index);
-    object_init_triangle(objects++, empty_transform(), (Triangle) {
+    });
+    object_init_triangle(objects++, empty_transform(), mat_index, (Triangle) {
         .vertex0 = v00,
         .vertex1 = v11,
         .vertex2 = v10,
         .normal = normal,
-    }, mat_index);
+    });
     return objects;
 }
 
@@ -869,18 +880,18 @@ write_xy_rect(Object *objects, Vec2 xy0, Vec2 xy1, f32 z, u32 mat_index)
     
     Vec3 normal = normalize(cross(vec3_sub(v01, v00), vec3_sub(v10, v00)));
     
-    object_init_triangle(objects++, empty_transform(), (Triangle) {
+    object_init_triangle(objects++, empty_transform(), mat_index, (Triangle) {
         .vertex0 = v00,
         .vertex1 = v01,
         .vertex2 = v11,
         .normal = normal,
-    }, mat_index);
-    object_init_triangle(objects++, empty_transform(), (Triangle) {
+    });
+    object_init_triangle(objects++, empty_transform(), mat_index, (Triangle) {
         .vertex0 = v00,
         .vertex1 = v11,
         .vertex2 = v10,
         .normal = normal,
-    }, mat_index);
+    });
     return objects;
 }
 
@@ -894,18 +905,18 @@ write_xz_rect(Object *objects, Vec2 xz0, Vec2 xz1, f32 y, u32 mat_index)
     
     Vec3 normal = normalize(cross(vec3_sub(v01, v00), vec3_sub(v10, v00)));
     
-    object_init_triangle(objects++, empty_transform(), (Triangle) {
+    object_init_triangle(objects++, empty_transform(), mat_index, (Triangle) {
         .vertex0 = v00,
         .vertex1 = v01,
         .vertex2 = v11,
         .normal = normal,
-    }, mat_index);
-    object_init_triangle(objects++, empty_transform(), (Triangle) {
+    });
+    object_init_triangle(objects++, empty_transform(), mat_index, (Triangle) {
         .vertex0 = v00,
         .vertex1 = v11,
         .vertex2 = v10,
         .normal = normal,
-    }, mat_index);
+    });
     return objects;
 }
 
@@ -1116,8 +1127,6 @@ parse_command_line_arguments(RaySettings *settings, u32 argc, char **argv)
         }
     }
 }
-
-
 
 int 
 main(int argc, char **argv)

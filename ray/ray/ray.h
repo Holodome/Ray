@@ -1,10 +1,7 @@
 #if !defined(RAY_H)
 
-#include <time.h>
-
 #include "ray/ray_tracer.h"
-// #include "ray/scene_file.h"
-#include "lib/sys.h"
+#include "lib/threading.h"
 #include "lib/memory_arena.h"
 
 // Single work order from multithreaded rendering system

@@ -103,7 +103,16 @@ enum {
     Texture_Image,
 	// ...
 	Texture_PerlinNoise,
+    // Sets resulting color be equal to surface normal of hit in given point\
+    // @TODO implement
+    Texture_Normal,
 };
+
+typedef union {
+    struct {
+        char *filename;
+    } image;
+} TextureMetaData;
 
 // @TODO(hl): Think if we can use texture indices instead of pointers
 typedef struct Texture {
@@ -126,9 +135,10 @@ typedef struct Texture {
 		} bilinear_interpolation;
         struct {
             ImageU32 image;
-            char *filename;
         } image;
     };
+    
+    TextureMetaData meta;
 } Texture;
 
 // Texture initialization functions
@@ -333,6 +343,14 @@ enum {
     Object_TriangleMesh,  
 };
 
+typedef union {
+    struct {
+        bool is_from_file;
+        char *filename;
+        
+    } triangle_mesh;
+} ObjectMetaData;
+
 typedef struct {
     ObjectType type;
     u32 mat_index;
@@ -351,15 +369,15 @@ typedef struct {
 } Object;
 
 // @TODO(hl): Move mat_index parameter to front
-void object_init_sphere(Object *object, Transform transform, Sphere sphere, u32 mat_index);
-void object_init_plane(Object *object, Transform transform, Plane plane, u32 mat_index);
-void object_init_disk(Object *object, Transform transform, Disk disk, u32 mat_index);
-void object_init_triangle(Object *object, Transform transform, Triangle triangle, u32 mat_index);
-void object_init_cylinder(Object *object, Transform transform, Cylinder cylinder, u32 mat_index);
-void object_init_cone(Object *object, Transform transform, Cone cone, u32 mat_index);
-void object_init_hyperboloid(Object *object, Transform transform, Hyperboloid hyperboloid, u32 mat_index);
-void object_init_paraboloid(Object *object, Transform transform, Paraboloid paraboloid, u32 mat_index);
-void object_init_triangle_mesh(Object *object, Transform transform, TriangleMesh mesh, u32 mat_index);
+void object_init_sphere(Object *object, Transform transform, u32 mat_index, Sphere sphere);
+void object_init_plane(Object *object, Transform transform, u32 mat_index, Plane plane);
+void object_init_disk(Object *object, Transform transform, u32 mat_index, Disk disk);
+void object_init_triangle(Object *object, Transform transform, u32 mat_index, Triangle triangle);
+void object_init_cylinder(Object *object, Transform transform, u32 mat_index, Cylinder cylinder);
+void object_init_cone(Object *object, Transform transform, u32 mat_index, Cone cone);
+void object_init_hyperboloid(Object *object, Transform transform, u32 mat_index, Hyperboloid hyperboloid);
+void object_init_paraboloid(Object *object, Transform transform, u32 mat_index, Paraboloid paraboloid);
+void object_init_triangle_mesh(Object *object, Transform transform, u32 mat_index, TriangleMesh mesh);
 
 //
 // Scene

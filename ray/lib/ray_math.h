@@ -16,7 +16,7 @@
 #define min(a, b)     ({__typeof__(a) _a = a; __typeof__(b) _b = b; (_a < _b) ? (_a) : (_b); })
 #define max3(a, b, c) ({__typeof__(a) _a = a; __typeof__(b) _b = b; __typeof__(c) _c = c; (_a > _b) ? ((_a > _c) ? _a : _c) : ((_b > _c) ? _b : _c ); })
 #define min3(a, b, c) ({__typeof__(a) _a = a; __typeof__(b) _b = b; __typeof__(c) _c = c; (_a < _b) ? ((_a < _c) ? _a : _c) : ((_b < _c) ? _b : _c ); })
-#define swap(a, b)    ({__typeof__(a) temp = a; a = b; b = temp; (void)0; })
+#define var_swap(a, b)    ({__typeof__(a) temp = a; a = b; b = temp; (void)0; })
 
 #if !defined(RAY_MATH_H)
 
@@ -251,7 +251,7 @@ refract(Vec3 v, Vec3 n, f32 ior)
     }
     else 
     {
-        swap(etai, etat);
+        var_swap(etai, etat);
         n = vec3_neg(n);
     }
     
@@ -424,8 +424,8 @@ inline f32 rect2_center_y(Rect2 r);
 inline void rect2_store_pointsa(Rect2 rect, Vec2 points[4]);
 // Wrties all rect coreners in corresponding parameters
 inline void rect2_store_points(Rect2 rect,
-							   Vec2 top_left[static 1], Vec2 bottom_left[static 1],
-							   Vec2 top_right[static 1], Vec2 bottom_right[static 1]);
+							   Vec2 top_left[1], Vec2 bottom_left[1],
+							   Vec2 top_right[1], Vec2 bottom_right[1]);
 // Checks if point is inside of the rect
 inline bool rect2_collide_point(Rect2 rect, Vec2 point);
 // Checks if two rects intersect
