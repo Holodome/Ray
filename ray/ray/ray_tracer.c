@@ -51,86 +51,154 @@ make_camera(Vec3 pos, ImageU32 *image)
 }
 
 
-void 
-texture_init_solid(Texture *texture, Vec3 c)
+static TextureID
+textures_get_next_id(TextureArray *textures)
 {
-    memset(texture, 0, sizeof(*texture));
+    TextureID result = { INVALID_ID };
     
-    texture->type = Texture_Solid,
-    texture->solid.color = c;
+    if (textures->count + 1 < textures->max_count)
+    {
+        result.id = textures->count++;
+    }
+    else 
+    {
+        fprintf(stderr, "[ERROR] Texture array %p size exceeded\n", textures);
+    }
+    
+    return result;
 }
 
-void 
-texture_init_scale(Texture *texture, Texture *texture1, Texture *texture2)
+TextureID 
+textures_append_solid(TextureArray *textures, Vec3 c)
 {
-    memset(texture, 0, sizeof(*texture));
+    TextureID id = textures_get_next_id(textures);
+    if (is_valid_id(id))
+    {
+        Texture *texture = textures->textures + id.id;
+        memset(texture, 0, sizeof(*texture));
     
-    texture->type = Texture_Scale;
-    texture->scale.texture1 = texture1;
-    texture->scale.texture2 = texture2;
+        texture->type = Texture_Solid,
+        texture->solid.color = c;
+    }
+    
+    return id;
 }
 
-void 
-texture_init_mix(Texture *texture, Texture *texture1, Texture *texture2, f32 mix)
+TextureID 
+textures_append_scale(TextureArray *textures, TextureID texture1, TextureID texture2)
 {
-    memset(texture, 0, sizeof(*texture));
+    TextureID id = textures_get_next_id(textures);
+    if (is_valid_id(id))
+    {
+        Texture *texture = textures->textures + id.id;
+        memset(texture, 0, sizeof(*texture));
+        
+        texture->type = Texture_Scale;
+        texture->scale.texture1 = texture1;
+        texture->scale.texture2 = texture2;
+    }
     
-    texture->type = Texture_Mix;
-    texture->scale.texture1 = texture1;
-    texture->scale.texture2 = texture2;
-    texture->scale.mix_value = mix;
+    return id;
 }
 
-void 
-texture_init_bilerp(Texture *texture, Vec3 c00, Vec3 c01, Vec3 c10, Vec3 c11)
+TextureID 
+textures_append_mix(TextureArray *textures, TextureID texture1, TextureID texture2, f32 mix)
 {
-    memset(texture, 0, sizeof(*texture));
+    TextureID id = textures_get_next_id(textures);
+    if (is_valid_id(id))
+    {
+        Texture *texture = textures->textures + id.id;
+        memset(texture, 0, sizeof(*texture));
     
-    texture->type = Texture_BilinearInterpolation;
-    texture->bilinear_interpolation.color00 = c00;   
-    texture->bilinear_interpolation.color01 = c01;   
-    texture->bilinear_interpolation.color10 = c10;   
-    texture->bilinear_interpolation.color11 = c11;   
+        texture->type = Texture_Mix;
+        texture->mix.texture1 = texture1;
+        texture->mix.texture2 = texture2;
+        texture->mix.mix_value = mix;
+    }
+    
+    return id;
 }
 
-void 
-texture_init_uv(Texture *texture)
+TextureID 
+textures_append_bilerp(TextureArray *textures, Vec3 c00, Vec3 c01, Vec3 c10, Vec3 c11)
 {
-    memset(texture, 0, sizeof(*texture));
+    TextureID id = textures_get_next_id(textures);
+    if (is_valid_id(id))
+    {
+        Texture *texture = textures->textures + id.id;
+        memset(texture, 0, sizeof(*texture));
     
-    texture->type = Texture_UV;
+        texture->type = Texture_BilinearInterpolation;
+        texture->bilinear_interpolation.color00 = c00;   
+        texture->bilinear_interpolation.color01 = c01;   
+        texture->bilinear_interpolation.color10 = c10;   
+        texture->bilinear_interpolation.color11 = c11;   
+    }
+    
+    return id;
 }
 
-void 
-texture_init_checkered(Texture *texture, Texture *texture1, Texture *texture2)
+TextureID 
+textures_append_uv(TextureArray *textures)
 {
-    memset(texture, 0, sizeof(*texture));
+    TextureID id = textures_get_next_id(textures);
+    if (is_valid_id(id))
+    {
+        Texture *texture = textures->textures + id.id;
+        memset(texture, 0, sizeof(*texture));
     
-    texture->type = Texture_Checkered;
-    texture->checkered.texture1 = texture1;
-    texture->checkered.texture2 = texture2;
+        texture->type = Texture_UV;
+    }
+    
+    return id;
 }
 
-void 
-texture_init_image(Texture *texture, char *filename)
+TextureID 
+textures_append_checkered(TextureArray *textures, TextureID texture1, TextureID texture2)
 {
-    memset(texture, 0, sizeof(*texture));
+    TextureID id = textures_get_next_id(textures);
+    if (is_valid_id(id))
+    {
+        Texture *texture = textures->textures + id.id;
+        memset(texture, 0, sizeof(*texture));
     
-    texture->type = Texture_Image;
-    texture->meta.image.filename = filename;
-    image_u32_load(&texture->image.image, filename);
+        texture->type = Texture_Checkered;
+        texture->checkered.texture1 = texture1;
+        texture->checkered.texture2 = texture2;
+    }
+    
+    return id;
 }
+
+TextureID 
+textures_append_image(TextureArray *textures, char *filename)
+{
+    TextureID id = textures_get_next_id(textures);
+    if (is_valid_id(id))
+    {
+        Texture *texture = textures->textures + id.id;
+        memset(texture, 0, sizeof(*texture));
+    
+        texture->type = Texture_Image;
+        texture->meta.image.filename = filename;
+        image_u32_load(&texture->image.image, filename);
+    }
+    
+    return id;
+}
+
 
 Vec3 
-sample_texture(Texture *texture, Vec2 uv, Vec3 hit_point)
+sample_texture(TextureArray *textures, TextureID id, Vec2 uv, Vec3 hit_point)
 {
-    if (!texture) 
+    if (!is_valid_id(id))
     {
         return vec3(0, 0, 0);
     }
     
 	Vec3 result = {0};
 	
+    Texture *texture = textures->textures + id.id;
 	switch(texture->type)
 	{
 		case Texture_Solid:
@@ -139,13 +207,13 @@ sample_texture(Texture *texture, Vec2 uv, Vec3 hit_point)
 		} break;
 		case Texture_Scale:
 		{
-			result = vec3_mul(sample_texture(texture->scale.texture1, uv, hit_point),
-							  sample_texture(texture->scale.texture2, uv, hit_point));
+			result = vec3_mul(sample_texture(textures, texture->scale.texture1, uv, hit_point),
+							  sample_texture(textures, texture->scale.texture2, uv, hit_point));
 		} break;
 		case Texture_Mix:
 		{
-			result = vec3_mix(sample_texture(texture->mix.texture1, uv, hit_point),
-							  sample_texture(texture->mix.texture2, uv, hit_point),
+			result = vec3_mix(sample_texture(textures, texture->mix.texture1, uv, hit_point),
+							  sample_texture(textures, texture->mix.texture2, uv, hit_point),
 							  texture->mix.mix_value);
 		} break;
 		case Texture_BilinearInterpolation:
@@ -166,11 +234,11 @@ sample_texture(Texture *texture, Vec2 uv, Vec3 hit_point)
 			if ((mod32(abs32(hit_point.x + 10000.0f), 2.0f) > 1.0f) - 
                 (mod32(abs32(hit_point.y + 10000.0f), 2.0f) > 1.0f))
 			{
-				result = sample_texture(texture->checkered.texture1, uv, hit_point);
+				result = sample_texture(textures, texture->checkered.texture1, uv, hit_point);
 			}
 			else 
 			{
-				result = sample_texture(texture->checkered.texture2, uv, hit_point);
+				result = sample_texture(textures, texture->checkered.texture2, uv, hit_point);
 			}
 		} break;
 		case Texture_Image:
@@ -205,102 +273,161 @@ sample_texture(Texture *texture, Vec2 uv, Vec3 hit_point)
 }
 
 
-void 
-object_init_sphere(Object *object, Transform transform, u32 mat_index, Sphere sphere)
+MaterialID 
+materials_append(MaterialArray *materials, Material material)
 {
-    memset(object, 0, sizeof(*object));
-
-    object->type = Object_Sphere;
-    object->transform = transform;
-    object->mat_index = mat_index;
-    object->sphere = sphere;
+    MaterialID result = { INVALID_ID };
+    
+    if (materials->count + 1 < materials->max_count)
+    {
+        result.id = materials->count++;
+        
+        *(materials->materials + result.id) = material;
+    }
+    else 
+    {
+        fprintf(stderr, "[ERROR] Material array %p size exceeded\n", materials);
+    }
+    
+    return result;
 }
 
-void 
-object_init_plane(Object *object, Transform transform, u32 mat_index, Plane plane)
-{
-    memset(object, 0, sizeof(*object));
 
-    object->type = Object_Plane;
-    object->transform = transform;
-    object->mat_index = mat_index;
-    object->plane = plane;
+
+
+Object 
+make_object_sphere(Transform transform, MaterialID mat_id, Sphere sphere)
+{
+    Object obj = {0};
+    
+    obj.type = Object_Sphere;
+    obj.transform = transform;
+    obj.mat_id = mat_id;
+    obj.sphere = sphere;
+    
+    return obj;
 }
 
-void 
-object_init_disk(Object *object, Transform transform, u32 mat_index, Disk disk)
+Object 
+make_object_plane(Transform transform, MaterialID mat_id, Plane plane)
 {
-    memset(object, 0, sizeof(*object));
-
-    object->type = Object_Disk;
-    object->transform = transform;
-    object->mat_index = mat_index;
-    object->disk = disk;
+    Object obj = {0};
+    
+    obj.type = Object_Plane;
+    obj.transform = transform;
+    obj.mat_id = mat_id;
+    obj.plane = plane;
+    
+    return obj;   
 }
 
-void 
-object_init_triangle(Object *object, Transform transform, u32 mat_index, Triangle triangle)
+Object 
+make_object_disk(Transform transform, MaterialID mat_id, Disk disk)
 {
-    memset(object, 0, sizeof(*object));
-
-    object->type = Object_Triangle;
-    object->transform = transform;
-    object->mat_index = mat_index;
-    object->triangle = triangle;
+    Object obj = {0};
+    
+    obj.type = Object_Disk;
+    obj.transform = transform;
+    obj.mat_id = mat_id;
+    obj.disk = disk;
+    
+    return obj;  
 }
 
-void 
-object_init_cylinder(Object *object, Transform transform, u32 mat_index, Cylinder cylinder)
+Object 
+make_object_triangle(Transform transform, MaterialID mat_id, Triangle triangle)
 {
-    memset(object, 0, sizeof(*object));
-
-    object->type = Object_Cylinder;
-    object->transform = transform;
-    object->mat_index = mat_index;
-    object->cylinder = cylinder;
+    Object obj = {0};
+    
+    obj.type = Object_Triangle;
+    obj.transform = transform;
+    obj.mat_id = mat_id;
+    obj.triangle = triangle;
+    
+    return obj;    
 }
 
-void 
-object_init_cone(Object *object, Transform transform, u32 mat_index, Cone cone)
+Object 
+make_object_cylinder(Transform transform, MaterialID mat_id, Cylinder cylinder)
 {
-    memset(object, 0, sizeof(*object));
-
-    object->type = Object_Cone;
-    object->transform = transform;
-    object->mat_index = mat_index;
-    object->cone = cone;
+    Object obj = {0};
+    
+    obj.type = Object_Cylinder;
+    obj.transform = transform;
+    obj.mat_id = mat_id;
+    obj.cylinder = cylinder;
+    
+    return obj;   
 }
 
-void 
-object_init_hyperboloid(Object *object, Transform transform, u32 mat_index, Hyperboloid hyperboloid)
+Object 
+make_object_cone(Transform transform, MaterialID mat_id, Cone cone)
 {
-    memset(object, 0, sizeof(*object));
-
-    object->type = Object_Hyperboloid;
-    object->transform = transform;
-    object->mat_index = mat_index;
-    object->hyperboloid = hyperboloid;
+    Object obj = {0};
+    
+    obj.type = Object_Cone;
+    obj.transform = transform;
+    obj.mat_id = mat_id;
+    obj.cone = cone;
+    
+    return obj;  
 }
 
-void 
-object_init_paraboloid(Object *object, Transform transform, u32 mat_index, Paraboloid paraboloid)
+Object 
+make_object_hyperboloid(Transform transform, MaterialID mat_id, Hyperboloid hyperboloid)
 {
-    memset(object, 0, sizeof(*object));
-
-    object->type = Object_Paraboloid;
-    object->transform = transform;
-    object->mat_index = mat_index;
-    object->paraboloid = paraboloid;
+    Object obj = {0};
+    
+    obj.type = Object_Hyperboloid;
+    obj.transform = transform;
+    obj.mat_id = mat_id;
+    obj.hyperboloid = hyperboloid;
+    
+    return obj;    
 }
 
-void 
-object_init_triangle_mesh(Object *object, Transform transform, u32 mat_index, TriangleMesh mesh)
+Object 
+make_object_paraboloid(Transform transform, MaterialID mat_id, Paraboloid paraboloid)
 {
-    memset(object, 0, sizeof(*object));
-
-    object->type = Object_TriangleMesh;
-    object->transform = transform;
-    object->mat_index = mat_index;
-    object->triangle_mesh = mesh;
+    Object obj = {0};
+    
+    obj.type = Object_Paraboloid;
+    obj.transform = transform;
+    obj.mat_id = mat_id;
+    obj.paraboloid = paraboloid;
+    
+    return obj;    
 }
 
+Object 
+make_object_triangle_mesh(Transform transform, MaterialID mat_id, TriangleMesh mesh)
+{
+    Object obj = {0};
+    
+    obj.type = Object_TriangleMesh;
+    obj.transform = transform;
+    obj.mat_id = mat_id;
+    obj.triangle_mesh = mesh;
+    
+    return obj;    
+}
+
+
+
+ObjectID 
+objects_append(ObjectArray *objects, Object object)
+{
+    ObjectID result = { INVALID_ID };
+    
+    if (objects->count + 1 < objects->max_count)
+    {
+        u32 index = result.id = objects->count++;
+        *(objects->objects + index) = object;
+    }
+    else 
+    {
+        fprintf(stderr, "[ERROR] Object array %p size exceeded\n", objects);
+    }
+    
+    return result;
+}

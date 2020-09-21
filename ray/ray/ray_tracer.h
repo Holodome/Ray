@@ -7,11 +7,16 @@
 
 #include "image.h"
 
+#define INVALID_ID U32_MAX
+#define is_valid_id(id_) ((id_).id != INVALID_ID)
+
 //
 // Ray
 //
 
+// Structure containing data about single ray, shot from camera or later bounced from some surface
 typedef struct {
+    // 
     Vec3 origin;
     // Normalized direction vector
     Vec3 direction;
@@ -108,11 +113,17 @@ enum {
     Texture_Normal,
 };
 
+// Some data is not essential for texture to function, but is useful when saving and loading scenes
+// This meta data is put to separate structure not to be confused with useful info
 typedef union {
     struct {
         char *filename;
     } image;
 } TextureMetaData;
+
+typedef struct {
+    u32 id;
+} TextureID;
 
 // @TODO(hl): Think if we can use texture indices instead of pointers
 typedef struct Texture {
@@ -122,8 +133,8 @@ typedef struct Texture {
 			Vec3 color;
 		} solid;
 		struct {
-			struct Texture *texture1;
-			struct Texture *texture2;
+			TextureID texture1;
+			TextureID texture2;
 			
 			f32 mix_value;
 		} scale, mix, checkered;
@@ -141,17 +152,29 @@ typedef struct Texture {
     TextureMetaData meta;
 } Texture;
 
-// Texture initialization functions
-void texture_init_solid(Texture *texture, Vec3 c);
-void texture_init_scale(Texture *texture, Texture *texture1, Texture *texture2);
-void texture_init_mix(Texture *texture, Texture *texture1, Texture *texture2, f32 mix);
-void texture_init_bilerp(Texture *texture, Vec3 c00, Vec3 c01, Vec3 c10, Vec3 c11);
-void texture_init_uv(Texture *texture);
-void texture_init_checkered(Texture *texture, Texture *texture1, Texture *texture2);
-void texture_init_image(Texture *texture, char *filename);
+// @NOTE(hl): It is kinda stupid that here are several structures array-like structures
+// They all use ids to operate
+// So it may be wiser, if we were in C++, to use generics here but whatever 
+typedef struct {
+    Texture *textures;
+    u32      count;
+    u32      max_count;
+} TextureArray;
 
 // Returns texture color in given position
-Vec3 sample_texture(Texture *texture, Vec2 uv, Vec3 hit_point);
+Vec3 sample_texture(TextureArray *textures, TextureID id, Vec2 uv, Vec3 hit_point);
+
+// These functions create new texture from given parameters and append it to texture array if it has enough space
+// Id of texture is returned, which can be used in creating materails
+// @TODO(hl): Change this to single append functtion and move texture constructors to other place
+TextureID textures_append_solid    (TextureArray *textures, Vec3 c);
+TextureID textures_append_scale    (TextureArray *textures, TextureID texture1, TextureID texture2);
+TextureID textures_append_mix      (TextureArray *textures, TextureID texture1, TextureID texture2, f32 mix);
+TextureID textures_append_bilerp   (TextureArray *textures, Vec3 c00, Vec3 c01, Vec3 c10, Vec3 c11);
+TextureID textures_append_uv       (TextureArray *textures);
+TextureID textures_append_checkered(TextureArray *textures, TextureID texture1, TextureID texture2);
+TextureID textures_append_image    (TextureArray *textures, char *filename);
+
 
 //
 // Materials
@@ -172,8 +195,20 @@ typedef struct {
     
     Vec3 emit_color;
     
-    Texture *texture;
+    TextureID texture;
 } Material;
+
+typedef struct {
+    u32 id;
+} MaterialID;
+
+typedef struct {
+    Material *materials;
+    u32       count;
+    u32       max_count;
+} MaterialArray;
+
+MaterialID materials_append(MaterialArray *materials, Material material);
 
 //
 // Scene objects
@@ -205,6 +240,7 @@ typedef struct {
     Vec3 normal;
 } Triangle;
 
+// @TODO
 typedef struct {
     f32 radius;
     f32 height;
@@ -213,6 +249,7 @@ typedef struct {
     Vec3 p;
 } Cylinder;
 
+// @TODO
 typedef struct {
     f32 radius;
     f32 height;
@@ -221,9 +258,11 @@ typedef struct {
     Vec3 p;
 } Cone;
 
+// @TODO
 typedef struct {
 } Paraboloid;
 
+// @TODO
 typedef struct {
 } Hyperboloid;
 
@@ -235,7 +274,7 @@ typedef struct {
 // The idea is, rather than to have AABB which is built around 3 normals (x, y, z axes),
 // we have more normals to pick min and max points for.
 // This too simplifies surface, but does not leave so much space wasted in typical AABB
-static Vec3 plane_set_normals[] = {
+static const Vec3 BVH_PLANE_SET_NORMALS[] = {
     { .x = 1,            .y = 0,            .z = 0          }, 
     { .x = 0,            .y = 1,            .z = 0          }, 
     { .x = 0,            .y = 0,            .z = 1          }, 
@@ -244,12 +283,17 @@ static Vec3 plane_set_normals[] = {
     { .x = -SQRT3_OVER3, .y = -SQRT3_OVER3, .z = SQRT3_OVER3}, 
     { .x =  SQRT3_OVER3, .y = -SQRT3_OVER3, .z = SQRT3_OVER3}
 };
-#define BVH_NUM_PLANE_SET_NORMALS array_size(plane_set_normals)
+#if 1
+#define BVH_PLANE_SET_NORMALS_COUNT array_size(BVH_PLANE_SET_NORMALS)
+#else 
+// @NOTE(hl): For testing. This way we have 3-normal bounding box (which is simply AABB)
+#define BVH_PLANE_SET_NORMALS_COUNT 3 
+#endif 
 
 typedef struct {
     // Min and max distances along every normal
-    f32 dmin[BVH_NUM_PLANE_SET_NORMALS];
-    f32 dmax[BVH_NUM_PLANE_SET_NORMALS];
+    f32 dmin[BVH_PLANE_SET_NORMALS_COUNT];
+    f32 dmax[BVH_PLANE_SET_NORMALS_COUNT];
 } Extents;
 
 typedef struct OctreeNode {
@@ -289,10 +333,48 @@ typedef struct {
 //
 
 // @TODO(hl): Make transforms be able to scale (may need to change intersection algorithms)
+// Holds object-to-world and its inverse (world-to-object) matrix.
+// Basically only o2s could do, but we store its inverse to speed up some computations where we need to make it
 typedef struct {
     Mat4x4 o2w;
     Mat4x4 w2o;
 } Transform;
+
+// Animated transform strcuture for space-time raytracing
+typedef struct {
+    // Supplied via constructor call
+    Transform start_transform;
+    Transform end_transform;
+    f32       start_time;
+    f32       end_time;
+    // Decomposed from original data
+    Vec3   t[2];
+    Quat4  r[2];
+    Mat4x4 s[2];
+} DynamicTransform;
+
+inline void 
+decompose(Mat4x4 m, Vec3 t[2], Quat4 r[2], Mat4x4 s[2])
+{
+    
+}
+
+inline DynamicTransform
+dynamic_transform(Transform start_transform,
+                  Transform end_transform,
+                  f32       start_time,
+                  f32       end_time)
+{
+    DynamicTransform result = {0};
+    result.start_transform = start_transform;
+    result.end_transform = end_transform;
+    result.start_time = start_time;
+    result.end_time = end_time;
+    
+    
+    
+    return result;
+}
 
 #define empty_transform() ( (Transform){ .o2w = mat4x4_identity(), .w2o = mat4x4_identity() } )
 inline Transform 
@@ -353,7 +435,7 @@ typedef union {
 
 typedef struct {
     ObjectType type;
-    u32 mat_index;
+    MaterialID mat_id;
     Transform transform;
     union {
         Sphere sphere;
@@ -368,29 +450,41 @@ typedef struct {
     };
 } Object;
 
-// @TODO(hl): Move mat_index parameter to front
-void object_init_sphere(Object *object, Transform transform, u32 mat_index, Sphere sphere);
-void object_init_plane(Object *object, Transform transform, u32 mat_index, Plane plane);
-void object_init_disk(Object *object, Transform transform, u32 mat_index, Disk disk);
-void object_init_triangle(Object *object, Transform transform, u32 mat_index, Triangle triangle);
-void object_init_cylinder(Object *object, Transform transform, u32 mat_index, Cylinder cylinder);
-void object_init_cone(Object *object, Transform transform, u32 mat_index, Cone cone);
-void object_init_hyperboloid(Object *object, Transform transform, u32 mat_index, Hyperboloid hyperboloid);
-void object_init_paraboloid(Object *object, Transform transform, u32 mat_index, Paraboloid paraboloid);
-void object_init_triangle_mesh(Object *object, Transform transform, u32 mat_index, TriangleMesh mesh);
+Object make_object_sphere(Transform transform, MaterialID mat_id, Sphere sphere);
+Object make_object_plane(Transform transform, MaterialID mat_id, Plane plane);
+Object make_object_disk(Transform transform, MaterialID mat_id, Disk disk);
+Object make_object_triangle(Transform transform, MaterialID mat_id, Triangle triangle);
+Object make_object_cylinder(Transform transform, MaterialID mat_id, Cylinder cylinder);
+Object make_object_cone(Transform transform, MaterialID mat_id, Cone cone);
+Object make_object_hyperboloid(Transform transform, MaterialID mat_id, Hyperboloid hyperboloid);
+Object make_object_paraboloid(Transform transform, MaterialID mat_id, Paraboloid paraboloid);
+Object make_object_triangle_mesh(Transform transform, MaterialID mat_id, TriangleMesh mesh);
+
+typedef struct {
+    u32 id;
+} ObjectID;
+
+typedef struct {
+    Object *objects;
+    u32     count;
+    u32     max_count;
+} ObjectArray;
+
+ObjectID objects_append(ObjectArray *objects, Object object);
 
 //
 // Scene
 //
 
 typedef struct Scene {
+    // Memory arena used to allocate all scene stuff. This way to free scene we can only free arena,
+    // and do not deallocate each array separately
 	MemoryArena arena;
-    
-    u32 material_count;
-    Material *materials;
+    // Asset arrays
+    TextureArray  textures;
+    MaterialArray materials;
 	
-    u32 object_count;
-    Object *objects;
+    ObjectArray objects;
     
     Camera camera;
 } Scene;
@@ -411,7 +505,7 @@ typedef struct {
 
 typedef struct {
     Vec3 normal;
-    u32 mat_index;
+    MaterialID mat_id;
     f32 distance;
     // UV coordinates of hit position
     Vec2 uv;
@@ -432,7 +526,7 @@ hit_record_set_normal(HitRecord *record, Ray ray, Vec3 normal)
     
     record->normal = normal;
 }
-inline bool has_hit(HitRecord record) { return (record.mat_index != 0); }
+inline bool has_hit(HitRecord record) { return (is_valid_id(record.mat_id)); }
 
 #define RAY_TRACER_H 1
 #endif

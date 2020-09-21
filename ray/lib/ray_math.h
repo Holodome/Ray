@@ -10,13 +10,11 @@
 #undef min
 #endif 
 
-// @NOTE(hl): Relies on GCC/clang extension https://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html#Statement-Exprs
-// In C++ this would be done with templates
+// @NOTE(hl): These macros use gcc extensions
 #define max(a, b)     ({__typeof__(a) _a = a; __typeof__(b) _b = b; (_a > _b) ? (_a) : (_b); })
 #define min(a, b)     ({__typeof__(a) _a = a; __typeof__(b) _b = b; (_a < _b) ? (_a) : (_b); })
 #define max3(a, b, c) ({__typeof__(a) _a = a; __typeof__(b) _b = b; __typeof__(c) _c = c; (_a > _b) ? ((_a > _c) ? _a : _c) : ((_b > _c) ? _b : _c ); })
 #define min3(a, b, c) ({__typeof__(a) _a = a; __typeof__(b) _b = b; __typeof__(c) _c = c; (_a < _b) ? ((_a < _c) ? _a : _c) : ((_b < _c) ? _b : _c ); })
-#define var_swap(a, b)    ({__typeof__(a) temp = a; a = b; b = temp; (void)0; })
 
 #if !defined(RAY_MATH_H)
 
@@ -28,12 +26,17 @@
 // > Steam says that 100% of its users have SSE
 #include <xmmintrin.h>
 
+typedef union {
+    u32 u;
+    f32 f;
+} F32;
+
 // @NOTE(hl): IEEE Floating-point constants.
 // Altough nans and infs can be produced by dividing by zero, it is safer to just initialize them from hex representation
-#define F32_INF  ({ u32 p = 0x7F800000; *(f32 *)&p; })
-#define F32_MINF ({ u32 p = 0xFF800000; *(f32 *)&p; })
-#define F32_NANS ({ u32 p = 0x7F800001; *(f32 *)&p; })
-#define F32_NANQ ({ u32 p = 0x7FC00000; *(f32 *)&p; })
+#define F32_INF  (((F32) { .u = 0x7F800000 }).f)
+#define F32_MINF (((F32) { .u = 0xFF800000 }).f)
+#define F32_NANS (((F32) { .u = 0x7F800001 }).f)
+#define F32_NANQ (((F32) { .u = 0x7FC00000 }).f)
 
 // PI 
 #define PI      3.14159265359f
@@ -251,7 +254,9 @@ refract(Vec3 v, Vec3 n, f32 ior)
     }
     else 
     {
-        var_swap(etai, etat);
+        f32 temp = etai;
+        etai = etat;
+        etat = temp;
         n = vec3_neg(n);
     }
     
@@ -320,7 +325,11 @@ vec4_normalize(Vec4 a)
 }
 
 
-inline Vec4 vec4_from_vec3(Vec3 xyz, f32 w) { return (Vec4) { .x = xyz.x, .y = xyz.y, .z = xyz.z, .w = w }; }
+inline Vec4 
+vec4_from_vec3(Vec3 xyz, f32 w)
+{ 
+    return (Vec4) { .x = xyz.x, .y = xyz.y, .z = xyz.z, .w = w }; 
+}
 
 //
 // Color converters
@@ -451,6 +460,18 @@ box3(Vec3 min, Vec3 max)
 }
 
 inline Box3 
+box3_point(Vec3 p)
+{
+    return box3(p, p);
+}
+
+inline Box3 
+box3_empty(void)
+{
+    return box3(vec3s(F32_INF), vec3s(F32_MINF));    
+}
+
+inline Box3 
 box3_join(Box3 a, Box3 b)
 {
     Box3 result;
@@ -481,6 +502,24 @@ box3_extend(Box3 a, Vec3 p)
     
     return result;
 }
+
+inline Box3 
+box3_intersect(Box3 a, Box3 b)
+{
+    Box3 result;
+    
+    result.min.x = max32(a.min.x, b.min.x);
+    result.min.y = max32(a.min.y, b.min.y);
+    result.min.z = max32(a.min.z, b.min.z);
+    
+    result.max.x = min32(a.max.x, b.max.x);
+    result.max.y = min32(a.max.y, b.max.y);
+    result.max.z = min32(a.max.z, b.max.z);
+    
+    return result;
+}
+
+
 
 //
 // Quaternion
