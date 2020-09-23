@@ -196,7 +196,7 @@ sample_texture(TextureArray *textures, TextureID id, Vec2 uv, Vec3 hit_point)
         return vec3(0, 0, 0);
     }
     
-	Vec3 result = {0};
+	Vec3 result = {};
 	
     Texture *texture = textures->textures + id.id;
 	switch(texture->type)
@@ -298,7 +298,7 @@ materials_append(MaterialArray *materials, Material material)
 Object 
 make_object_sphere(Transform transform, MaterialID mat_id, Sphere sphere)
 {
-    Object obj = {0};
+    Object obj = {};
     
     obj.type = Object_Sphere;
     obj.transform = transform;
@@ -311,7 +311,7 @@ make_object_sphere(Transform transform, MaterialID mat_id, Sphere sphere)
 Object 
 make_object_plane(Transform transform, MaterialID mat_id, Plane plane)
 {
-    Object obj = {0};
+    Object obj = {};
     
     obj.type = Object_Plane;
     obj.transform = transform;
@@ -324,7 +324,7 @@ make_object_plane(Transform transform, MaterialID mat_id, Plane plane)
 Object 
 make_object_disk(Transform transform, MaterialID mat_id, Disk disk)
 {
-    Object obj = {0};
+    Object obj = {};
     
     obj.type = Object_Disk;
     obj.transform = transform;
@@ -337,7 +337,7 @@ make_object_disk(Transform transform, MaterialID mat_id, Disk disk)
 Object 
 make_object_triangle(Transform transform, MaterialID mat_id, Triangle triangle)
 {
-    Object obj = {0};
+    Object obj = {};
     
     obj.type = Object_Triangle;
     obj.transform = transform;
@@ -350,7 +350,7 @@ make_object_triangle(Transform transform, MaterialID mat_id, Triangle triangle)
 Object 
 make_object_cylinder(Transform transform, MaterialID mat_id, Cylinder cylinder)
 {
-    Object obj = {0};
+    Object obj = {};
     
     obj.type = Object_Cylinder;
     obj.transform = transform;
@@ -363,7 +363,7 @@ make_object_cylinder(Transform transform, MaterialID mat_id, Cylinder cylinder)
 Object 
 make_object_cone(Transform transform, MaterialID mat_id, Cone cone)
 {
-    Object obj = {0};
+    Object obj = {};
     
     obj.type = Object_Cone;
     obj.transform = transform;
@@ -376,7 +376,7 @@ make_object_cone(Transform transform, MaterialID mat_id, Cone cone)
 Object 
 make_object_hyperboloid(Transform transform, MaterialID mat_id, Hyperboloid hyperboloid)
 {
-    Object obj = {0};
+    Object obj = {};
     
     obj.type = Object_Hyperboloid;
     obj.transform = transform;
@@ -389,7 +389,7 @@ make_object_hyperboloid(Transform transform, MaterialID mat_id, Hyperboloid hype
 Object 
 make_object_paraboloid(Transform transform, MaterialID mat_id, Paraboloid paraboloid)
 {
-    Object obj = {0};
+    Object obj = {};
     
     obj.type = Object_Paraboloid;
     obj.transform = transform;
@@ -402,7 +402,7 @@ make_object_paraboloid(Transform transform, MaterialID mat_id, Paraboloid parabo
 Object 
 make_object_triangle_mesh(Transform transform, MaterialID mat_id, TriangleMesh mesh)
 {
-    Object obj = {0};
+    Object obj = {};
     
     obj.type = Object_TriangleMesh;
     obj.transform = transform;

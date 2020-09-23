@@ -4,7 +4,7 @@
 TemporaryMemory
 temporary_memory_begin(MemoryArena *pool)
 {
-	TemporaryMemory result = {0};
+	TemporaryMemory result = {};
 	result.pool = pool;
 	result.used = pool->used;
 
@@ -22,7 +22,7 @@ temporary_memory_end(TemporaryMemory temporary_memory)
 MemoryArena
 memory_arena(void *storage, u64 storage_size)
 {
-	MemoryArena result = {0};
+	MemoryArena result = {};
 	result.base = (u8 *)storage;
 	result.size = storage_size;
 	return result;
@@ -31,7 +31,7 @@ memory_arena(void *storage, u64 storage_size)
 MemoryArena
 memory_arena_dyn(u64 minimum_block_size)
 {
-	MemoryArena result = {0};
+	MemoryArena result = {};
 	result.is_dynamically_growing = true;
 	result.minimum_block_size     = minimum_block_size;
 	return result;

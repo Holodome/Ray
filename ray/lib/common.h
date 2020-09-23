@@ -37,10 +37,15 @@
 #define ATTRIBUTE(x) 
 #endif 
 
+// Ugly pre C11 way to compile-time assert
+#define ct_assert(exp) char __a##__LINE__[(exp) ? 1 : -1]
+
 #include <stdbool.h>
 
 #include <stdint.h>
 #include <float.h>
+
+#if 0
 
 typedef int8_t  i8;
 typedef int16_t i16;
@@ -51,9 +56,6 @@ typedef uint8_t  u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
-
-typedef float  f32;
-typedef double f64;
 
 typedef uintptr_t umm;
 typedef intptr_t  imm;
@@ -72,19 +74,59 @@ typedef intptr_t  imm;
 #define I64_MAX INT64_MAX
 #define I64_MIN INT64_MIN
 
+#define UMM_MAX UINTPTR_MAX
+#define IMM_MAX INTPTR_MAX
+#define IMM_MIN INTPTR_MIN
+
+#else 
+
+// @NOTE(hl): x86-64 defines. For some reason stdint.h on WSL is incorrect (WTF? - 64 bit types are defines as long, not long long )
+typedef char      i8;
+typedef short     i16;
+typedef int       i32;
+typedef long long i64;
+
+typedef unsigned char       u8;
+typedef unsigned short      u16;
+typedef unsigned int        u32;
+typedef unsigned long long  u64;
+
+#define U8_MAX  ((u8) 0xFF)
+#define U16_MAX ((u16)0xFFFF)
+#define U32_MAX ((u32)0xFFFFFFFF)
+#define U64_MAX ((u64)0xFFFFFFFFFFFFFFFF)
+
+#define I8_MAX  ((i8) 127)
+#define I8_MIN  ((i8)(-127 - 1))
+#define I16_MAX ((i16)32767)
+#define I16_MIN ((i16)(-32767 - 1))
+#define I32_MAX ((i32)2147483647)
+#define I32_MIN ((i32)(-2147483647 - 1))
+#define I64_MAX ((i64)9223372036854775807)
+#define I64_MIN ((i64)(-9223372036854775807 - 1))
+
+typedef u64 umm;
+typedef u64 imm;
+
+#define UMM_MAX U64_MAX
+#define IMM_MAX I64_MAX
+#define IMM_MIN I64_MIN
+
+#endif 
+
+typedef float  f32;
+typedef double f64;
+
 #define F32_MAX FLT_MAX
 #define F32_MIN FLT_MIN
 #define F64_MAX DBL_MAX
 #define F64_MIN DBL_MIN
 
-#define UMM_MAX UINTPTR_MAX
-#define IMM_MAX INTPTR_MAX
-#define IMM_MIN INTPTR_MIN
-
 #include <assert.h>
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <ctype.h>
 #include <time.h>

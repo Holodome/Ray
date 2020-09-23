@@ -365,7 +365,7 @@ dynamic_transform(Transform start_transform,
                   f32       start_time,
                   f32       end_time)
 {
-    DynamicTransform result = {0};
+    DynamicTransform result = {};
     result.start_transform = start_transform;
     result.end_transform = end_transform;
     result.start_time = start_time;
@@ -387,7 +387,7 @@ make_transform_o2w(Mat4x4 object_to_world)
     return result; 
 }
 
-inline Transform
+Transform
 make_transform(Vec3 translation, Vec3 rotation)
 {
     // Operations are done in SRT order
@@ -429,7 +429,6 @@ typedef union {
     struct {
         bool is_from_file;
         char *filename;
-        
     } triangle_mesh;
 } ObjectMetaData;
 
@@ -437,6 +436,7 @@ typedef struct {
     ObjectType type;
     MaterialID mat_id;
     Transform transform;
+    ObjectMetaData meta;
     union {
         Sphere sphere;
         Plane  plane;
@@ -476,7 +476,7 @@ ObjectID objects_append(ObjectArray *objects, Object object);
 // Scene
 //
 
-typedef struct Scene {
+typedef struct {
     // Memory arena used to allocate all scene stuff. This way to free scene we can only free arena,
     // and do not deallocate each array separately
 	MemoryArena arena;

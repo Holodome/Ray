@@ -96,7 +96,7 @@ ray_cast(CastState *state, Ray ws_ray, HitRecord *hit_record)
 {    
     Scene *scene = state->scene;
     
-    Vec3 ray_cast_color = {0};
+    Vec3 ray_cast_color = {};
     
     f32 precomputed_numerator  [BVH_PLANE_SET_NORMALS_COUNT];
     f32 precomputed_denumerator[BVH_PLANE_SET_NORMALS_COUNT];
@@ -200,7 +200,7 @@ ray_cast(CastState *state, Ray ws_ray, HitRecord *hit_record)
             {
                 Disk disk = object.disk;
                 
-                Vec3 disk_point = {0};
+                Vec3 disk_point = {};
                 f32 denominator = dot(disk.normal, ray.direction);
                 if ((denominator < -tolerance) || (denominator > tolerance))
                 {
@@ -378,7 +378,7 @@ cast_sample_rays(CastState *state)
         {
             ++bounces_computed;
             
-            HitRecord hit_record = {0};
+            HitRecord hit_record = {};
             hit_record.distance = F32_MAX;
             ray_cast(state, ray, &hit_record);
             
@@ -488,7 +488,7 @@ render_tile(RenderWorkQueue *queue)
     
     ImageU32 *image = order->image;
     
-    CastState state = {0};
+    CastState state = {};
     state.scene = order->scene;
     state.series = order->random_series;
     state.rays_per_pixel = queue->rays_per_pixel;
@@ -538,7 +538,7 @@ TriangleMesh
 triangle_mesh(u32 nfaces, u32 *fi, u32 *vi, Vec3 *p, Vec3 *n, Vec2 *st)
 {
     // @TODO(hl): Use single malloc for all allocations to avoid heap fragmentation or whatever.
-    TriangleMesh result = {0};
+    TriangleMesh result = {};
     
     u32 k = 0, max_vertex_index = 0;
     for (u32 i = 0;
@@ -945,7 +945,7 @@ write_xz_rect(Object *objects, Vec2 xz0, Vec2 xz1, f32 y, MaterialID mat_id)
 // void 
 // make_cornell_box(Scene *scene, ImageU32 *image)
 // {
-//     static Material materials[9] = {0};
+//     static Material materials[9] = {};
 //     // materials[0].emit_color = vec3_muls(vec3(0.3f, 0.4f, 0.5f), 5);
 //     // materials[0].emit_color = vec3(.5f, .5f, .5f);
 //     // materials[1].texture = texture_solid_color(vec3(0.65f, 0.05f, 0.05f));
@@ -959,7 +959,7 @@ write_xz_rect(Object *objects, Vec2 xz0, Vec2 xz1, f32 y, MaterialID mat_id)
 //     // materials[7].texture = texture_solid_color(vec3(0.8f, 0.8f, 0.1f));
 //     // materials[8].texture = texture_solid_color(vec3(0.3f, 0.3f, 0.3f));
 	
-//     // static Plane planes[1] = {0};
+//     // static Plane planes[1] = {};
 //     // planes[0] = (Plane) {
 //     //     .normal = vec3(0, 0, 1),
 //     //     .mat_index = 8,  
@@ -968,7 +968,7 @@ write_xz_rect(Object *objects, Vec2 xz0, Vec2 xz1, f32 y, MaterialID mat_id)
 //     // scene->planes = planes;
 //     // scene->plane_count = array_size(planes);
 	
-//     static Triangle triangles[12] = {0};
+//     static Triangle triangles[12] = {};
 //     write_yz_rect(triangles, vec2(-5, -5), vec2(5, 5), -5, 1);
 //     write_yz_rect(triangles + 2, vec2(-5, -5), vec2(5, 5),  5, 3);
 //     f32 d = 1.2f;
@@ -985,7 +985,7 @@ write_xz_rect(Object *objects, Vec2 xz0, Vec2 xz1, f32 y, MaterialID mat_id)
 //     scene->mesh_count = array_size(meshes);
 //     scene->meshes = meshes;
     
-//     // static Sphere spheres[2] = {0};
+//     // static Sphere spheres[2] = {};
 //     // spheres[0] = (Sphere) {
 //     //     .mat_index = 6,
 //     //     .pos = vec3(1.4f, -2.3f, -3.5f),
@@ -1155,7 +1155,7 @@ main(int argc, char **argv)
 {
     printf("Ray started!\n");
     
-    RaySettings settings = {0};
+    RaySettings settings = {};
     settings.output_filename = "out.png";
     settings.output_width = 600;
     settings.output_height = 600;
@@ -1169,11 +1169,11 @@ main(int argc, char **argv)
     printf("\n");
     
     // Raycasting output is simply an image
-    ImageU32 image = {0};
+    ImageU32 image = {};
     image_u32_init(&image, settings.output_width, settings.output_height);
 	
     // Initialize scene
-    Scene scene = {0};
+    Scene scene = {};
 	// make_test_scene(&scene, &image);
 	init_sample_scene(&scene, &image);
     
@@ -1185,6 +1185,8 @@ main(int argc, char **argv)
     // Get core count to initialize threads
     u32 core_count = settings.thread_count;
     u32 threads_available_count = sys_get_processor_count();
+    // @NOTE(hl): In case something on platform side is broken
+    assert(threads_available_count != 0);
     if (core_count == 0)
     {
         core_count = threads_available_count;
@@ -1202,14 +1204,14 @@ main(int argc, char **argv)
     u32 tile_count_y = (image.height + tile_height - 1) / tile_height;
     u32 total_tile_count = tile_count_x * tile_count_y;
 	
-    printf("Core count: %d, tile size: %u %ux%u (%lluk/tile)\n", core_count, total_tile_count, tile_width, tile_height,
+    printf("Core count: %d, tile size: %u %ux%u (%luk/tile)\n", core_count, total_tile_count, tile_width, tile_height,
            (tile_width * tile_height * sizeof(u32)) / 1024);
 	
     // Initialize multithreaded work orders for rendering
     // Because all tiles respond for different pixel groups with no intersections, we can have
     // lockless write access to image. And since we also only read from scene structure,
     // we have no locks at all.
-    RenderWorkQueue queue = {0};
+    RenderWorkQueue queue = {};
     queue.rays_per_pixel = settings.rays_per_pixel;
     queue.max_bounce_count = settings.max_bounce_count;
     queue.work_orders = malloc(sizeof(RenderWorkOrder) * total_tile_count);

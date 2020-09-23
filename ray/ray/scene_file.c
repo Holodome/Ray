@@ -13,7 +13,7 @@ scene_write_to_scene_file(Scene *scene, char *filename)
     u64 rect_count = scene->rect_count;
     u64 triangle_count = scene->triangle_count;
     
-    SceneFileHeader header = {0};
+    SceneFileHeader header = {};
     header.magic_number = SCENE_FILE_MAGIC_NUMBER;
     header.version = SCENE_FILE_VERSION;
     header.material_count = material_count;

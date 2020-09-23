@@ -8,10 +8,10 @@ if %ERRORLEVEL% neq 0 call "C:\Program Files (x86)\Microsoft Visual Studio\2019\
 if not exist .\build mkdir build 
 pushd build 
 
-copy ..\src\Thirdparty\stb_image_write.h stb_image_write.c
-copy ..\src\Thirdparty\stb_sprintf.h stb_sprintf.c
-copy ..\src\Thirdparty\stb_image.h stb_image.c
-copy ..\src\Thirdparty\stb_truetype.h stb_truetype.c
+copy ..\thirdparty\stb_image_write.h stb_image_write.c
+copy ..\thirdparty\stb_sprintf.h stb_sprintf.c
+copy ..\thirdparty\stb_image.h stb_image.c
+copy ..\thirdparty\stb_truetype.h stb_truetype.c
 
 cl -DSTB_IMAGE_WRITE_IMPLEMENTATION=1 -c -O2 -EHsc -nologo stb_image_write.c
 cl -DSTB_SPRINTF_IMPLEMENTATION=1 -c -O2 -EHsc -nologo stb_sprintf.c

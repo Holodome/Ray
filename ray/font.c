@@ -35,7 +35,7 @@ font_load(Font *font, char *filename, f32 height, OpenGLRenderer *opengl)
 	u8 *loaded_atlas_data = (u8 *)malloc(atlas_width * atlas_height);
 	u32 *atlas_data       = (u32 *)malloc(atlas_width * atlas_height * sizeof(u32));
 
-	stbtt_pack_context context = {0};
+	stbtt_pack_context context = {};
 	stbtt_PackBegin(&context, loaded_atlas_data, atlas_width, atlas_height, 0, 1, 0);
 	stbtt_PackSetOversampling(&context, 2, 2);
 	stbtt_PackFontRange(&context, (u8 *)file_contents, 0, height, first_codepoint, codepoint_count, glyphs);

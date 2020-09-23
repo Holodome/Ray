@@ -19,7 +19,7 @@
 typedef THREAD_PROC_SIGNATURE(ThreadProc);
 
 typedef struct {
-    u32 id;  
+    u64 id;  
 } Thread;
 
 u32    sys_get_processor_count(void);

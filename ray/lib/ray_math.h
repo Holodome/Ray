@@ -263,7 +263,7 @@ refract(Vec3 v, Vec3 n, f32 ior)
     f32 eta = etai / etat;
     f32 k = 1 - eta * eta * (1 - cosi * cosi);
     
-    Vec3 result = {0};
+    Vec3 result = {};
     if (k >= 0)
     {
         result = vec3_add(vec3_muls(v, eta), vec3_muls(n, eta * cosi - sqrt32(k)));

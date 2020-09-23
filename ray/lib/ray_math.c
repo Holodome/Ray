@@ -467,7 +467,7 @@ normalize(Vec3 a)
 inline Vec3 
 normalize(Vec3 a)
 {
-    Vec3 result = {0};
+    Vec3 result = {};
     
     f32 length_sq = length_sq(a);
     if(length_sq > square(0.0001f))
@@ -511,7 +511,7 @@ linear1_to_srgb1(f32 l)
 inline Vec4 
 linear1_to_srgb255(Vec4 a)
 {
-    Vec4 result = {0};
+    Vec4 result = {};
     
     f32 one255 = 255.0f;
     
@@ -539,7 +539,7 @@ rgba_pack_4x8(Vec4 a)
 inline Mat4x4 
 mat4x4(void)
 {
-	Mat4x4 result = {0};
+	Mat4x4 result = {};
 	return result;
 }
 
@@ -694,7 +694,7 @@ mat4x4_look_at(Vec3 pos, Vec3 target)
 inline Mat4x4 
 mat4x4_mul(Mat4x4 a, Mat4x4 b)
 {
-    Mat4x4 result = {0};
+    Mat4x4 result = {};
 	for(u32 i = 0; 
         i < 4;
         ++i)
@@ -757,7 +757,7 @@ mat4x4_as_3x3_mul_vec3(Mat4x4 m, Vec3 v)
 inline Mat4x4 
 mat4x4_perspective(f32 fovy, f32 aspect, f32 near, f32 far)
 {
-    Mat4x4 result = {0};
+    Mat4x4 result = {};
     
     f32 thf = tan32(fovy / 2.0f);
 

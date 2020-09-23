@@ -177,7 +177,7 @@ cast_sample_rays(CastState *state)
 
             LaneF32 hit_distance = lane_u32(F32_MAX);
             LaneU32 hit_mat_index = lane_u32(0);
-            LaneVec3 next_normal = {0};
+            LaneVec3 next_normal = {};
 
             for (u32 plane_index = 0;
                 plane_index < world->plane_count;
