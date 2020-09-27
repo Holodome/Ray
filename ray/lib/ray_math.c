@@ -1,154 +1,5 @@
 #include "ray_math.h"
 
-inline f32
-reciprocal32(f32 a)
-{
-    f32 result = _mm_cvtss_f32(_mm_rcp_ss(_mm_set_ss(a)));
-    return result;
-}
-
-// @NOTE(hl): Performs truncation, like (i32)2.5f
-inline i32
-truncate32(f32 a)
-{
-    i32 result = _mm_cvtt_ss2si(_mm_set_ss(a));
-    return result;
-}
-
-inline i32
-round32(f32 a)
-{
-    i32 result = _mm_cvt_ss2si(_mm_set_ss(a + a + 0.5f)) >> 1;
-    return result;
-}
-
-inline i32
-floor32(f32 a)
-{
-    i32 result = _mm_cvt_ss2si(_mm_set_ss(a + a - 0.5f)) >> 1;
-    return result;
-}
-
-inline i32
-ceil32(f32 a)
-{
-    i32 result = -(_mm_cvt_ss2si(_mm_set_ss(-0.5f - (a + a))) >> 1);
-    return result;
-}
-
-inline f32
-sqrt32(f32 a)
-{
-    f32 result = _mm_cvtss_f32(_mm_sqrt_ss(_mm_set_ss(a)));
-    return result;
-}
-
-inline f32
-rsqrt32(f32 a)
-{
-    f32 result = _mm_cvtss_f32(_mm_rsqrt_ss(_mm_set_ss(a)));
-    return result;
-}
-
-inline f32 
-max32(f32 a, f32 b)
-{
-    return _mm_cvtss_f32(_mm_max_ss(_mm_set_ss(a), _mm_set_ss(b)));
-}
-
-inline f32 
-min32(f32 a, f32 b)
-{
-    return _mm_cvtss_f32(_mm_min_ss(_mm_set_ss(a), _mm_set_ss(b)));
-}
-
-inline f32
-sin32(f32 a)
-{
-    f32 result = __builtin_sinf(a);
-    return result;
-}
-
-inline f32
-cos32(f32 a)
-{
-    f32 result = __builtin_cosf(a);
-    return result;
-}
-
-inline f32 
-asin32(f32 a)
-{
-    f32 result = __builtin_asinf(a);
-    return result;
-}
-
-inline f32
-atan232(f32 y, f32 x)
-{
-    f32 result = __builtin_atan2f(y, x);
-    return result;
-}
-
-inline f32
-tan32(f32 a)
-{
-    f32 result = __builtin_tanf(a);
-    return result;
-}
-
-inline f32
-mod32(f32 a, f32 b)
-{
-	f32 result = __builtin_fmodf(a, b);
-	return result;
-}
-
-inline f32 
-pow32(f32 a, f32 b)
-{
-    f32 result = __builtin_powf(a, b);
-    return result;
-}
-
-inline bool
-is_power_of_two(u32 x)
-{
-	bool result = (x & (x - 1)) == 0;
-	return result;
-}
-
-inline f32
-lerp(f32 a, f32 b, f32 t)
-{
-	f32 result = a + (b - a) * t;
-	return result;
-}
-
-inline f32
-clamp(f32 a, f32 low, f32 high)
-{
-	f32 result = ((a < low) ? low : (a > high) ? high : a);
-	return result;
-}
-
-inline f32
-clamp01(f32 a)
-{
-	f32 result = clamp(a, 0, 1);
-	return result;
-}
-
-inline f32
-abs32(f32 a)
-{
-    u32 temp = *(u32 *)&a;
-    temp &= 0x7FFFFFFF;
-    f32 result = *(f32 *)&temp;
-    return result;
-}
-
-
 inline Vec2
 vec2_neg(Vec2 a)
 {
@@ -457,8 +308,7 @@ length(Vec3 a)
 inline Vec3 
 normalize(Vec3 a)
 {
-    f32 coef    = rsqrt32(dot(a, a));
-    Vec3 result = vec3_muls(a, coef);
+    Vec3 result = vec3_muls(a, rsqrt32(dot(a, a)));
     return result;
 }
 
@@ -503,7 +353,7 @@ linear1_to_srgb1(f32 l)
     f32 s = l * 12.92f;
     if (l > 0.0031308f)
     {
-        s = 1.055f * pow32(l, reciprocal32(2.4f)) - 0.055f;
+        s = 1.055f * powf(l, reciprocal32(2.4f)) - 0.055f;
     }
     return s;
 }
@@ -585,8 +435,8 @@ mat4x4_scale(Vec3 s) {
 
 inline Mat4x4
 mat4x4_rotate_x(f32 angle) {
-	const f32 c = cos32(angle);
-	const f32 s = sin32(angle);
+	const f32 c = cosf(angle);
+	const f32 s = sinf(angle);
 	Mat4x4 r =
 	{{
 			{1, 0, 0, 0},
@@ -599,8 +449,8 @@ mat4x4_rotate_x(f32 angle) {
 
 inline Mat4x4
 mat4x4_rotate_y(f32 angle) {
-	const f32 c = cos32(angle);
-	const f32 s = sin32(angle);
+	const f32 c = cosf(angle);
+	const f32 s = sinf(angle);
 	Mat4x4 r =
 	{{
 			{ c, 0, s, 0},
@@ -613,8 +463,8 @@ mat4x4_rotate_y(f32 angle) {
 
 inline Mat4x4
 mat4x4_rotate_z(f32 angle) {
-	const f32 c = cos32(angle);
-	const f32 s = sin32(angle);
+	const f32 c = cosf(angle);
+	const f32 s = sinf(angle);
 	Mat4x4 r =
 	{{
 			{c,-s, 0, 0},
@@ -627,8 +477,8 @@ mat4x4_rotate_z(f32 angle) {
 
 inline Mat4x4
 mat4x4_rotate(f32 angle, Vec3 a) {
-	const f32 c = cos32(angle);
-	const f32 s = sin32(angle);
+	const f32 c = cosf(angle);
+	const f32 s = sinf(angle);
 	a = normalize(a);
 	
 	const f32 tx = (1.0f - c) * a.x;
@@ -759,7 +609,7 @@ mat4x4_perspective(f32 fovy, f32 aspect, f32 near, f32 far)
 {
     Mat4x4 result = {};
     
-    f32 thf = tan32(fovy / 2.0f);
+    f32 thf = tanf(fovy / 2.0f);
 
 	result.e[0][0] = 1.0f / (aspect * thf);
 	result.e[1][1] = 1.0f / (thf);

@@ -231,8 +231,8 @@ sample_texture(TextureArray *textures, TextureID id, Vec2 uv, Vec3 hit_point)
 		} break;
 		case Texture_Checkered:
 		{
-			if ((mod32(abs32(hit_point.x + 10000.0f), 2.0f) > 1.0f) - 
-                (mod32(abs32(hit_point.y + 10000.0f), 2.0f) > 1.0f))
+			if ((fmodf(abs32(hit_point.x + 10000.0f), 2.0f) > 1.0f) - 
+                (fmodf(abs32(hit_point.y + 10000.0f), 2.0f) > 1.0f))
 			{
 				result = sample_texture(textures, texture->checkered.texture1, uv, hit_point);
 			}

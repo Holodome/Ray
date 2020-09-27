@@ -184,8 +184,8 @@ ray_cast(CastState *state, Ray ws_ray, HitRecord *hit_record)
                         hit_record->hit_point = ray_point_at(ray, t);
                         // @TODO(hl): Check if it is faster to do  x - floor(x) 
 #if 1
-                        hit_record->uv.u = mod32(hit_record->hit_point.x, 1.0f);
-                        hit_record->uv.v = mod32(hit_record->hit_point.y, 1.0f);
+                        hit_record->uv.u = fmodf(hit_record->hit_point.x, 1.0f);
+                        hit_record->uv.v = fmodf(hit_record->hit_point.y, 1.0f);
 #else   
                         f32 hx = hit_record->hit_point.x;
                         f32 hy = hit_record->hit_point.y;
@@ -219,7 +219,7 @@ ray_cast(CastState *state, Ray ws_ray, HitRecord *hit_record)
                             
                             // @TODO(hl): Check this!
                             f32 phi_max = TWO_PI;
-                            f32 phi = atan232(hit_point.y, hit_point.x);
+                            f32 phi = atan2f(hit_point.y, hit_point.x);
                             if (phi < 0) 
                             {
                                 phi += TWO_PI;
@@ -319,7 +319,7 @@ ray_cast(CastState *state, Ray ws_ray, HitRecord *hit_record)
                                 hit_record->mat_id = object.mat_id;
                                 hit_record->hit_point = ray_point_at(ray, hit_record->distance);
                                 hit_record->normal = normal;
-                                // hit_record_set_normal(hit_record, ray, normal);
+                                hit_record_set_normal(hit_record, ray, normal);
                                 // @TODO(hl): This have to be interpolation between triangle vertices uvs too
                                 hit_record->uv = vec2(u, v);
                                 has_hit = true;
@@ -340,7 +340,6 @@ ray_cast(CastState *state, Ray ws_ray, HitRecord *hit_record)
             Vec3 ws_n = normalize(mat4x4_as_3x3_mul_vec3(object.transform.o2w, hit_record->normal));
             
             hit_record->hit_point = ws_p;
-            // Since normal is in world space
             hit_record_set_normal(hit_record, ws_ray, ws_n);
         }
     }
@@ -648,9 +647,9 @@ make_poly_sphere(f32 r, u32 divs)
         for (u32 j = 0; 
              j < divs;
              j++) { 
-            f32 x = r * cos32(u) * cos32(v); 
-            f32 z = r * sin32(u); 
-            f32 y = r * cos32(u) * sin32(v) ; 
+            f32 x = r * cosf(u) * cosf(v); 
+            f32 z = r * sinf(u); 
+            f32 y = r * cosf(u) * sinf(v) ; 
             P[k] = N[k] = vec3(x, y, z); 
             st[k].x = u / PI + 0.5; 
             st[k].y = v * 0.5 / PI + 0.5; 
@@ -864,9 +863,8 @@ init_sample_scene(Scene *scene, ImageU32 *image)
     scene->camera = make_camera(vec3_muls(vec3(-1.5, -6, 1.5), 1.5f), image);
 }
 
-#if 0
-Object *
-write_yz_rect(Object *objects, Vec2 yz0, Vec2 yz1, f32 x, MaterialID mat_id)
+void
+write_yz_rect(ObjectArray *objects, Vec2 yz0, Vec2 yz1, f32 x, MaterialID mat_id, Transform transform)
 {
     Vec3 v00 = vec3(x, yz0.x, yz0.y);
     Vec3 v01 = vec3(x, yz0.x, yz1.y);
@@ -875,23 +873,22 @@ write_yz_rect(Object *objects, Vec2 yz0, Vec2 yz1, f32 x, MaterialID mat_id)
     
     Vec3 normal = normalize(cross(vec3_sub(v01, v00), vec3_sub(v10, v00)));
     
-    object_init_triangle(objects++, empty_transform(), mat_id, (Triangle) {
+    objects_append(objects, make_object_triangle(transform, mat_id, (Triangle) {
         .vertex0 = v00,
         .vertex1 = v01,
         .vertex2 = v11,
         .normal = normal,
-    });
-    object_init_triangle(objects++, empty_transform(), mat_id, (Triangle) {
+    }));
+    objects_append(objects, make_object_triangle(transform, mat_id, (Triangle) {
         .vertex0 = v00,
         .vertex1 = v11,
         .vertex2 = v10,
         .normal = normal,
-    });
-    return objects;
+    }));
 }
 
-Object * 
-write_xy_rect(Object *objects, Vec2 xy0, Vec2 xy1, f32 z, MaterialID mat_id)
+void
+write_xy_rect(ObjectArray *objects, Vec2 xy0, Vec2 xy1, f32 z, MaterialID mat_id, Transform transform)
 {
     Vec3 v00 = vec3(xy0.x, xy0.y, z);
     Vec3 v01 = vec3(xy0.x, xy1.y, z);
@@ -900,23 +897,22 @@ write_xy_rect(Object *objects, Vec2 xy0, Vec2 xy1, f32 z, MaterialID mat_id)
     
     Vec3 normal = normalize(cross(vec3_sub(v01, v00), vec3_sub(v10, v00)));
     
-    object_init_triangle(objects++, empty_transform(), mat_id, (Triangle) {
+    objects_append(objects, make_object_triangle(transform, mat_id, (Triangle) {
         .vertex0 = v00,
         .vertex1 = v01,
         .vertex2 = v11,
         .normal = normal,
-    });
-    object_init_triangle(objects++, empty_transform(), mat_id, (Triangle) {
+    }));
+    objects_append(objects, make_object_triangle(transform, mat_id, (Triangle) {
         .vertex0 = v00,
         .vertex1 = v11,
         .vertex2 = v10,
         .normal = normal,
-    });
-    return objects;
+    }));
 }
 
-Object *  
-write_xz_rect(Object *objects, Vec2 xz0, Vec2 xz1, f32 y, MaterialID mat_id)
+void
+write_xz_rect(ObjectArray *objects, Vec2 xz0, Vec2 xz1, f32 y, MaterialID mat_id, Transform transform)
 {
     Vec3 v00 = vec3(xz0.x, y, xz0.y);
     Vec3 v01 = vec3(xz0.x, y, xz1.y);
@@ -925,99 +921,128 @@ write_xz_rect(Object *objects, Vec2 xz0, Vec2 xz1, f32 y, MaterialID mat_id)
     
     Vec3 normal = normalize(cross(vec3_sub(v01, v00), vec3_sub(v10, v00)));
     
-    object_init_triangle(objects++, empty_transform(), mat_id, (Triangle) {
+    objects_append(objects, make_object_triangle(transform, mat_id, (Triangle) {
         .vertex0 = v00,
         .vertex1 = v01,
         .vertex2 = v11,
         .normal = normal,
-    });
-    object_init_triangle(objects++, empty_transform(), mat_id, (Triangle) {
+    }));
+    objects_append(objects, make_object_triangle(transform, mat_id, (Triangle) {
         .vertex0 = v00,
         .vertex1 = v11,
         .vertex2 = v10,
         .normal = normal,
-    });
-    return objects;
+    }));
 }
 
-#endif 
+void 
+objects_append_box(ObjectArray *objects, Box3 box, MaterialID mat_id, Transform transform)
+{
+    write_xy_rect(objects, vec2(box.min.x, box.min.y), vec2(box.max.x, box.max.y), box.min.z, mat_id, transform);
+    write_xy_rect(objects, vec2(box.min.x, box.min.y), vec2(box.max.x, box.max.y), box.max.z, mat_id, transform);
+    
+    write_xz_rect(objects, vec2(box.min.x, box.min.z), vec2(box.max.x, box.max.z), box.min.y, mat_id, transform);
+    write_xz_rect(objects, vec2(box.min.x, box.min.z), vec2(box.max.x, box.max.z), box.max.y, mat_id, transform);
 
-// void 
-// make_cornell_box(Scene *scene, ImageU32 *image)
-// {
-//     static Material materials[9] = {};
-//     // materials[0].emit_color = vec3_muls(vec3(0.3f, 0.4f, 0.5f), 5);
-//     // materials[0].emit_color = vec3(.5f, .5f, .5f);
-//     // materials[1].texture = texture_solid_color(vec3(0.65f, 0.05f, 0.05f));
-//     // materials[2].texture = texture_solid_color(vec3(0.73f, 0.73f, 0.73f));
-//     // materials[3].texture = texture_solid_color(vec3(0.12f, 0.45f, 0.15f));
-//     // f32 c = 30.0f;
-//     // materials[4].emit_color = vec3(c, c, c * 0.8f);
-//     // materials[5].texture = texture_image("e:\\dev\\ray\\data\\pano.jpg");
-//     // materials[6].texture = texture_solid_color(vec3(0.7f, 0.5f, 0.3f));
-//     // materials[6].refraction_probability = 1.0f;
-//     // materials[7].texture = texture_solid_color(vec3(0.8f, 0.8f, 0.1f));
-//     // materials[8].texture = texture_solid_color(vec3(0.3f, 0.3f, 0.3f));
+    write_yz_rect(objects, vec2(box.min.y, box.min.z), vec2(box.max.y, box.max.z), box.min.x, mat_id, transform);
+    write_yz_rect(objects, vec2(box.min.y, box.min.z), vec2(box.max.y, box.max.z), box.max.x, mat_id, transform);
+}
+
+void 
+make_cornell_box(Scene *scene, ImageU32 *image)
+{
+	u32 scene_memory_size = MEGABYTES(1);
+	scene->arena = memory_arena(malloc(scene_memory_size), scene_memory_size);
 	
-//     // static Plane planes[1] = {};
-//     // planes[0] = (Plane) {
-//     //     .normal = vec3(0, 0, 1),
-//     //     .mat_index = 8,  
-//     //     .dist = 0
-//     // };
-//     // scene->planes = planes;
-//     // scene->plane_count = array_size(planes);
+    scene->textures.max_count = 100;
+    scene->textures.textures = memory_arena_alloc_array(&scene->arena, Texture, scene->textures.max_count);
+    
+    scene->materials.max_count = 100;
+    scene->materials.materials = memory_arena_alloc_array(&scene->arena, Material, scene->materials.max_count);
+    
+    scene->objects.max_count = 100;
+    scene->objects.objects = memory_arena_alloc_array(&scene->arena, Object, scene->objects.max_count);
+    
+    TextureID red_tex = textures_append_solid(&scene->textures, vec3(0.65f, 0.05f, 0.05f));
+    TextureID white_tex = textures_append_solid(&scene->textures, vec3(0.73f, 0.73f, 0.73f));
+    TextureID green_tex = textures_append_solid(&scene->textures, vec3(0.12f, 0.45f, 0.15f));
+    
+    MaterialID bg_mat = materials_append(&scene->materials, (Material) {
+        .emit_color = vec3(0, 0, 0)
+    });
+    
+    MaterialID red_mat = materials_append(&scene->materials, (Material) {
+        .texture = red_tex
+    });
+    MaterialID white_mat = materials_append(&scene->materials, (Material) {
+        .texture = white_tex
+    });
+    MaterialID green_mat = materials_append(&scene->materials, (Material) {
+        .texture = green_tex
+    });
+    f32 c = 30.0f;
+    MaterialID light_mat = materials_append(&scene->materials, (Material) {
+        .emit_color = vec3(c, c, c * 0.8f)
+    });
+    
+    // materials[0].emit_color = vec3_muls(vec3(0.3f, 0.4f, 0.5f), 5);
+    // materials[0].emit_color = vec3(.5f, .5f, .5f);
+    // materials[1].texture = texture_solid_color(vec3(0.65f, 0.05f, 0.05f));
+    // materials[2].texture = texture_solid_color(vec3(0.73f, 0.73f, 0.73f));
+    // materials[3].texture = texture_solid_color(vec3(0.12f, 0.45f, 0.15f));
+    // f32 c = 30.0f;
+    // materials[4].emit_color = vec3(c, c, c * 0.8f);
+    // materials[5].texture = texture_image("e:\\dev\\ray\\data\\pano.jpg");
+    // materials[6].texture = texture_solid_color(vec3(0.7f, 0.5f, 0.3f));
+    // materials[6].refraction_probability = 1.0f;
+    // materials[7].texture = texture_solid_color(vec3(0.8f, 0.8f, 0.1f));
+    // materials[8].texture = texture_solid_color(vec3(0.3f, 0.3f, 0.3f));
 	
-//     static Triangle triangles[12] = {};
-//     write_yz_rect(triangles, vec2(-5, -5), vec2(5, 5), -5, 1);
-//     write_yz_rect(triangles + 2, vec2(-5, -5), vec2(5, 5),  5, 3);
-//     f32 d = 1.2f;
-//     write_xy_rect(triangles + 4, vec2(-d, -d), vec2(d, d),  4.99f, 4);
-//     write_xy_rect(triangles + 6, vec2(-5, -5), vec2(5, 5),  5.0f,  2);
-//     write_xy_rect(triangles + 8, vec2(-5, -5), vec2(5, 5), -5.0f,  2);
-//     write_xz_rect(triangles + 10, vec2(-5, -5), vec2(5, 5), 5.0f,  2);
-//     scene->triangles = triangles;
-//     scene->triangle_count = array_size(triangles);
+    // write_yz_rect(&scene->objects, vec2(-5, -5), vec2(5, 5), -5, red_mat, empty_transform());
+    write_yz_rect(&scene->objects, vec2(-5, -5), vec2(5, 5), -5, green_mat, empty_transform());
+    // write_yz_rect(&scene->objects, vec2(-5, -5), vec2(5, 5),  5, green_mat, empty_transform());
+    write_yz_rect(&scene->objects, vec2(-5, -5), vec2(5, 5),  5, red_mat, empty_transform());
+    f32 d = 1.2f;
+    write_xy_rect(&scene->objects, vec2(-d, -d), vec2(d, d),  4.99f, light_mat, empty_transform());
+    write_xy_rect(&scene->objects, vec2(-5, -5), vec2(5, 5),  5.0f,  white_mat, empty_transform());
+    write_xy_rect(&scene->objects, vec2(-5, -5), vec2(5, 5), -5.0f,  white_mat, empty_transform());
+    write_xz_rect(&scene->objects, vec2(-5, -5), vec2(5, 5), 5.0f,  white_mat, empty_transform());
     
-//     static TriangleMesh meshes[UTAH_TEAPOT_NUM_PATCHES] = { 0 };
-//     make_utah_teapot(meshes);
-//     for (u32 i = 0; i < UTAH_TEAPOT_NUM_PATCHES; ++i) meshes[i].mat_index = 2;
-//     scene->mesh_count = array_size(meshes);
-//     scene->meshes = meshes;
+    // static TriangleMesh meshes[UTAH_TEAPOT_NUM_PATCHES] = { 0 };
+    // make_utah_teapot(meshes);
+    // for (u32 i = 0; i < UTAH_TEAPOT_NUM_PATCHES; ++i) meshes[i].mat_index = 2;
+    // scene->mesh_count = array_size(meshes);
+    // scene->meshes = meshes;
     
-//     // static Sphere spheres[2] = {};
-//     // spheres[0] = (Sphere) {
-//     //     .mat_index = 6,
-//     //     .pos = vec3(1.4f, -2.3f, -3.5f),
-//     //     .radius = 1.5f
-//     // };
-//     // spheres[1] = (Sphere) {
-//     //     .mat_index = 5,
-//     //     .pos = vec3(-1.25f, 2.0f, -2.0f),
-//     //     .radius = 3.0f
-//     // };
-//     // scene->sphere_count = array_size(spheres);
-//     // scene->spheres = spheres;
+    // static Sphere spheres[2] = {};
+    // spheres[0] = (Sphere) {
+    //     .mat_index = 6,
+    //     .pos = vec3(1.4f, -2.3f, -3.5f),
+    //     .radius = 1.5f
+    // };
+    // spheres[1] = (Sphere) {
+    //     .mat_index = 5,
+    //     .pos = vec3(-1.25f, 2.0f, -2.0f),
+    //     .radius = 3.0f
+    // };
+    // scene->sphere_count = array_size(spheres);
+    // scene->spheres = spheres;
     
+    Transform box0_transform = make_transform(vec3(0, 0, 0), vec3(0, 0, -0.261799f * 1.3f));
+    Box3 box0 = { 
+        .min = vec3(0.7f, -3.3f, -5.0f),
+        .max = vec3(3.5f, -0.4f, -2.0f)
+    };
+    objects_append_box(&scene->objects, box0, white_mat, box0_transform);
+    Transform box1_transform = make_transform(vec3(0, 0, 0), vec3(0, 0, 0.314159265f));
+    Box3 box1 = {
+        .min = vec3(-2.75f, 0.3f, -5.0f),
+        .max = vec3(  0.2f, 3.3f,  0.95f)
+    };
+    objects_append_box(&scene->objects, box1, white_mat, box1_transform);
     
-    
-//     // Box3 box0 = { 
-//     //     .min = vec3(0.7f, -3.3f, -5.0f),
-//     //     .max = vec3(3.5f, -0.4f, -2.0f)
-//     // };
-//     // add_box(rects + 6, box0, 2,  0.261799f * 1.3f);
-//     // Box3 box1 = {
-//     //     .min = vec3(-2.75f, 0.3f, -5.0f),
-//     //     .max = vec3(  0.2f, 3.3f,  0.95f)
-//     // };
-//     // add_box(rects + 12, box1, 2, -0.314159265f);
-    
-//     // scene->camera = camera(vec3(0, -16, 4), image);
-//     scene->camera = make_camera(vec3(0, -16, 0), image);
-	
-//     scene->material_count = array_size(materials);
-//     scene->materials = materials;
-// }
+    scene->camera = make_camera(vec3(0, -16, 0), image);
+}
 
 static void 
 parse_command_line_arguments(RaySettings *settings, u32 argc, char **argv)
@@ -1175,7 +1200,7 @@ main(int argc, char **argv)
     // Initialize scene
     Scene scene = {};
 	// make_test_scene(&scene, &image);
-	init_sample_scene(&scene, &image);
+	make_cornell_box(&scene, &image);
     
     printf("Scene object count: %u\n", scene.objects.count);
 	// init_sample_scene(&scene, &image);
@@ -1204,8 +1229,8 @@ main(int argc, char **argv)
     u32 tile_count_y = (image.height + tile_height - 1) / tile_height;
     u32 total_tile_count = tile_count_x * tile_count_y;
 	
-    printf("Core count: %d, tile size: %u %ux%u (%luk/tile)\n", core_count, total_tile_count, tile_width, tile_height,
-           (tile_width * tile_height * sizeof(u32)) / 1024);
+    printf("Core count: %d, tile size: %u %ux%u (%uk/tile)\n", core_count, total_tile_count, tile_width, tile_height,
+           (u32)((tile_width * tile_height * sizeof(u32)) / 1024));
 	
     // Initialize multithreaded work orders for rendering
     // Because all tiles respond for different pixel groups with no intersections, we can have

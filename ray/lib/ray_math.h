@@ -21,10 +21,15 @@
 #include "common.h"
 #include <math.h>
 
-// SSE extensions. We assume everyone has them. 
-// https://store.steampowered.com/hwsurvey/Steam-Hardware-Software-Survey-Welcome-to-Steam?platform=pc 
-// > Steam says that 100% of its users have SSE
+// Flag that defines how we control optimizations - either we explicitly force compiler to use fast
+// sse instructions or hope it does that for us
+#if !defined(USE_SSE)
+#define USE_SSE 0
+#endif 
+
+#if USE_SSE 
 #include <xmmintrin.h>
+#endif 
 
 typedef union {
     u32 u;
@@ -33,10 +38,10 @@ typedef union {
 
 // @NOTE(hl): IEEE Floating-point constants.
 // Altough nans and infs can be produced by dividing by zero, it is safer to just initialize them from hex representation
-#define F32_INF  (((F32) { .u = 0x7F800000 }).f)
-#define F32_MINF (((F32) { .u = 0xFF800000 }).f)
-#define F32_NANS (((F32) { .u = 0x7F800001 }).f)
-#define F32_NANQ (((F32) { .u = 0x7FC00000 }).f)
+#define F32_INF  ( ((F32){ .u = 0x7F800000 }).f )
+#define F32_MINF ( ((F32){ .u = 0xFF800000 }).f )
+#define F32_NANS ( ((F32){ .u = 0x7F800001 }).f )
+#define F32_NANQ ( ((F32){ .u = 0x7FC00000 }).f )
 
 // PI 
 #define PI      3.14159265359f
@@ -73,30 +78,170 @@ typedef union {
 #define MEGABYTES(x) (KILOBYTES(x) << 10)
 
 // @NOTE(hl): Calculates fast 1.0f / x using special instruction, which is way faster than actually dividing
-inline f32 reciprocal32(f32 a);
-// @NOTE(hl): Performs truncation, like (i32)2.5f
-inline i32 truncate32(f32 a);
-inline i32 round32(f32 a);
-inline i32 floor32(f32 a);
-inline i32 ceil32(f32 a);
-inline f32 sqrt32(f32 a);
-// Reciprocal (inverse) square root
-inline f32 rsqrt32(f32 a);
-inline f32 sin32(f32 a);
-inline f32 cos32(f32 a);
-inline f32 asin32(f32 a);
-inline f32 acos32(f32 a) { return __builtin_acosf(a); }
-inline f32 atan232(f32 y, f32 x);
-inline f32 tan32(f32 a);
-inline f32 mod32(f32 a, f32 b);
-inline f32 pow32(f32 a, f32 b);
-inline bool is_power_of_two(u32 x);
-inline f32 lerp(f32 a, f32 b, f32 t);
-inline f32 clamp(f32 a, f32 low, f32 high);
-inline f32 clamp01(f32 a);
-inline f32 abs32(f32 a);
-inline f32 max32(f32 a, f32 b);
-inline f32 min32(f32 a, f32 b);
+#if USE_SSE
+    
+inline f32
+reciprocal32(f32 a)
+{
+    f32 result = _mm_cvtss_f32(_mm_rcp_ss(_mm_set_ss(a)));
+    return result;
+}
+
+inline i32
+truncate32(f32 a)
+{
+    i32 result = _mm_cvtt_ss2si(_mm_set_ss(a));
+    return result;
+}
+
+inline i32
+round32(f32 a)
+{
+    i32 result = _mm_cvt_ss2si(_mm_set_ss(a + a + 0.5f)) >> 1;
+    return result;
+}
+
+inline i32
+floor32(f32 a)
+{
+    i32 result = _mm_cvt_ss2si(_mm_set_ss(a + a - 0.5f)) >> 1;
+    return result;
+}
+
+inline i32
+ceil32(f32 a)
+{
+    i32 result = -(_mm_cvt_ss2si(_mm_set_ss(-0.5f - (a + a))) >> 1);
+    return result;
+}
+
+inline f32
+sqrt32(f32 a)
+{
+    f32 result = _mm_cvtss_f32(_mm_sqrt_ss(_mm_set_ss(a)));
+    return result;
+}
+
+inline f32
+rsqrt32(f32 a)
+{
+    f32 result = _mm_cvtss_f32(_mm_rsqrt_ss(_mm_set_ss(a)));
+    return result;
+}
+
+inline f32 
+max32(f32 a, f32 b)
+{
+    return _mm_cvtss_f32(_mm_max_ss(_mm_set_ss(a), _mm_set_ss(b)));
+}
+
+inline f32 
+min32(f32 a, f32 b)
+{
+    return _mm_cvtss_f32(_mm_min_ss(_mm_set_ss(a), _mm_set_ss(b)));
+}
+
+#else 
+
+inline f32
+reciprocal32(f32 a)
+{
+    f32 result = 1.0f / a;
+    return result;
+}
+
+inline i32
+truncate32(f32 a)
+{
+    i32 result = (i32)a;
+    return result;
+}
+
+inline i32
+round32(f32 a)
+{
+    i32 result = roundf(a);
+    return result;
+}
+
+inline i32
+floor32(f32 a)
+{
+    i32 result = floorf(a);
+    return result;
+}
+
+inline i32
+ceil32(f32 a)
+{
+    i32 result = ceilf(a);
+    return result;
+}
+
+inline f32
+sqrt32(f32 a)
+{
+    f32 result = sqrtf(a);
+    return result;
+}
+
+inline f32
+rsqrt32(f32 a)
+{
+    f32 result = 1.0f / sqrt32(a);
+    return result;
+}
+
+inline f32 
+max32(f32 a, f32 b)
+{
+    return (a > b ? a : b);
+}
+
+inline f32 
+min32(f32 a, f32 b)
+{
+    return (a < b ? a : b);
+}
+
+
+#endif 
+
+inline bool
+is_power_of_two(u32 x)
+{
+	bool result = (x & (x - 1)) == 0;
+	return result;
+}
+
+inline f32
+lerp(f32 a, f32 b, f32 t)
+{
+	f32 result = a + (b - a) * t;
+	return result;
+}
+
+inline f32
+clamp(f32 a, f32 low, f32 high)
+{
+	f32 result = ((a < low) ? low : (a > high) ? high : a);
+	return result;
+}
+
+inline f32
+clamp01(f32 a)
+{
+	f32 result = clamp(a, 0, 1);
+	return result;
+}
+
+inline f32
+abs32(f32 a)
+{
+    F32 ieee = (F32){ .f = a };
+    ieee.u &= 0x7FFFFFFF;
+    return ieee.f;
+}
 // Simplifies writing some math expressions
 inline f32 square(f32 a) { return a * a; }
 inline f32 cube(f32 a) { return a * a * a; }
@@ -107,7 +252,7 @@ schlick(f32 cosine, f32 ref_idx)
 {
     f32 r0 = square((1.0f - ref_idx) / (1.0f + ref_idx));
 #if 1
-    f32 result = r0 + (1.0f - r0) * pow32((1.0f - cosine), 5.0f);
+    f32 result = r0 + (1.0f - r0) * powf((1.0f - cosine), 5.0f);
 #else 
     // This version doesn't use powf function, so it SHOULD be faster
     f32 multiplier = 1 - cosine;
@@ -220,8 +365,8 @@ reflect(Vec3 v, Vec3 normal)
 inline Vec2 
 unit_sphere_get_uv(Vec3 p)
 {
-    f32 phi   = atan232(p.y, p.x);
-    f32 theta = asin32(p.z);
+    f32 phi   = atan2f(p.y, p.x);
+    f32 theta = asinf(p.z);
     
     Vec2 result = {   
         .u = 1.0f - (phi + PI) / TWO_PI,
@@ -583,10 +728,10 @@ quat4_slerp(Quat4 a, Quat4 b, f32 t)
     }
     else 
     {
-        f32 theta = acos32(clamp(cos_theta, -1, 1));
+        f32 theta = acosf(clamp(cos_theta, -1, 1));
         f32 thetap = theta * t;
         Quat4 qperp = quat4_normalize(quat4_sub(b, quat4_muls(a, cos_theta)));
-        result = quat4_add(quat4_muls(a, cos32(thetap)), quat4_muls(qperp, sin32(thetap)));
+        result = quat4_add(quat4_muls(a, cosf(thetap)), quat4_muls(qperp, sinf(thetap)));
     }
     
     return result;

@@ -54,6 +54,8 @@ ray_point_at(Ray ray, f32 t)
     return result;
 }
 
+#define SPECTRUM_SAMPLES 
+
 //
 // Camera
 //
