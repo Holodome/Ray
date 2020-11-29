@@ -1,733 +1,628 @@
-#include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <math.h>
-#include <assert.h>
+#include "general.h"
+#include "image.h"
+#include "trace.h"
+#include "perlin.h"
 
-typedef int8_t  i8;
-typedef int16_t i16;
-typedef int32_t i32;
-typedef int64_t i64;
-
-typedef uint8_t  u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-typedef float  f32;
-typedef double f64;
-
-#define CT_ASSERT(_expr) static_assert(_expr, #_expr)
-
-#define PI 3.1415926535897932385f
-
-#define DEG2RAD(_deg) ((_deg) * PI / 180.0f)
-
-inline f32 
-random_unitlateral() {
-    f32 result = (f32)rand() / ((f32)RAND_MAX + 1);
-    return result;
-}
-
-inline f32 
-random_bilateral() {
-    f32 result = random_unitlateral() * 2.0f - 1.0f;
-    return result;
-}
-
-inline f32 
-random_range(f32 low, f32 high) {
-    f32 result = low + (high - low) * random_unitlateral();
-    return result;
-}
-
-inline f32 
-lerp(f32 a, f32 b, f32 t) {
-    // assert(0 <= t && t <= 1);
-    return (1.0f - t) * a + t * b;
-}
-
-inline f32 
-rsqrtf(f32 a) {
-    return 1.0f / sqrtf(a);
-}
-
-inline u32 
-rgba_pack_4x8(u32 r, u32 g, u32 b, u32 a) {
-    // If values passed here are greater that 255 something for sure went wrong
-    assert(!(r & ~0xFFu) && !(g & ~0xFFu) && !(b & ~0xFFu) && !(a & ~0xFFu));
-    u32 result = r << 0 | g << 8 | b << 16 | a << 24;
-    return result;
-}
-
-inline u32
-rgba_pack_4x8_linear1(f32 r, f32 g, f32 b, f32 a) {
-    u32 ru = roundf(r * 255.0f);
-    u32 gu = roundf(g * 255.0f);
-    u32 bu = roundf(b * 255.0f);
-    u32 au = roundf(a * 255.0f);
-    u32 result = rgba_pack_4x8(ru, gu, bu, au);
-    return result;
-}
-
-typedef union {
-    struct {
-        f32 x, y, z;  
-    };
-    struct {
-        f32 r, g, b;  
-    };
-    f32 e[3];
-} Vec3;
-
-inline Vec3 
-vec3(f32 x, f32 y, f32 z) {
-    Vec3 result;
-    result.x = x;
-    result.y = y;
-    result.z = z;
-    return result;
-}
-
-inline Vec3 
-vec3s(f32 s) {
-    Vec3 result;
-    result.x = s;
-    result.y = s;
-    result.z = s;
-    return result;
-}
-
-inline Vec3 
-v3neg(Vec3 a) {
-    Vec3 result;
-    result.x = -a.x;
-    result.y = -a.y;
-    result.z = -a.z;
-    return result;
-}
-
-inline Vec3 
-v3add(Vec3 a, Vec3 b) {
-    Vec3 result;
-    result.x = a.x + b.x;
-    result.y = a.y + b.y;
-    result.z = a.z + b.z;
-    return result;
-}
-
-inline Vec3 
-v3sub(Vec3 a, Vec3 b) {
-    Vec3 result;
-    result.x = a.x - b.x;
-    result.y = a.y - b.y;
-    result.z = a.z - b.z;
-    return result;
-}
-
-inline Vec3 
-v3div(Vec3 a, Vec3 b) {
-    Vec3 result;
-    result.x = a.x / b.x;
-    result.y = a.y / b.y;
-    result.z = a.z / b.z;
-    return result;
-}
-
-inline Vec3 
-v3mul(Vec3 a, Vec3 b) {
-    Vec3 result;
-    result.x = a.x * b.x;
-    result.y = a.y * b.y;
-    result.z = a.z * b.z;
-    return result;
-}
-
-inline Vec3 
-v3divs(Vec3 a, f32 b) {
-    Vec3 result;
-    result.x = a.x / b;
-    result.y = a.y / b;
-    result.z = a.z / b;
-    return result;
-}
-
-inline Vec3 
-v3muls(Vec3 a, f32 b) {
-    Vec3 result;
-    result.x = a.x * b;
-    result.y = a.y * b;
-    result.z = a.z * b;
-    return result;
-}
-
-inline f32 
-dot(Vec3 a, Vec3 b) {
-    f32 result = a.x * b.x + a.y * b.y + a.z * b.z;
-    return result;
-}
-
-inline Vec3 
-cross(Vec3 a, Vec3 b) {
-    Vec3 result;
-    result.x = a.y * b.z - a.z * b.y;
-    result.y = a.z * b.x - a.x * b.z;
-    result.z = a.x * b.y - a.y * b.x;
-    return result;
-}
-
-inline f32 
-length_sq(Vec3 a) {
-    f32 result = dot(a, a);
-    return result;
-}
-
-inline f32 
-length(Vec3 a) {
-    f32 result = sqrtf(length_sq(a));
-    return result;
-}
-
-inline Vec3 
-normalize(Vec3 a)
-{
-    Vec3 result = v3muls(a, rsqrtf(length_sq(a)));
-    return result;
-}
-
-inline Vec3 
-v3lerp(Vec3 a, Vec3 b, f32 t) {
-    Vec3 result;
-    result.x = lerp(a.x, b.x, t);
-    result.y = lerp(a.y, b.y, t);
-    result.z = lerp(a.z, b.z, t);
-    return result;
-}
-
-inline bool 
-vec3_is_near_zero(Vec3 a) {
-    const f32 epsilon = 1e-8;
-    bool result = (fabsf(a.x) < epsilon) && (fabsf(a.y) < epsilon) && (fabsf(a.z) < epsilon);
-    return result;
-}
-
-inline Vec3 
-reflect(Vec3 v, Vec3 n) {
-    Vec3 result = v3sub(v, v3muls(n, 2.0f * dot(v, n)));
-    return result;
-}
-
-inline Vec3 
-refract(Vec3 v, Vec3 n, f32 etai_over_etat) {
-    f32 cos_theta = fminf(dot(v3neg(v), n), 1.0f);
-    Vec3 r_out_perp = v3muls(v3add(v, v3muls(n, cos_theta)), etai_over_etat);
-    Vec3 r_out_parallel = v3muls(n, -sqrtf(fabsf(1.0f - length_sq(r_out_perp))));
-    Vec3 result = v3add(r_out_perp, r_out_parallel);
-    return result; 
-}
-
-inline f32
-schlick(f32 cosine, f32 ref_idx)
-{
-    f32 r0 = (1.0f - ref_idx) / (1.0f + ref_idx);
-    r0 = r0 * r0;
-    f32 result = r0 + (1.0f - r0) * powf((1.0f - cosine), 5.0f);
-    return result;
-}
-
-inline Vec3 
-random_unit_vector(void) {
-    Vec3 result = vec3(random_bilateral(), random_bilateral(), random_bilateral());
-    return result;
-}
-
-inline Vec3 
-random_unit_sphere(void) {
-    Vec3 result;
-    do {
-        result = random_unit_vector();
-    } while(length_sq(result) >= 1.0f);
-    return result;
-}
-
-inline Vec3 
-random_unit_disk(void) {
-    Vec3 result;
-    do {
-        result = vec3(random_bilateral(), random_bilateral(), 0);
-    } while(length_sq(result) >= 1.0f);
-    return result;
-}
-
-inline Vec3 
-random_hemisphere(Vec3 normal) {
-    Vec3 result = random_unit_sphere();
-    if (dot(result, normal) > 0.0f) {
-        
-    } else {
-        result = v3neg(result);
-    }
-    return result;
-}
-
-#pragma pack(push, 1)
+static RandomSeries global_entropy = { 546674569 };
 
 typedef struct {
-    u16 file_type;
-    u32 file_size;
-    u32 reserved;
-    u32 bitmap_offset;
-    u32 size;
-    i32 width;
-    i32 height;
-    u16 planes;
-    u16 bits_per_pixel;
-    u32 compression;
-    u32 size_of_bitmap;
-    i32 horz_resolution;
-    i32 vert_resolution;
-    u32 colors_used;
-    u32 colors_important;
-} BMPHeader;
-
-#pragma pack(pop)
-
-static bool 
-save_bmp(char *filename, u32 width, u32 height, void *pixels) {
-    bool result = true;
+    u32 x_min;
+    u32 x_max;
+    u32 y_min;
+    u32 y_max;
     
-    u32 output_pixel_size = width * height * 4;
-    
-    BMPHeader header = {0};
-    header.file_type = 0x4D42;
-    header.file_size = sizeof(header) + output_pixel_size;
-    header.bitmap_offset = sizeof(header);
-    header.size = sizeof(header) - 14;
-    header.width = width;
-    header.height = height;
-    header.planes = 1;
-    header.bits_per_pixel = 32;
-    header.compression = 0;
-    header.size_of_bitmap = 0;
-    header.horz_resolution = 0;
-    header.vert_resolution = 0;
-    header.colors_used = 0;
-    header.colors_important = 0;
-    
-    FILE *file = fopen(filename, "wb");
-    if (file) {
-        fwrite(&header, sizeof(header), 1, file);
-        fwrite(pixels, output_pixel_size, 1, file);
-        fclose(file);
-    } else {
-        fprintf(stderr, "[ERROR] Failed to open file '%s' for writing\n", filename);
-        result = false;
-    }
-    
-    return result;
-}
+    RandomSeries entropy;
+} RenderWorkOrder;
 
 typedef struct {
-    u32 *pixels;
-    u32 width;
-    u32 height;
-} Image;
-
-static Image 
-make_image_for_writing(u32 width, u32 height) {
-    Image result;
+    Image *output;
     
-    result.width = width;
-    result.height = height;
-    result.pixels = (u32 *)calloc(1, width * height * 4); 
+    World *world;
     
-    return result;
-}
-
-void 
-image_save(Image *image, char *filename) {
-    save_bmp(filename, image->width, image->height, image->pixels);
-}
-
-u32 *
-image_get_pixel_pointer(Image *image, u32 x, u32 y) {
-    u32 *result = image->pixels + y * image->width + x;
-    return result;
-}
+    RenderWorkOrder *orders;
+    u32 order_count;
+    
+    volatile u64 next_order_index;
+    volatile u64 orders_done;
+    
+    volatile u64 total_bounce_count;
+    volatile u64 total_ray_triangle_collision_tests;
+} RenderWorkQueue;
 
 typedef struct {
-    Vec3 orig;
-    Vec3 dir;
-} Ray;
+    u64 id;
+} Thread;
 
-inline Ray 
-make_ray(Vec3 orig, Vec3 dir) {
-    Ray result;
-    result.orig = orig;
-    result.dir = dir;
-    return result;
+#define THREAD_PROC_SIGNATURE(_name) unsigned long _name(void *param)
+typedef THREAD_PROC_SIGNATURE(ThreadProc);
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <intrin.h>
+
+static u64
+atomic_add64(volatile u64 *value, u64 addend) {
+	u64 result = InterlockedExchangeAdd64((volatile long long *)value, addend);
+	return result;
 }
 
-inline Vec3 
-ray_at(Ray ray, f32 t) {
-    Vec3 result = v3add(ray.orig, v3muls(ray.dir, t));
-    return result;
+static Thread
+create_thread(ThreadProc *proc, void *param) {
+	Thread result = {0};
+	
+	DWORD thread_id;
+	HANDLE thread_handle = CreateThread(0, 0, proc, param, 0, &thread_id);
+	CloseHandle(thread_handle);
+	
+	result.id = thread_id;
+	
+	return result;
 }
 
-typedef struct {
-    Vec3 orig;
-    // Orthonormal basis
-    Vec3 x;
-    Vec3 y;
-    Vec3 z;
-    
-    f32 lens_radius;
-    
-    Vec3 lower_left_corner;
-    Vec3 horizontal;
-    Vec3 vertical;
-    
-    f32 film_w;
-    f32 film_h;
-} Camera;
-
-static Camera 
-make_camera(Vec3 look_from, Vec3 look_at, Vec3 v_up,
-            f32 aspect_ratio, f32 vfov,
-            f32 aperture, f32 focus_dist) {
-    Camera camera;
-    
-    camera.orig = look_from;
-    camera.z = normalize(v3sub(look_from, look_at));
-    camera.x = normalize(cross(v_up, camera.z));
-    camera.y = normalize(cross(camera.z, camera.x));
-    
-    f32 viewport_height = 2.0f * tanf(vfov * 0.5f);
-    f32 viewport_width  = aspect_ratio * viewport_height;
-    camera.horizontal = v3muls(camera.x, focus_dist * viewport_width);
-    camera.vertical   = v3muls(camera.y, focus_dist * viewport_height);
-    
-    camera.lower_left_corner = camera.orig;
-    camera.lower_left_corner = v3sub(camera.lower_left_corner, v3muls(camera.horizontal, 0.5f));
-    camera.lower_left_corner = v3sub(camera.lower_left_corner, v3muls(camera.vertical, 0.5f));
-    camera.lower_left_corner = v3sub(camera.lower_left_corner, v3muls(camera.z, focus_dist));   
-    
-    camera.lens_radius = aperture * 0.5f;
-    
-    return camera;
-}
-
-static Ray 
-camera_make_ray(Camera *camera, f32 u, f32 v) {
-    // u = u * 2 - 1;
-    // v = v * 2 - 1;
-    
-    Vec3 rd = v3muls(random_unit_disk(), camera->lens_radius);
-    Vec3 offset = v3add(v3muls(camera->x, rd.x), v3muls(camera->y, rd.y));
-    
-    Vec3 dir = camera->lower_left_corner;
-    dir = v3add(dir, v3muls(camera->horizontal, u));
-    dir = v3add(dir, v3muls(camera->vertical, v));
-    dir = v3sub(dir, camera->orig);
-    dir = v3sub(dir, offset);
-    dir = normalize(dir);
-    
-    Vec3 orig = v3add(camera->orig, offset);
-    Ray ray = make_ray(orig, dir);
-    
-    return ray;
-}
-
-typedef struct {
-    bool has_hit;
-    f32 t;
-    Vec3 p;
-    Vec3 n;
-    bool is_front_face;
-    
-    u32 mat_index;
-} HitRecord;
-
-static void 
-hit_set_normal(HitRecord *hit, Vec3 n, Ray ray) {
-    if (dot(ray.dir, n) < 0.0f) {
-        hit->is_front_face = true;
-        hit->n = n;
-    } else {
-        hit->is_front_face = false;
-        hit->n = v3neg(n);
-    }
+static void
+exit_thread(void) {
+    ExitThread(0);
 }
 
 static bool 
-ray_collide_sphere(Vec3 sphere_center, f32 sphere_radius, Ray ray, HitRecord *hit) {
-    bool result = false;
-
-    Vec3 rel_orig = v3sub(ray.orig, sphere_center);
-    f32 a = length_sq(ray.dir);
-    f32 half_b = dot(rel_orig, ray.dir);
-    f32 c = length_sq(rel_orig) - sphere_radius * sphere_radius;
+render_tile(RenderWorkQueue *queue) {
+    u64 work_order_index = atomic_add64(&queue->next_order_index, 1);
+    if (work_order_index >= queue->order_count) {
+        return false;
+    }
     
-    f32 discriminant = half_b * half_b - a * c;
+    RenderWorkOrder *order = queue->orders + work_order_index;
     
-    if (discriminant >= 0) {
-        f32 root_term = sqrtf(discriminant);
-        
-        f32 tp = (-half_b + root_term) / a;
-        f32 tn = (-half_b - root_term) / a;
-        
-        f32 t = tp;
-        if ((tn > 0.001f) && (tn < tp)) {
-            t = tn;
-        }
-        
-        if ((t > 0.001f) && (t < hit->t)) {
-            hit->t = t;
-            hit->p = ray_at(ray, t);
-            hit_set_normal(hit, v3divs(v3sub(hit->p, sphere_center), sphere_radius), ray);
+    u64 bounce_count = 0;
+    u64 ray_triangle_collision_tests = 0;
+    for (u32 y = order->y_min;
+         y < order->y_max;
+         ++y) {
+        u32 *pixel = image_get_pixel_pointer(queue->output, order->x_min, y);
+             
+        for (u32 x = order->x_min;
+             x < order->x_max;
+             ++x) {
+            Vec3 pixel_color = v3(0, 0, 0);
             
-            result = true;
+            for (u32 sample_index = 0;
+                sample_index < SAMPLES_PER_PIXEL;
+                ++sample_index) {
+                f32 u = ((f32)x + random_bilateral(&order->entropy) * 0.5f) / (f32)queue->output->w;
+                f32 v = ((f32)y + random_bilateral(&order->entropy) * 0.5f) / (f32)queue->output->h;
+                Ray ray = camera_make_ray(&queue->world->camera, &order->entropy, u, v);
+                
+                RayCastData cast_data = {0};
+                Vec3 sample_color = ray_cast(queue->world, &order->entropy, ray, &cast_data);
+                bounce_count += cast_data.bounce_count;
+                ray_triangle_collision_tests += cast_data.ray_triangle_collision_tests;
+                
+                f32 color_multiplier = 1.0f / (f32)SAMPLES_PER_PIXEL;
+                pixel_color = v3add(pixel_color, v3muls(sample_color, color_multiplier));
+            }
+
+            *pixel++ = rgba_pack_4x8_linear1(sqrtf(pixel_color.b), sqrtf(pixel_color.g), sqrtf(pixel_color.r), 1.0f);     
+        }        
+    }
+    
+    atomic_add64(&queue->orders_done, 1);
+    atomic_add64(&queue->total_bounce_count, bounce_count);
+    atomic_add64(&queue->total_ray_triangle_collision_tests, ray_triangle_collision_tests);
+    
+    return true;
+}
+
+static THREAD_PROC_SIGNATURE(render_thread_proc) {
+    RenderWorkQueue *queue = param;
+    
+    while (render_tile(queue)) { }
+    
+    exit_thread();
+    return 0;
+}
+
+#if 0
+static void 
+init_scene2(World *world, Image *image) {
+    MaterialHandle ground_mat = add_material(world, (Material) {
+        .type = MaterialType_Lambertian,
+        .lambertian = {
+            .albedo = add_texture(world, (Texture) {
+                .type = TextureType_Checkered,
+                .checkered = {
+                    .t1 = add_texture(world, (Texture) {
+                        .type = TextureType_Solid,
+                        .solid = {
+                            .c = v3(0.2, 0.3, 0.1)
+                        }
+                    }),
+                    .t2 = add_texture(world, (Texture) {
+                        .type = TextureType_Solid,
+                        .solid = {
+                            .c = v3(0.9, 0.9, 0.9)
+                        }
+                    })
+                }
+            })
+        }
+    });
+    add_object(world, (Object) {
+        .type = ObjectType_Sphere,  
+        .sphere = {
+            .mat = ground_mat,
+            .p = v3(0, -1000, 0),
+            .r = 1000.0f
+        }
+    });
+    
+    for (int a = -11; a < 11; a++) {
+        for (int b = -11; b < 11; b++) {
+            f32 choose_mat = random(&global_entropy);
+            Vec3 center = v3(a + 0.9f * random(&global_entropy),
+                             0.2,
+                             b + 0.9 * random(&global_entropy));
+
+            if (length(v3sub(center, v3(4, 0.2, 0))) > 0.9) {
+                if (choose_mat < 0.8) {
+                    // diffuse
+                    Vec3 albedo = v3mul(random_vector(&global_entropy, 0.1f, 1.0f), random_vector(&global_entropy, 0.1f, 1.0f));
+                    
+                    TextureHandle tex = add_texture(world, (Texture) {
+                        .type = TextureType_Solid,
+                        .solid = {
+                            .c = albedo
+                        }
+                    });
+                    MaterialHandle mat = add_material(world, (Material) {
+                        .type = MaterialType_Lambertian,
+                        .lambertian = {
+                            .albedo = tex
+                        }
+                    });
+                    add_object(world, (Object) {
+                        .type = ObjectType_Sphere,  
+                        .sphere = {
+                            .mat = mat,
+                            .p = center,
+                            .r = 0.2f
+                        }
+                    });
+                } else if (choose_mat < 0.95) {
+                    // metal
+                    f32 fuzz = random_uniform(&global_entropy, 0, 0.5);
+                    Vec3 albedo = random_vector(&global_entropy, 0.5, 1);
+                    TextureHandle tex = add_texture(world, (Texture) {
+                        .type = TextureType_Solid,
+                        .solid = {
+                            .c = albedo
+                        }
+                    });
+                    MaterialHandle mat = add_material(world, (Material) {
+                        .type = MaterialType_Metal,
+                        .metal = {
+                            .albedo = tex,
+                            .fuzz = fuzz
+                        }
+                    });
+                    add_object(world, (Object) {
+                        .type = ObjectType_Sphere,  
+                        .sphere = {
+                            .mat = mat,
+                            .p = center,
+                            .r = 0.2f
+                        }
+                    });
+                } else {
+                    // glass
+                    MaterialHandle mat = add_material(world, (Material) {
+                        .type = MaterialType_Dielectric,
+                        .dielectric = {
+                            .ir = 1.5f
+                        }
+                    });
+                    add_object(world, (Object) {
+                        .type = ObjectType_Sphere,  
+                        .sphere = {
+                            .mat = mat,
+                            .p = center,
+                            .r = 0.2f
+                        }
+                    });
+                }
+            }
         }
     }
     
-    return result;
-}
-
-typedef u32 MaterialType;
-enum {
-    MaterialType_None = 0x0,
-    MaterialType_Metal,
-    MaterialType_Lambertian,
-    MaterialType_Dielectric,
-};
-
-typedef struct {
-    MaterialType type;
-    
-    union {
-        struct {
-            Vec3 albedo;
-            f32 fuzz; 
-        } metal;
-        struct {
-            Vec3 albedo;
-        } lambertian;
-        struct {
-            f32 ir;
-        } dielectric;
-    };
-} Material;
-
-typedef u32 ObjectType;
-enum {
-    ObjectType_None = 0x0,
-    ObjectType_Sphere  
-};
-
-typedef struct {
-    ObjectType type;
-    
-    u32 mat_index;
-    union {
-        struct {
-            Vec3 pos;  
-            f32  radius; 
-        } sphere;
-    };
-} Object;
-
-typedef struct {
-    Object objects[100];
-    u32 object_count;
-    
-    Material materials[100];
-    u32 material_count;
-} World;
-
-int 
-main(int argc, char **argv) {
-    u32 image_width = 720;
-    // u32 image_height = 720;
-    u32 image_height = 405;
-    
-    World world = {0};
-    world.materials[world.material_count++] = (Material) {
-        .type = MaterialType_Lambertian,
-        .lambertian = {
-            .albedo = vec3(0.8f, 0.8f, 0.0f)
-        }  
-    };
-    world.materials[world.material_count++] = (Material) {
-        .type = MaterialType_Lambertian,
-        .lambertian = {
-            .albedo = vec3(0.1f, 0.2f, 0.5f)
-        }  
-    };
-    world.materials[world.material_count++] = (Material) {
+    MaterialHandle mat1 = add_material(world, (Material) {
         .type = MaterialType_Dielectric,
         .dielectric = {
             .ir = 1.5f
         }
-    };
-    world.materials[world.material_count++] = (Material) {
+    });
+    add_object(world, (Object) {
+        .type = ObjectType_Sphere,  
+        .sphere = {
+            .mat = mat1,
+            .p = v3(0, 1, 0),
+            .r = 1.0f
+        }
+    });
+    
+    MaterialHandle mat2 = add_material(world, (Material) {
+        .type = MaterialType_Lambertian,
+        .lambertian = {
+            .albedo = add_texture(world, (Texture) {
+                .type = TextureType_Solid,
+                .solid = {
+                    .c = v3(0.4, 0.2, 0.1)
+                }
+            })
+        }
+    });
+    add_object(world, (Object) {
+        .type = ObjectType_Sphere,  
+        .sphere = {
+            .mat = mat2,
+            .p = v3(-4, 1, 0),
+            .r = 1.0f
+        }
+    });
+    
+    MaterialHandle mat3 = add_material(world, (Material) {
         .type = MaterialType_Metal,
         .metal = {
-            .albedo = vec3(0.8, 0.6, 0.2),
-            .fuzz = 0.0f
-        }  
-    };
-    
-    world.objects[world.object_count++] = (Object) {
-        .type = ObjectType_Sphere, 
-        .mat_index = 1, 
-        .sphere = {
-            .pos = vec3(0, 0, -1),
-            .radius = 0.5f
-        }
-    };
-    world.objects[world.object_count++] = (Object) {
-        .type = ObjectType_Sphere,  
-        .mat_index = 0,
-        .sphere = {
-            .pos = vec3(0, -100.5f, -1),
-            .radius = 100.0f
-        }
-    };
-    world.objects[world.object_count++] = (Object) {
-        .type = ObjectType_Sphere,  
-        .mat_index = 3,
-        .sphere = {
-            .pos = vec3(1, 0, -1),
-            .radius = 0.5f
-        }
-    };
-    // world.objects[world.object_count++] = (Object) {
-    //     .type = ObjectType_Sphere,  
-    //     .mat_index = 2,
-    //     .sphere = {
-    //         .pos = vec3(-1, 0, -1),
-    //         .radius = -0.45f
-    //     }
-    // };
-    world.objects[world.object_count++] = (Object) {
-        .type = ObjectType_Sphere,  
-        .mat_index = 2,
-        .sphere = {
-            .pos = vec3(-1, 0, -1),
-            .radius = 0.5f
-        }
-    };
-    
-    u32 samples_per_pixel = 32;
-    u32 max_bounce_count = 8;
-    
-    f32 aspect_ratio = (f32)image_width / (f32)image_height;
-    Image output_image = make_image_for_writing(image_width, image_height);
-    Vec3 look_from = vec3(3, 1, 2);
-    Vec3 look_at = vec3(0, 0, -1);
-    Camera camera = make_camera(look_from, look_at, vec3(0, 1, 0), aspect_ratio, DEG2RAD(20), 0.0f, length(v3sub(look_from, look_at)));
-    for (u32 y = 0;
-         y < image_height;
-         ++y) {
-        for (u32 x = 0;
-             x < image_width;
-             ++x) {
-            Vec3 pixel_color = vec3(0, 0, 0);
-            
-            for (u32 sample_index = 0;
-                sample_index < samples_per_pixel;
-                ++sample_index) {
-                
-                f32 u = ((f32)x + random_bilateral() * 0.5f) / (f32)image_width;
-                f32 v = ((f32)y + random_bilateral() * 0.5f) / (f32)image_height;
-                Ray ray = camera_make_ray(&camera, u, v);
-                Vec3 attenuation = vec3(1, 1, 1);
-                Vec3 sample_color = vec3(0, 0, 0);
-                
-                for (u32 bounce_count = 0;
-                    bounce_count < max_bounce_count;
-                    ++bounce_count) {
-                    
-                    HitRecord hit = {0};
-                    hit.t = INFINITY;
-                    
-                    Vec3 color = vec3(0, 0, 0);
-                    
-                    for (u32 object_index = 0;
-                        object_index < world.object_count;
-                        ++object_index) {
-                        Object object = world.objects[object_index];
-                        
-                        switch(object.type) {
-                            case ObjectType_Sphere: {
-                                if (ray_collide_sphere(object.sphere.pos, object.sphere.radius, ray, &hit)) {
-                                    hit.mat_index = object.mat_index;
-                                }
-                            } break;
-                            default: assert(false);
-                        }
-                    }
-                    
-                    if (hit.t == INFINITY) {
-                        color = vec3(0.5f, 0.7f, 1.0f);
-                        sample_color = v3add(sample_color, v3mul(color, attenuation));
-                        
-                        break;
-                    } else {
-                        Material material = world.materials[hit.mat_index];
-                        switch (material.type) {
-                            case MaterialType_Lambertian: {
-                                Vec3 scatter_dir = normalize(v3add(hit.n, random_unit_vector()));
-                                if (vec3_is_near_zero(scatter_dir)) {
-                                    scatter_dir = hit.n;
-                                }
-                                ray.dir = scatter_dir;
-                                attenuation = v3mul(attenuation, material.lambertian.albedo);
-                            } break;
-                            case MaterialType_Metal: {
-                                Vec3 reflected = reflect(ray.dir, hit.n);
-                                Vec3 random = random_unit_sphere();
-                                Vec3 scattered = normalize(v3add(reflected, v3muls(random, material.metal.fuzz)));
-                                if (dot(scattered, hit.n) > 0.0f) {
-                                    ray.dir = scattered;
-                                    attenuation = v3mul(attenuation, material.metal.albedo);
-                                }
-                            } break;
-                            case MaterialType_Dielectric: {
-                                f32 refraction_ratio = material.dielectric.ir;
-                                if (hit.is_front_face) {
-                                    refraction_ratio = 1.0f / refraction_ratio;
-                                }
-                                    
-                                f32 cos_theta = fminf(dot(v3neg(ray.dir), hit.n), 1.0f);
-                                f32 sin_theta = sqrtf(1.0f - cos_theta * cos_theta);
-                                
-                                Vec3 scattered;
-                                if ((refraction_ratio * sin_theta > 1.0f) || schlick(cos_theta, refraction_ratio) > random_unitlateral()) {
-                                    scattered = reflect(ray.dir, hit.n);
-                                } else {
-                                    scattered = refract(ray.dir, hit.n, refraction_ratio);
-                                }
-                                ray.dir = normalize(scattered);
-                            } break;
-                            default: assert(false);
-                        }
-
-                        ray.orig = hit.p;
-                    }
+            .fuzz = 0,
+            .albedo = add_texture(world, (Texture) {
+                .type = TextureType_Solid,
+                .solid = {
+                    .c = v3(0.7, 0.6, 0.5)
                 }
-                
-                f32 color_multiplier = 1.0f / (f32)samples_per_pixel;
-                pixel_color = v3add(pixel_color, v3muls(sample_color, color_multiplier));
-            }
+            })
+        }
+    });
+    add_object(world, (Object) {
+        .type = ObjectType_Sphere,  
+        .sphere = {
+            .mat = mat3,
+            .p = v3(4, 1, 0),
+            .r = 1.0f
+        }
+    });
+    
+    f32 aspect_ratio = (f32)image->w / (f32)image->h;
 
+    world->backgorund_color = v3(0.70, 0.80, 1.00);
+
+    Vec3 look_from = v3(13, 2, 3);
+    Vec3 look_at = v3(0, 0, 0);
+    f32 dtf = 10.0f;
+    f32 aperture = 0.1f;
+    world->camera = make_camera(look_from, look_at, v3(0, 1, 0), aspect_ratio, DEG2RAD(20), aperture, dtf);
+}
+
+void 
+init_scene1(World *world, Image *image) {
+    MaterialHandle marble = add_material(world, (Material) {
+            .type = MaterialType_Lambertian,
+            .lambertian = {
+                .albedo = add_texture(world, (Texture) {
+                    .type = TextureType_Perlin,
+                    .perlin = {
+                        .p = make_perlin(&global_entropy),
+                        .s = 4.0f
+                    }
+                })
+            }
+        });
+    add_object(world, (Object) {
+        .type = ObjectType_Sphere,
+        .sphere = {
+            .mat = marble,
+            .p = v3(0, 2, 0),
+            .r = 2
+        },
+        // .mat = add_material(world, (Material) {
+        //     .type = MaterialType_Lambertian,
+        //     .lambertian = {
+        //         .albedo = add_texture(world, (Texture) {
+        //             .type = TextureType_Normal
+        //         })
+        //     } 
+        // })
+    });
+    add_object(world, (Object) {
+        .type = ObjectType_Sphere,
+        .sphere = {
+            .p = v3(0, -1000, 0),
+            .r = 1000,
+            .mat = marble
+        },
+    });
+    
+    MaterialHandle light = add_material(world, (Material) {
+        .type = MaterialType_DiffuseLight,
+        .diffuse_light = {
+            .emit = add_texture(world, (Texture) {
+                .type = TextureType_Solid,
+                .solid = {
+                    .c = v3s(1)
+                }
+            })
+        } 
+    });
+    add_object(world, (Object) {
+        .type = ObjectType_Triangle,
+        .triangle = {
+            .mat = light,
+            .p[0] = v3(3, 1, -2),
+            .p[1] = v3(5, 1, -2),
+            .p[2] = v3(5, 3, -2),
+        } 
+    });
+    add_object(world, (Object) {
+        .type = ObjectType_Triangle,
+        .triangle = {
+            .mat = light,
+            .p[0] = v3(3, 1, -2),
+            .p[1] = v3(3, 3, -2),
+            .p[2] = v3(5, 3, -2),
+        } 
+    });
+    
+    f32 aspect_ratio = (f32)image->w / (f32)image->h;
+
+    world->backgorund_color = v3(0, 0, 0);
+
+    Vec3 look_from = v3(26, 3, 6);
+    Vec3 look_at = v3(0, 2, 0);
+    f32 dtf = length(v3sub(look_from, look_at));
+    f32 aperture = 0.0f;
+    world->camera = make_camera(look_from, look_at, v3(0, 1, 0), aspect_ratio, DEG2RAD(20), aperture, dtf);
+}
+#endif 
+
+void 
+init_cornell_box(World *world, Image *image) {
+    MaterialHandle red = add_material(world, material_lambertian(add_texture(world, texture_solid(v3(0.65, 0.05, 0.05)))));
+    MaterialHandle white = add_material(world, material_lambertian(add_texture(world, texture_solid(v3(0.73, 0.73, 0.73)))));
+    MaterialHandle green = add_material(world, material_lambertian(add_texture(world, texture_solid(v3(0.12, 0.45, 0.15)))));
+    MaterialHandle light = add_material(world, (Material) {
+        .type = MaterialType_DiffuseLight,
+        .diffuse_light = {
+            .emit = add_texture(world, texture_solid(v3s(15)))
+        }
+    });
+    
+    world->object_list = add_object(world, (Object) {
+        .type = ObjectType_ObjectList
+    });
+    add_yz_rect(world, world->object_list, 0, 555, 0, 555, 555, green);
+    add_yz_rect(world, world->object_list, 0, 555, 0, 555, 0, red);
+    add_xz_rect(world, world->object_list, 213, 343, 227, 332, 554, light);
+    add_xz_rect(world, world->object_list, 0, 555, 0, 555, 0, white);
+    add_xz_rect(world, world->object_list, 0, 555, 0, 555, 555, white);
+    add_xy_rect(world, world->object_list, 0, 555, 0, 555, 555, white);
+    
+    ObjectHandle box1_list = add_object(world, (Object) { .type = ObjectType_ObjectList });
+    add_box(world, box1_list, v3(130, 0, 65), v3(295, 165, 230), white);
+    add_object_to_list(world, world->object_list, add_object(world, (Object) {
+        .type = ObjectType_ConstantMedium,
+        .constant_medium = {
+            .neg_inv_density = -1 / 0.01f,
+            .phase_function = add_material(world, material_isotropic(add_texture(world, texture_solid(v3s(1))))),
+            .boundary = box1_list
+        }
+    }));
+    
+    ObjectHandle box2_list = add_object(world, (Object) { .type = ObjectType_ObjectList });
+    add_box(world, box2_list, v3(265, 0, 295), v3(430, 330, 460), white);
+    add_object_to_list(world, world->object_list, add_object(world, (Object) {
+        .type = ObjectType_ConstantMedium,
+        .constant_medium = {
+            .neg_inv_density = -1 / 0.01f,
+            .phase_function = add_material(world, material_isotropic(add_texture(world, texture_solid(v3s(0))))),
+            .boundary = box2_list
+        }
+    }));
+    
+    world->backgorund_color = v3s(0);
+
+    f32 aspect_ratio = (f32)image->w / (f32)image->h;
+    Vec3 look_from = v3(278, 278, -800);
+    Vec3 look_at = v3(278, 278, 0);
+    f32 dtf = 10;
+    f32 aperture = 0.f;
+    world->camera = make_camera(look_from, look_at, v3(0, 1, 0), aspect_ratio, DEG2RAD(40), aperture, dtf);
+}
+
+#if 0
+void 
+init_scene3(World *world, Image *image) {
+    MaterialHandle ground = add_material(world, material_lambertian(add_texture(world, texture_solid(v3(0.48, 0.83, 0.53)))));
+
+    const int boxes_per_side = 20;
+    for (int i = 0; i < boxes_per_side; i++) {
+        for (int j = 0; j < boxes_per_side; j++) {
+            f32 w = 100.0;
+            f32 x0 = -1000.0 + i*w;
+            f32 z0 = -1000.0 + j*w;
+            f32 y0 = 0.0;
+            f32 x1 = x0 + w;
+            f32 y1 = random_uniform(&global_entropy, 1,101);
+            f32 z1 = z0 + w;
+
+            world_add_box(world, v3(x0,y0,z0), v3(x1,y1,z1), ground);
+        }*
+    }
+
+    MaterialHandle light = add_material(world, (Material) {
+        .type = MaterialType_DiffuseLight,
+        .diffuse_light = {
+            .emit = add_texture(world, texture_solid(v3s(7)))
+        }
+    });
+    world_add_xz_rect(world, 123, 423, 147, 412, 554, light);
+
+    // Vec3 center1 = point3(400, 400, 200);
+    // Vec3 center2 = v3add(center1, vec3(30,0,0));
+    // auto moving_sphere_material = make_shared<lambertian>(color(0.7, 0.3, 0.1));
+    // objects.add(make_shared<moving_sphere>(center1, center2, 0, 1, 50, moving_sphere_material));
+
+    add_object(world, object_sphere(v3(260, 150, 45), 50, add_material(world, material_dielectric(1.5))));
+    add_object(world, object_sphere(v3(0, 150, 145), 50, add_material(world, (Material) {
+        .type = MaterialType_Metal,
+        .metal = {
+            .albedo = add_texture(world, texture_solid(v3(0.8, 0.8, 0.9))),
+            .fuzz = 1
+        }
+    })));
+
+    // add_object(world, object_sphere(v3(360,150,145), 70, add_material(world, material_dielectric(1.5))));
+    // objects.add(boundary);
+    // objects.add(make_shared<constant_medium>(boundary, 0.2, color(0.2, 0.4, 0.9)));
+    // boundary = make_shared<sphere>(point3(0, 0, 0), 5000, make_shared<dielectric>(1.5));
+    // objects.add(make_shared<constant_medium>(boundary, .0001, color(1,1,1)));
+
+    MaterialHandle emat = add_material(world, (Material) {
+        .type = MaterialType_Lambertian,
+        .lambertian = {
+            .albedo = add_texture(world, (Texture) {
+                .type = TextureType_Image,
+                .image = {
+                    .i = load_bmp("earth.bmp")
+                }
+            })
+        } 
+    });
+    add_object(world, object_sphere(v3(400,200,400), 100, emat));
+    MaterialHandle marble = add_material(world, (Material) {
+        .type = MaterialType_Lambertian,
+        .lambertian = {
+            .albedo = add_texture(world, (Texture) {
+                .type = TextureType_Perlin,
+                .perlin = {
+                    .p = make_perlin(&global_entropy),
+                    .s = 0.1f
+                }
+            })
+        }
+    });  
+    add_object(world, object_sphere(v3(220,280,300), 80, marble));
+
+    MaterialHandle white = add_material(world, material_lambertian(add_texture(world, texture_solid(v3(.73, .73, .73)))));
+    int ns = 1000;
+    for (int j = 0; j < ns; j++) {
+        add_object(world, object_sphere(v3add(v3(-100,270,395),random_vector(&global_entropy, 0, 165)), 10, white));
+    }
+
+    world->backgorund_color = v3s(0);
+
+    f32 aspect_ratio = (f32)image->w / (f32)image->h;
+    Vec3 look_from = v3(478, 278, -600);
+    Vec3 look_at = v3(278, 278, 0);
+    f32 dtf = 10;
+    f32 aperture = 0.f;
+    world->camera = make_camera(look_from, look_at, v3(0, 1, 0), aspect_ratio, DEG2RAD(40), aperture, dtf);
+}
+#endif 
+
+int 
+main(int argc, char **argv) {
+    u32 image_w = 480;
+    u32 image_h = 480;
+    
+    Image output_image = make_image_for_writing(image_w, image_h);
+    
+    World world = {0};
+    init_cornell_box(&world, &output_image);
+    
+    u32 tile_w = 64;
+    u32 tile_h = 64;
+    u32 tile_count_x = (image_w + tile_w - 1) / tile_w;
+    u32 tile_count_y = (image_h + tile_h - 1) / tile_h;
+    u32 tile_count = tile_count_x * tile_count_y;
+    
+    RenderWorkQueue render_queue = {0};
+    render_queue.output = &output_image;
+    render_queue.world = &world;
+    render_queue.order_count = tile_count;
+    render_queue.orders = malloc(sizeof(RenderWorkOrder) * render_queue.order_count);
+    
+    u32 cursor = 0;
+    for (u32 tile_y = 0;
+         tile_y < tile_count_y;
+         ++tile_y) {
+        u32 y_min = tile_y * tile_h;
+        u32 y_max = y_min + tile_h;
+        if (y_max > image_h) {
+            y_max = image_h;
+        }
+        
+        for (u32 tile_x = 0;
+             tile_x < tile_count_x;
+             ++tile_x) {
+            u32 x_min = tile_x * tile_w;
+            u32 x_max = x_min + tile_w;
+            if (x_max > image_w) {
+                x_max = image_w;
+            }
             
-            u32 *pixel = image_get_pixel_pointer(&output_image, x, y);
-            *pixel = rgba_pack_4x8_linear1(sqrtf(pixel_color.b), sqrtf(pixel_color.g), sqrtf(pixel_color.r), 1.0f);  
+            RenderWorkOrder *order = render_queue.orders + cursor++;
+            assert(cursor <= render_queue.order_count);
+            
+            order->x_min = x_min;
+            order->x_max = x_max;
+            order->y_min = y_min;
+            order->y_max = y_max;
+            
+            u32 seed = tile_count_x * 13998 + tile_count_y * 39224 + tile_x * 60918 + tile_y * 14319;
+            order->entropy.state = seed;
+        }           
+    }
+    assert(cursor == render_queue.order_count);
+    
+    printf("Scene object count: %u\n", world.objects_size);
+    printf("Scene texture count: %u\n", world.textures_size);
+    printf("Scene material count: %u\n", world.materials_size);
+    
+    printf("Start raycasting\n");
+    clock_t start_clock = clock();
+    
+    u32 thread_count = 6;
+    for (u32 core_index = 1;
+         core_index < thread_count;
+         ++core_index) {
+        create_thread(render_thread_proc, &render_queue);
+    }
+    
+    while (render_queue.orders_done < render_queue.order_count) {
+        if (render_tile(&render_queue)) {
+            f32 percent = (f32)render_queue.orders_done / (f32)render_queue.order_count;
+            printf("\rRaycasting %u%%", (u32)roundf(percent * 100));
+            fflush(stdout);
         }
     }
-    image_save(&output_image, "out.bmp");
+    printf("\nRaycasting done\n");
+    
+    clock_t end_clock = clock();
+    clock_t time_elapsed = end_clock - start_clock;
+    
+    printf("Raycasting time: %lldms\n", (i64)time_elapsed);
+    printf("Pixel count: %u\n", output_image.w * output_image.h);
+    printf("Samples per pixel: %llu\n", SAMPLES_PER_PIXEL);
+    printf("Primary ray count: %llu\n", SAMPLES_PER_PIXEL * output_image.w * output_image.h);
+    printf("Perfomace: %fms/primary ray\n", (f64)time_elapsed / (f64)(SAMPLES_PER_PIXEL * output_image.w * output_image.h));
+    printf("Total bounces: %llu\n", render_queue.total_bounce_count);
+    printf("Perfomance: %fms/bounce\n", (f64)time_elapsed / (f64)render_queue.total_bounce_count);
+    printf("Triangle collision tests: %llu\n", render_queue.total_ray_triangle_collision_tests);
+    printf("Object collision tests: %llu\n", render_queue.total_bounce_count * world.objects_size);
+    printf("Average bounce count per ray: %f\n", (f64)render_queue.total_bounce_count / (f64)(SAMPLES_PER_PIXEL * output_image.w * output_image.h));
+    
+    char *out = "out.bmp";
+    image_save(&output_image, out);
+    char command[32] = {0};
+    snprintf(command, sizeof(command), "start %s", out);
+    system(command);
     
     printf("Exited successfully\n");
     return 0;
