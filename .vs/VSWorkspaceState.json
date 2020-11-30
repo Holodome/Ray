@@ -1,8 +1,9 @@
 {
   "ExpandedNodes": [
     "",
+    "\\build",
     "\\src"
   ],
-  "SelectedNode": "\\src\\general.h",
+  "SelectedNode": "\\build\\ray.exe",
   "PreviewInSolutionExplorer": false
 }

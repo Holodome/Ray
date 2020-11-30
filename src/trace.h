@@ -4,9 +4,9 @@
 #include "image.h"
 #include "perlin.h"
 
-typedef struct { u32 v; } TextureHandle;
-typedef struct { u32 v; } MaterialHandle;
-typedef struct { u32 v; } ObjectHandle;
+typedef struct { u64 v; } TextureHandle;
+typedef struct { u64 v; } MaterialHandle;
+typedef struct { u64 v; } ObjectHandle;
 
 //
 // Helper functions
@@ -231,7 +231,10 @@ enum {
     ObjectType_ObjectList,
     ObjectType_Sphere,
     ObjectType_Triangle,
-    ObjectType_ConstantMedium
+    ObjectType_ConstantMedium,
+    ObjectType_Instance,
+    ObjectType_BVHNode,
+    ObjectType_Box,
 };
 
 typedef struct {
@@ -257,9 +260,23 @@ typedef struct {
         } constant_medium;
         struct {
             ObjectHandle *objects;
-            u32 objects_size;
-            u32 objects_capacity;
+            u64 objects_size;
+            u64 objects_capacity;
         } object_list;
+        struct {
+            ObjectHandle object;
+            Mat4x4 o2w;
+            Mat4x4 w2o;
+        } instance;
+        struct {
+            ObjectHandle left;
+            ObjectHandle right;
+            Box3 box;
+        } bvh_node;
+        struct {
+            Box3 box;
+            ObjectHandle sides_list;
+        } box;
     };
 } Object;
 
@@ -269,16 +286,16 @@ typedef struct {
     Vec3 backgorund_color;
     
     Texture *textures;
-    u32 textures_size;
-    u32 textures_capacity;
+    u64 textures_size;
+    u64 textures_capacity;
 
     Material *materials;
-    u32 materials_size;
-    u32 materials_capacity;
+    u64 materials_size;
+    u64 materials_capacity;
     
     Object *objects;
-    u32 objects_size;
-    u32 objects_capacity;
+    u64 objects_size;
+    u64 objects_capacity;
     
     ObjectHandle object_list;
 } World;
@@ -419,6 +436,8 @@ material_dielectric(f32 ir) {
     };
 }
 
+#define OBJECT_LIST ( (Object) { .type = ObjectType_ObjectList } )
+
 inline Object 
 object_sphere(Vec3 p, f32 r, MaterialHandle mat) {
     return (Object) {
@@ -427,6 +446,24 @@ object_sphere(Vec3 p, f32 r, MaterialHandle mat) {
             .mat = mat,
             .p = p,
             .r = r
+        }
+    };
+}
+
+inline Object 
+object_instance(ObjectHandle obj, Vec3 t, Vec3 r) {
+    Mat4x4 o2w = MAT4X4_IDENTITIY;
+    o2w = mat4x4_mul(o2w, mat4x4_translate(t));
+    o2w = mat4x4_mul(o2w, mat4x4_rotation(r.x, v3(1, 0, 0)));
+    o2w = mat4x4_mul(o2w, mat4x4_rotation(r.y, v3(0, 1, 0)));
+    o2w = mat4x4_mul(o2w, mat4x4_rotation(r.z, v3(0, 0, 1)));
+    
+    return (Object) {
+        .type = ObjectType_Instance,
+        .instance = {
+            .object = obj,
+            .o2w = o2w,
+            .w2o = mat4x4_inverse(o2w)
         }
     };
 }
@@ -489,6 +526,181 @@ add_box(World *world, ObjectHandle list, Vec3 p0, Vec3 p1, MaterialHandle mat) {
     add_yz_rect(world, list, p0.y, p1.y, p0.z, p1.z, p0.x, mat);
 }
 
+
+inline Object 
+object_box(World *world, Vec3 min, Vec3 max, MaterialHandle mat) {
+    Object result = { .type = ObjectType_Box };
+    result.box.box = (Box3){ .min = min, .max = max }; 
+    
+    result.box.sides_list = add_object(world, OBJECT_LIST);
+    add_box(world, result.box.sides_list, min, max, mat);
+    
+    return result;
+}
+
+bool
+object_get_box(World *world, ObjectHandle obj_handle, Box3 *box) {
+    bool result = false;
+    
+    Object object = world->objects[obj_handle.v];
+    switch (object.type) {
+        case ObjectType_ObjectList: {
+            if (object.object_list.objects_size) {
+                Box3 temp_box;
+                bool first_box = true;
+                
+                result = true;
+                for (u64 object_index = 0;
+                     object_index < object.object_list.objects_size;
+                     ++object_index) {
+                    ObjectHandle test_object = object.object_list.objects[object_index];
+                    
+                    if (!object_get_box(world, test_object, &temp_box)) {
+                        result = false;
+                        break;
+                    }
+                    
+                    *box = first_box ? temp_box : box3_join(*box, temp_box);
+                    first_box = false;
+                }
+            }
+        } break;
+        case ObjectType_Sphere: {
+            box->min = v3sub(object.sphere.p, v3s(object.sphere.r));
+            box->max = v3add(object.sphere.p, v3s(object.sphere.r));
+            
+            result = true;
+        } break;
+        case ObjectType_Triangle: {
+            f32 min_x = fminf(object.triangle.p[0].x, fminf(object.triangle.p[1].x, object.triangle.p[2].x));
+            f32 max_x = fmaxf(object.triangle.p[0].x, fmaxf(object.triangle.p[1].x, object.triangle.p[2].x));
+            
+            f32 min_y = fminf(object.triangle.p[0].y, fminf(object.triangle.p[1].y, object.triangle.p[2].y));
+            f32 max_y = fmaxf(object.triangle.p[0].y, fmaxf(object.triangle.p[1].y, object.triangle.p[2].y));
+            
+            f32 min_z = fminf(object.triangle.p[0].z, fminf(object.triangle.p[1].z, object.triangle.p[2].z));
+            f32 max_z = fmaxf(object.triangle.p[0].z, fmaxf(object.triangle.p[1].z, object.triangle.p[2].z));
+            
+            f32 epsilon = 0.001f;
+            box->min = v3(min_x - epsilon, min_y - epsilon, min_z - epsilon);
+            box->max = v3(max_x + epsilon, max_y + epsilon, max_z + epsilon);
+            
+            result = true;
+        } break;
+        case ObjectType_ConstantMedium: {
+            result = object_get_box(world, object.constant_medium.boundary, box);
+        } break;
+        case ObjectType_Instance: {
+            Box3 os_box;
+            assert(object_get_box(world, object.instance.object, &os_box));
+            
+            // *box->min = mat4x4_mul_vec3(object.instance.o2w, os_box.min);
+            // *box->max = mat4x4_mul_vec3(object.instance.o2w, os_box.max);
+        } break;
+        case ObjectType_BVHNode: {
+            *box = object.bvh_node.box;
+            
+            result = true;
+        } break;
+        case ObjectType_Box: {
+            *box = object.box.box;
+            
+            result = true;
+        } break;
+        default: assert(false);
+    }
+    
+    return result;
+}
+
+
+
+#define BOX_COMPARATOR_SIGNATURE(_name) int _name(void *w, const void *a, const void *b)
+typedef BOX_COMPARATOR_SIGNATURE(BoxComparator);
+
+inline int 
+box_comapre(World *world, ObjectHandle a, ObjectHandle b, u32 axis) {
+    Box3 b0, b1;
+    assert(object_get_box(world, a, &b0) && object_get_box(world, b, &b1));
+    return b0.min.e[axis] < b1.min.e[axis];
+}
+
+BOX_COMPARATOR_SIGNATURE(box_compare_x) { return box_comapre((World *)w, *((ObjectHandle *)a), *((ObjectHandle *)b), 0); }
+BOX_COMPARATOR_SIGNATURE(box_compare_y) { return box_comapre((World *)w, *((ObjectHandle *)a), *((ObjectHandle *)b), 1); }
+BOX_COMPARATOR_SIGNATURE(box_compare_z) { return box_comapre((World *)w, *((ObjectHandle *)a), *((ObjectHandle *)b), 2); }
+
+Object 
+object_bvh_node(World *world, ObjectHandle *objects_init, u64 objects_total_size,
+                u64 start, u64 end) {
+    Object bvh = { .type = ObjectType_BVHNode };
+    
+    u32 axis = random_int(&global_entropy, 0, 2);
+ 
+    BoxComparator *comparator = (axis == 0) ? box_compare_x 
+                              : (axis == 1) ? box_compare_y 
+                                            : box_compare_z;
+                                            
+    u64 object_count = end - start;
+    assert(object_count);
+    
+    ObjectHandle *objects = malloc(sizeof(ObjectHandle) * objects_total_size);
+    memcpy(objects, objects_init, sizeof(ObjectHandle) * objects_total_size);
+    
+    if (object_count == 1) {
+        bvh.bvh_node.left = bvh.bvh_node.right = objects[start];    
+    } else if (object_count == 2) {
+        if (comparator(world, objects +start, objects + start + 1)) {
+            bvh.bvh_node.left = objects[start];
+            bvh.bvh_node.right = objects[start + 1];
+        } else {
+            bvh.bvh_node.left = objects[start + 1];
+            bvh.bvh_node.right = objects[start];
+        }
+    } else {
+        qsort_s(objects + start, object_count, sizeof(ObjectHandle), comparator, world);
+        
+        u64 mid = start + object_count / 2;
+        
+        bvh.bvh_node.left = add_object(world, object_bvh_node(world, objects, objects_total_size,start, mid));
+        bvh.bvh_node.right = add_object(world, object_bvh_node(world, objects, objects_total_size, mid, end));
+    }
+    
+    free(objects);
+    
+    Box3 box_left = {0}, box_right = {0};
+    assert(object_get_box(world, bvh.bvh_node.left, &box_left) && object_get_box(world, bvh.bvh_node.right, &box_right));
+    bvh.bvh_node.box = box3_join(box_left, box_right);
+    
+    return bvh;
+}
+
+static bool 
+box3_hit(Box3 box, Ray ray, f32 t_min, f32 t_max) {
+    for (u32 a = 0;
+         a < 3;
+         ++a) {
+        f32 inv_d = 1.0f / ray.dir.e[a];
+        f32 t0 = (box.min.e[a] - ray.orig.e[a]) * inv_d;
+        f32 t1 = (box.max.e[a] - ray.orig.e[a]) * inv_d;
+        if (inv_d < 0.0f) {
+            f32 temp = t0;
+            t0 = t1;
+            t1 = temp;
+        }
+        
+        if (t0 > t_min) {
+            t_min = t0;
+        }
+        if (t1 < t_max) {
+            t_max = t1;
+        }
+        
+        if (t_max < t_min) {
+            return false;
+        }
+    }
+    return true;
+}
 
 typedef struct {
     u64 bounce_count;
@@ -570,7 +782,7 @@ object_hit(World *world, RandomSeries *rs, ObjectHandle obj_handle, Ray ray, Hit
             bool has_hit_anything = false;
             
             f32 closest_so_far = t_max;
-            for (u32 object_index = 0;
+            for (u64 object_index = 0;
                 object_index < object.object_list.objects_size;
                 ++object_index) {
                 ObjectHandle test_object = object.object_list.objects[object_index];
@@ -617,6 +829,29 @@ object_hit(World *world, RandomSeries *rs, ObjectHandle obj_handle, Ray ray, Hit
                     }
                 }
             }
+        } break;
+        case ObjectType_Instance: {
+            Vec3 os_orig = mat4x4_mul_vec3(object.instance.w2o, ray.orig);
+            Vec3 os_dir = mat4x4_as_3x3_mul_vec3(object.instance.w2o, ray.dir); 
+            Ray os_ray = make_ray(os_orig, os_dir);
+        
+            result = object_hit(world, rs, object.instance.object, os_ray, hit, t_min, t_max);
+            
+            Vec3 ws_p = mat4x4_mul_vec3(object.instance.o2w, hit->p);
+            Vec3 ws_n = normalize(mat4x4_as_3x3_mul_vec3(object.instance.o2w, hit->n));
+            
+            hit->p = ws_p;
+            hit_set_normal(hit, ws_n, ray);   
+        } break;
+        case ObjectType_BVHNode: {
+            if (box3_hit(object.bvh_node.box, ray, t_min, t_max)) {
+                bool hit_left = object_hit(world, rs, object.bvh_node.left, ray, hit, t_min, t_max);
+                bool hit_right = object_hit(world, rs, object.bvh_node.right, ray, hit, t_min, hit_left ? hit->t : t_max);
+                result = hit_left || hit_right;
+            }
+        } break;
+        case ObjectType_Box: {
+            result = object_hit(world, rs, object.box.sides_list, ray, hit, t_min, t_max);
         } break;
         default: assert(false);
     }

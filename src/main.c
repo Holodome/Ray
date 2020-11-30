@@ -3,8 +3,6 @@
 #include "trace.h"
 #include "perlin.h"
 
-static RandomSeries global_entropy = { 546674569 };
-
 typedef struct {
     u32 x_min;
     u32 x_max;
@@ -389,7 +387,7 @@ init_cornell_box(World *world, Image *image) {
     MaterialHandle light = add_material(world, (Material) {
         .type = MaterialType_DiffuseLight,
         .diffuse_light = {
-            .emit = add_texture(world, texture_solid(v3s(15)))
+            .emit = add_texture(world, texture_solid(v3s(7)))
         }
     });
     
@@ -398,32 +396,40 @@ init_cornell_box(World *world, Image *image) {
     });
     add_yz_rect(world, world->object_list, 0, 555, 0, 555, 555, green);
     add_yz_rect(world, world->object_list, 0, 555, 0, 555, 0, red);
-    add_xz_rect(world, world->object_list, 213, 343, 227, 332, 554, light);
+    // add_xz_rect(world, world->object_list, 213, 343, 227, 332, 554, light);
+    add_xz_rect(world, world->object_list, 113, 443, 127, 432, 554, light);
     add_xz_rect(world, world->object_list, 0, 555, 0, 555, 0, white);
     add_xz_rect(world, world->object_list, 0, 555, 0, 555, 555, white);
     add_xy_rect(world, world->object_list, 0, 555, 0, 555, 555, white);
     
     ObjectHandle box1_list = add_object(world, (Object) { .type = ObjectType_ObjectList });
-    add_box(world, box1_list, v3(130, 0, 65), v3(295, 165, 230), white);
-    add_object_to_list(world, world->object_list, add_object(world, (Object) {
-        .type = ObjectType_ConstantMedium,
-        .constant_medium = {
-            .neg_inv_density = -1 / 0.01f,
-            .phase_function = add_material(world, material_isotropic(add_texture(world, texture_solid(v3s(1))))),
-            .boundary = box1_list
-        }
-    }));
-    
-    ObjectHandle box2_list = add_object(world, (Object) { .type = ObjectType_ObjectList });
-    add_box(world, box2_list, v3(265, 0, 295), v3(430, 330, 460), white);
-    add_object_to_list(world, world->object_list, add_object(world, (Object) {
+    add_box(world, box1_list, v3(0, 0, 0), v3(165, 330, 165), white);
+    ObjectHandle box1 = add_object(world, object_instance(box1_list, v3(265,0,295), v3(0, DEG2RAD(15), 0)));
+    ObjectHandle smoke1 = add_object(world, (Object) {
         .type = ObjectType_ConstantMedium,
         .constant_medium = {
             .neg_inv_density = -1 / 0.01f,
             .phase_function = add_material(world, material_isotropic(add_texture(world, texture_solid(v3s(0))))),
-            .boundary = box2_list
+            .boundary = box1
         }
-    }));
+    });
+    
+    ObjectHandle box2_list = add_object(world, (Object) { .type = ObjectType_ObjectList });
+    add_box(world, box2_list, v3(0, 0, 0), v3(165, 165, 165), white);
+    ObjectHandle box2 = add_object(world, object_instance(box2_list, v3(130, 0, 65), v3(0, DEG2RAD(-18), 0)));
+    ObjectHandle smoke2 = add_object(world, (Object) {
+        .type = ObjectType_ConstantMedium,
+        .constant_medium = {
+            .neg_inv_density = -1 / 0.01f,
+            .phase_function = add_material(world, material_isotropic(add_texture(world, texture_solid(v3s(1))))),
+            .boundary = box2
+        }
+    });
+    
+    ObjectHandle smoke_list = add_object(world, OBJECT_LIST);
+    add_object_to_list(world, smoke_list, smoke1);
+    add_object_to_list(world, smoke_list, smoke2);
+    add_object_to_list(world, world->object_list, add_object(world, object_bvh_node(world, world->objects[smoke_list.v].object_list.objects, 2, 0, 2)));
     
     world->backgorund_color = v3s(0);
 
@@ -435,11 +441,12 @@ init_cornell_box(World *world, Image *image) {
     world->camera = make_camera(look_from, look_at, v3(0, 1, 0), aspect_ratio, DEG2RAD(40), aperture, dtf);
 }
 
-#if 0
 void 
 init_scene3(World *world, Image *image) {
+    world->object_list = add_object(world, OBJECT_LIST);
     MaterialHandle ground = add_material(world, material_lambertian(add_texture(world, texture_solid(v3(0.48, 0.83, 0.53)))));
 
+    ObjectHandle boxes_list = add_object(world, OBJECT_LIST);
     const int boxes_per_side = 20;
     for (int i = 0; i < boxes_per_side; i++) {
         for (int j = 0; j < boxes_per_side; j++) {
@@ -451,9 +458,13 @@ init_scene3(World *world, Image *image) {
             f32 y1 = random_uniform(&global_entropy, 1,101);
             f32 z1 = z0 + w;
 
-            world_add_box(world, v3(x0,y0,z0), v3(x1,y1,z1), ground);
-        }*
+            add_object_to_list(world, boxes_list, add_object(world, object_box(world, v3(x0,y0,z0), v3(x1,y1,z1), ground)));
+        }
     }
+    add_object_to_list(world, world->object_list, 
+                       add_object(world,
+                                  object_bvh_node(world, world->objects[boxes_list.v].object_list.objects, 
+                                                  boxes_per_side * boxes_per_side, 0, boxes_per_side * boxes_per_side)));
 
     MaterialHandle light = add_material(world, (Material) {
         .type = MaterialType_DiffuseLight,
@@ -461,27 +472,38 @@ init_scene3(World *world, Image *image) {
             .emit = add_texture(world, texture_solid(v3s(7)))
         }
     });
-    world_add_xz_rect(world, 123, 423, 147, 412, 554, light);
+    add_xz_rect(world, world->object_list, 123, 423, 147, 412, 554, light);
 
-    // Vec3 center1 = point3(400, 400, 200);
-    // Vec3 center2 = v3add(center1, vec3(30,0,0));
-    // auto moving_sphere_material = make_shared<lambertian>(color(0.7, 0.3, 0.1));
-    // objects.add(make_shared<moving_sphere>(center1, center2, 0, 1, 50, moving_sphere_material));
-
-    add_object(world, object_sphere(v3(260, 150, 45), 50, add_material(world, material_dielectric(1.5))));
-    add_object(world, object_sphere(v3(0, 150, 145), 50, add_material(world, (Material) {
+    add_object_to_list(world, world->object_list, add_object(world, object_sphere(v3(260, 150, 45), 50, add_material(world, material_dielectric(1.5)))));
+    add_object_to_list(world, world->object_list, add_object(world, object_sphere(v3(0, 150, 145), 50, add_material(world, (Material) {
         .type = MaterialType_Metal,
         .metal = {
             .albedo = add_texture(world, texture_solid(v3(0.8, 0.8, 0.9))),
             .fuzz = 1
         }
-    })));
+    }))));
 
-    // add_object(world, object_sphere(v3(360,150,145), 70, add_material(world, material_dielectric(1.5))));
-    // objects.add(boundary);
-    // objects.add(make_shared<constant_medium>(boundary, 0.2, color(0.2, 0.4, 0.9)));
-    // boundary = make_shared<sphere>(point3(0, 0, 0), 5000, make_shared<dielectric>(1.5));
-    // objects.add(make_shared<constant_medium>(boundary, .0001, color(1,1,1)));
+    ObjectHandle bound1 = add_object(world, object_sphere(v3(360,150,145), 70, add_material(world, material_dielectric(1.5f))));
+    add_object_to_list(world, world->object_list, bound1);
+    add_object_to_list(world, world->object_list, add_object(world, (Object) {
+        .type = ObjectType_ConstantMedium,
+        .constant_medium = {
+            .neg_inv_density = -1 / 0.2f,
+            .phase_function = add_material(world, material_isotropic(add_texture(world, texture_solid(v3(0.2, 0.4, 0.9))))),
+            .boundary = bound1
+        }
+    }));
+    
+    ObjectHandle bound2 = add_object(world, object_sphere(v3(0,0,0), 5000, add_material(world, material_dielectric(1.5f))));
+    add_object_to_list(world, world->object_list, bound2);
+    add_object_to_list(world, world->object_list, add_object(world, (Object) {
+        .type = ObjectType_ConstantMedium,
+        .constant_medium = {
+            .neg_inv_density = -1 / 0.0001f,
+            .phase_function = add_material(world, material_isotropic(add_texture(world, texture_solid(v3s(1))))),
+            .boundary = bound2
+        }
+    }));
 
     MaterialHandle emat = add_material(world, (Material) {
         .type = MaterialType_Lambertian,
@@ -494,7 +516,7 @@ init_scene3(World *world, Image *image) {
             })
         } 
     });
-    add_object(world, object_sphere(v3(400,200,400), 100, emat));
+    add_object_to_list(world, world->object_list, add_object(world, object_sphere(v3(400,200,400), 100, emat)));
     MaterialHandle marble = add_material(world, (Material) {
         .type = MaterialType_Lambertian,
         .lambertian = {
@@ -507,13 +529,15 @@ init_scene3(World *world, Image *image) {
             })
         }
     });  
-    add_object(world, object_sphere(v3(220,280,300), 80, marble));
+    add_object_to_list(world, world->object_list, add_object(world, object_sphere(v3(220,280,300), 80, marble)));
 
+    ObjectHandle sphere_box = add_object(world, OBJECT_LIST);
     MaterialHandle white = add_material(world, material_lambertian(add_texture(world, texture_solid(v3(.73, .73, .73)))));
     int ns = 1000;
     for (int j = 0; j < ns; j++) {
-        add_object(world, object_sphere(v3add(v3(-100,270,395),random_vector(&global_entropy, 0, 165)), 10, white));
+        add_object_to_list(world, sphere_box, add_object(world, object_sphere(v3add(v3(-100,270,395), random_vector(&global_entropy, 0, 165)), 10, white)));
     }
+    add_object_to_list(world, world->object_list, add_object(world, object_bvh_node(world, world->objects[sphere_box.v].object_list.objects, ns, 0, ns)));
 
     world->backgorund_color = v3s(0);
 
@@ -524,7 +548,6 @@ init_scene3(World *world, Image *image) {
     f32 aperture = 0.f;
     world->camera = make_camera(look_from, look_at, v3(0, 1, 0), aspect_ratio, DEG2RAD(40), aperture, dtf);
 }
-#endif 
 
 int 
 main(int argc, char **argv) {
@@ -534,7 +557,7 @@ main(int argc, char **argv) {
     Image output_image = make_image_for_writing(image_w, image_h);
     
     World world = {0};
-    init_cornell_box(&world, &output_image);
+    init_scene3(&world, &output_image);
     
     u32 tile_w = 64;
     u32 tile_h = 64;
@@ -581,9 +604,12 @@ main(int argc, char **argv) {
     }
     assert(cursor == render_queue.order_count);
     
-    printf("Scene object count: %u\n", world.objects_size);
-    printf("Scene texture count: %u\n", world.textures_size);
-    printf("Scene material count: %u\n", world.materials_size);
+    printf("Scene object count: %llu\n", world.objects_size);
+    printf("Scene texture count: %llu\n", world.textures_size);
+    printf("Scene material count: %llu\n", world.materials_size);
+    printf("Scene memory taken: %llu bytes\n", world.objects_size * sizeof(*world.objects) + 
+                                         world.textures_size * sizeof(*world.textures) +
+                                         world.materials_size * sizeof(*world.materials));
     
     printf("Start raycasting\n");
     clock_t start_clock = clock();
