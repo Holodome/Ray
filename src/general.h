@@ -1,5 +1,9 @@
 #if !defined(GENERAL_H)
 
+#if !defined(RAY_INTERNAL)
+#define RAY_INTERNAL 0
+#endif 
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -26,18 +30,24 @@ typedef double f64;
 
 typedef uintptr_t umm;
 
+#define I8_MIN  INT8_MIN
+#define I16_MIN INT16_MIN
+#define I32_MIN INT32_MIN
+#define I64_MIN INT64_MIN
+#define I8_MAX  INT8_MAX
+#define I16_MAX INT16_MAX
+#define I32_MAX INT32_MAX
+#define I64_MAX INT64_MAX
+#define U8_MAX  UINT8_MAX
+#define U16_MAX UINT16_MAX
 #define U32_MAX UINT32_MAX
+#define U64_MAX UINT64_MAX
 
 #define CT_ASSERT(_expr) static_assert(_expr, #_expr)
 
-#define MAX_BOUNCE_COUNT  16llu
-// #define SAMPLES_PER_PIXEL 1024llu
-#define SAMPLES_PER_PIXEL (u64)(64)
-
-#define DEFAULT_ALIGNMENT (2 * sizeof(void *))
-
-#define KILOBYTES(_b) ((_b) << 10)
+#define KILOBYTES(_b) ((u64)(_b) << 10)
 #define MEGABYTES(_b) (KILOBYTES(_b) << 10)
+#define DEFAULT_ALIGNMENT (2 * sizeof(void *))
 
 typedef struct {
     u8 *data;
@@ -65,6 +75,14 @@ inline void
 temp_memory_end(TempMemory mem) {
     mem.arena->data_size = mem.data_size;
     mem.arena->last_data_size = mem.last_data_size;
+}
+
+inline MemoryArena 
+memory_arena(void *buffer, u64 buffer_size) {
+    return (MemoryArena) {
+        .data = buffer,
+        .data_capacity = buffer_size
+    };
 }
 
 inline umm 
@@ -125,7 +143,7 @@ arena_realloc_align(MemoryArena *a, void *old_mem_v, u64 old_size, u64 new_size,
             result = old_mem;
         } else {
             result = arena_alloc_align(a, new_size, align);
-            umm copy_size = new_size;
+            u64 copy_size = new_size;
             if (old_size < new_size) {
                 copy_size = old_size;
             }

@@ -38,11 +38,11 @@ typedef struct {
     u32 image_h;
     char *image_filename;
     bool open_image_after_done;
-    
     u32 thread_count;
-    u32 rays_per_pixel;
+    u32 samples_per_pixel;
     u32 max_bounce_count;
-    
+    u32 tile_w;
+    u32 tile_h;
 } RaySettings;
 
 #define RAY_H 1

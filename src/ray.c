@@ -7,6 +7,9 @@
 
 RandomSeries global_entropy = { 546674572 };
 
+u32 max_bounce_count;
+u32 samples_per_pixel;
+
 static bool 
 render_tile(RenderWorkQueue *queue) {
     u64 work_order_index = atomic_add64(&queue->next_order_index, 1);
@@ -30,7 +33,7 @@ render_tile(RenderWorkQueue *queue) {
             Vec3 pixel_color = v3(0, 0, 0);
             
             for (u32 sample_index = 0;
-                sample_index < SAMPLES_PER_PIXEL;
+                sample_index < samples_per_pixel;
                 ++sample_index) {
                 f32 u = ((f32)x + random_bilateral(&order->entropy) * 0.5f) / (f32)queue->output->w;
                 f32 v = ((f32)y + random_bilateral(&order->entropy) * 0.5f) / (f32)queue->output->h;
@@ -42,7 +45,7 @@ render_tile(RenderWorkQueue *queue) {
                 ray_triangle_collision_tests += cast_data.ray_triangle_collision_tests;
                 object_collision_tests += cast_data.object_collision_tests;
                 
-                f32 color_multiplier = 1.0f / (f32)SAMPLES_PER_PIXEL;
+                f32 color_multiplier = 1.0f / (f32)samples_per_pixel;
                 pixel_color = v3add(pixel_color, v3muls(sample_color, color_multiplier));
             }
             
@@ -99,6 +102,30 @@ parse_command_line_arguments(u32 argc, char **argv, RaySettings *s) {
             s->image_h = h;
             
             cursor += 3;
+        } else if (!strcmp(arg, "-spp")) {
+            CHECK_HAS_ENOUGH_ARGS_OR_ERROR(1);
+            
+            u32 v = atoi(argv[cursor + 1]);
+            s->samples_per_pixel = v;
+            
+            cursor += 2;
+        } else if (!strcmp(arg, "-mbc")) {
+            CHECK_HAS_ENOUGH_ARGS_OR_ERROR(1);
+            
+            u32 v = atoi(argv[cursor + 1]);
+            s->max_bounce_count = v;
+            
+            cursor += 2;
+        } else if (!strcmp(arg, "-threads")) {
+            CHECK_HAS_ENOUGH_ARGS_OR_ERROR(1);
+            
+            u32 v = atoi(argv[cursor + 1]);
+            s->thread_count = v;
+            
+            cursor += 2;
+        } else if (!strcmp(arg, "-open")) {
+            s->open_image_after_done = true;
+            ++cursor;
         } else {
             fprintf(stderr, "[ERROR] Unknown argument %s\n", arg);
             break;
@@ -108,25 +135,35 @@ parse_command_line_arguments(u32 argc, char **argv, RaySettings *s) {
 
 int 
 main(int argc, char **argv) {
-    RaySettings settings = {0};
+    RaySettings s = {
+        .image_w = 480,
+        .image_h = 480,
+        .image_filename = "out.bmp",
+        .samples_per_pixel = 32,
+        .max_bounce_count = 16,
+        .open_image_after_done = true,
+        .thread_count = 6,
+        .tile_w = 64,
+        .tile_h = 64
+    };
+    parse_command_line_arguments(argc, argv, &s);
     
-    u32 image_w = 480 * 2;
-    u32 image_h = 480 * 2;
+    max_bounce_count = s.max_bounce_count;
+    samples_per_pixel = s.samples_per_pixel;
     
-    Image output_image = make_image_for_writing(image_w, image_h);
+    Image output_image = make_image_for_writing(s.image_w, s.image_h);
     
     World world = {0};
     world.arena.data_capacity = MEGABYTES(16);
     world.arena.data = malloc(world.arena.data_capacity);
-    init_scene3(&world, &output_image);
+    init_cornell_box(&world, &output_image);
+    
     char bytes_buffer[32];
     format_bytes(bytes_buffer, sizeof(bytes_buffer), world.arena.data_size);
     printf("Scene memory taken: %s\n", bytes_buffer);
     
-    u32 tile_w = 64;
-    u32 tile_h = 64;
-    u32 tile_count_x = (image_w + tile_w - 1) / tile_w;
-    u32 tile_count_y = (image_h + tile_h - 1) / tile_h;
+    u32 tile_count_x = (s.image_w + s.tile_w - 1) / s.tile_w;
+    u32 tile_count_y = (s.image_h + s.tile_h - 1) / s.tile_h;
     u32 tile_count = tile_count_x * tile_count_y;
     
     RenderWorkQueue render_queue = {0};
@@ -139,19 +176,19 @@ main(int argc, char **argv) {
     for (u32 tile_y = 0;
          tile_y < tile_count_y;
          ++tile_y) {
-        u32 y_min = tile_y * tile_h;
-        u32 y_max = y_min + tile_h;
-        if (y_max > image_h) {
-            y_max = image_h;
+        u32 y_min = tile_y * s.tile_h;
+        u32 y_max = y_min + s.tile_h;
+        if (y_max > s.image_h) {
+            y_max = s.image_h;
         }
         
         for (u32 tile_x = 0;
              tile_x < tile_count_x;
              ++tile_x) {
-            u32 x_min = tile_x * tile_w;
-            u32 x_max = x_min + tile_w;
-            if (x_max > image_w) {
-                x_max = image_w;
+            u32 x_min = tile_x * s.tile_w;
+            u32 x_max = x_min + s.tile_w;
+            if (x_max > s.image_w) {
+                x_max = s.image_w;
             }
             
             RenderWorkOrder *order = render_queue.orders + cursor++;
@@ -172,13 +209,16 @@ main(int argc, char **argv) {
     printf("Scene object count: %llu\n", world.objects_size);
     printf("Scene texture count: %llu\n", world.textures_size);
     printf("Scene material count: %llu\n", world.materials_size);
+    printf("Thread count: %u\n", s.thread_count);
+    printf("Image size: %ux%u\n", s.image_w, s.image_h);
+    printf("Samples per pixel: %u\n", s.samples_per_pixel);
+    printf("Max bounce count: %u\n", s.max_bounce_count);
     
     printf("Start raycasting\n");
     clock_t start_clock = clock();
     
-    u32 thread_count = 6;
     for (u32 core_index = 1;
-         core_index < thread_count;
+         core_index < s.thread_count;
          ++core_index) {
         create_thread(render_thread_proc, &render_queue);
     }
@@ -188,9 +228,7 @@ main(int argc, char **argv) {
             f32 percent = (f32)render_queue.orders_done / (f32)render_queue.order_count;
             printf("\rRaycasting %u%%", (u32)roundf(percent * 100));
             fflush(stdout);
-        } else {
-            _mm_pause();
-        }
+        } 
     }
     printf("\nRaycasting done\n");
     
@@ -203,10 +241,9 @@ main(int argc, char **argv) {
     char number_buffer[100];
     printf("Raycasting time: %s\n", time_string);
     printf("Pixel count: %u\n", output_image.w * output_image.h);
-    printf("Samples per pixel: %llu\n", SAMPLES_PER_PIXEL);
-    format_number_with_thousand_separators(number_buffer, sizeof(number_buffer), SAMPLES_PER_PIXEL * output_image.w * output_image.h);
+    format_number_with_thousand_separators(number_buffer, sizeof(number_buffer), samples_per_pixel * output_image.w * output_image.h);
     printf("Primary ray count: %s\n", number_buffer);
-    printf("Perfomace: %fms/primary ray\n", (f64)time_elapsed / (f64)(SAMPLES_PER_PIXEL * output_image.w * output_image.h));
+    printf("Perfomace: %fms/primary ray\n", (f64)time_elapsed / (f64)(samples_per_pixel * output_image.w * output_image.h));
     format_number_with_thousand_separators(number_buffer, sizeof(number_buffer), render_queue.total_bounce_count);
     printf("Total bounces: %s\n", number_buffer);
     printf("Perfomance: %fms/bounce\n", (f64)time_elapsed / (f64)render_queue.total_bounce_count);
@@ -214,13 +251,16 @@ main(int argc, char **argv) {
     printf("Triangle collision tests: %s\n", number_buffer);
     format_number_with_thousand_separators(number_buffer, sizeof(number_buffer), render_queue.object_collision_tests);
     printf("Object collision tests: %s\n", number_buffer);
-    printf("Average bounce count per ray: %f\n", (f64)render_queue.total_bounce_count / (f64)(SAMPLES_PER_PIXEL * output_image.w * output_image.h));
+    printf("Average bounce count per ray: %f\n", (f64)render_queue.total_bounce_count / (f64)(samples_per_pixel * output_image.w * output_image.h));
     
-    char *out = "out.bmp";
+    char *out = s.image_filename;
     image_save(&output_image, out);
-    char command[32] = {0};
-    snprintf(command, sizeof(command), "start %s", out);
-    system(command);
+    
+    if (s.open_image_after_done) {
+        char command[32];
+        snprintf(command, sizeof(command), "start %s", out);
+        system(command);
+    }
     
     printf("Exited successfully\n");
     return 0;

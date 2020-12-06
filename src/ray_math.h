@@ -514,11 +514,24 @@ typedef struct {
 typedef struct {
     Vec3 min;
     Vec3 max;  
-} Box3;
+} Bounds3;
 
-inline Box3 
-box3_join(Box3 a, Box3 b) {
-    Box3 result;
+inline Bounds3
+bounds3(Vec3 min, Vec3 max) {
+    return (Bounds3) {
+        .min = min,
+        .max = max
+    };
+}
+
+inline Bounds3
+bounds3i(Vec3 v) {
+    return bounds3(v, v);
+}
+
+inline Bounds3 
+bounds3_join(Bounds3 a, Bounds3 b) {
+    Bounds3 result;
     
     result.min.x = fminf(a.min.x, b.min.x);
     result.min.y = fminf(a.min.y, b.min.y);
@@ -531,9 +544,9 @@ box3_join(Box3 a, Box3 b) {
     return result;    
 }
 
-inline Box3 
-box3_extend(Box3 a, Vec3 p) {
-    Box3 result;
+inline Bounds3 
+bounds3_extend(Bounds3 a, Vec3 p) {
+    Bounds3 result;
     
     result.min.x = fminf(a.min.x, p.x);
     result.min.y = fminf(a.min.y, p.y);

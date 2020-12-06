@@ -181,6 +181,17 @@ texture_solid(Vec3 c) {
         }
     };
 }
+
+inline Texture
+texture_perlin(Perlin perlin, f32 s) {
+    return (Texture) {
+        .type = TextureType_Perlin,
+        .perlin = {
+            .p = perlin,
+            .s = s
+        }
+    };
+}
 // Recursive texture sampler
 Vec3 sample_texture(World *world, TextureHandle handle, HitRecord *hit);
 
@@ -250,9 +261,26 @@ material_dielectric(f32 ir) {
     };
 }
 
+inline Material 
+material_metal(TextureHandle albedo, f32 fuzz) {
+    return (Material) {
+        .type = MaterialType_Metal,
+        .metal = {
+            .albedo = albedo,
+            .fuzz = fuzz
+        }
+    };
+}
+
 //
 // Objects
 //
+
+typedef struct {
+    ObjectHandle *a;
+    u64 size;
+    u64 capacity;
+} ObjectList;
 
 typedef u32 ObjectType;
 enum {
@@ -266,7 +294,7 @@ enum {
     ObjectType_Box,
 };
 
-typedef struct {
+typedef struct Object {
     ObjectType type;
     union {
         struct {
@@ -284,23 +312,20 @@ typedef struct {
             MaterialHandle phase_function;
             f32 neg_inv_density;
         } constant_medium;
-        struct {
-            ObjectHandle *objects;
-            u64 objects_size;
-            u64 objects_capacity;
-        } object_list;
+        ObjectList object_list;
         struct {
             ObjectHandle object;
             Mat4x4 o2w;
             Mat4x4 w2o;
+            Bounds3 bounds;
         } instance;
         struct {
             ObjectHandle left;
             ObjectHandle right;
-            Box3 box;
+            Bounds3 box;
         } bvh_node;
         struct {
-            Box3 box;
+            Bounds3 box;
             ObjectHandle sides_list;
         } box;
     };
@@ -309,15 +334,15 @@ typedef struct {
 #define OBJECT_LIST ( (Object) { .type = ObjectType_ObjectList } )
 
 Object object_sphere(Vec3 p, f32 r, MaterialHandle mat);
-Object object_instance(ObjectHandle obj, Vec3 t, Vec3 r);
+Object object_instance(World *world, ObjectHandle obj, Vec3 t, Vec3 r);
 Object object_triangle(Vec3 p0, Vec3 p1, Vec3 p2, MaterialHandle mat);
 Object object_box(World *world, Vec3 min, Vec3 max, MaterialHandle mat);
-// @TODO replace objects list with some kind of structure
-Object object_bvh_node(World *world, ObjectHandle *objects_init, u64 objects_total_size,
-                       u64 start, u64 end);
+Object object_constant_medium(f32 d, MaterialHandle phase, ObjectHandle bound);
+// @NOTE: Object list is passed by value because it is not changed
+Object object_bvh_node(World *world, ObjectList object_list, u64 start, u64 end);
 
-// Gets bounding box for given object and writes it to box. If object has no AABB, return false
-bool object_get_box(World *world, ObjectHandle obj_handle, Box3 *box);
+void add_object_to_list(MemoryArena *arena, ObjectList *list, ObjectHandle o);
+void object_list_shrink_to_fit(MemoryArena *arena, ObjectList *list);
 
 //
 // World 
@@ -348,90 +373,35 @@ struct World {
     ObjectHandle object_list;
 };
 
-// Dynamic array hacks
-#define DEFAULT_ARRAY_CAPACITY 10
-#define IAMLAZYTOINITWORLD(_a, _arr, _capacity) { if (!_capacity) { _capacity = DEFAULT_ARRAY_CAPACITY; _arr = arena_alloc(_a, sizeof(*_arr) * _capacity); } }
-#define EXPAND_IF_NEEDED(_a, _arr, _size, _capacity) { IAMLAZYTOINITWORLD(_a, _arr, _capacity);  \
-    if (_size + 1 > _capacity) { _arr = arena_realloc(_a, _arr, sizeof(*_arr) * _capacity, sizeof(*_arr) * _capacity * 2); _capacity *= 2; } }
-#define SHRINK_TO_FIT(_a, _arr, _size, _capacity) { _arr = arena_realloc(_a, _arr, sizeof(*_arr) * _capacity, sizeof(*_arr) * _size); _capacity = _size; }
-
-// #define IAMLAZYTOINITWORLD(_a, _arr, _capacity) { if (!_capacity) { _capacity = 10; _arr = malloc(sizeof(*_arr) * _capacity); } }
-// #define EXPAND_IF_NEEDED(_a, _arr, _size, _capacity) { IAMLAZYTOINITWORLD(_a, _arr, _capacity);  \
-//     if (_size + 1 > _capacity) { _arr = realloc(_arr, sizeof(*_arr) * _capacity * 2); _capacity *= 2; } }
-// #define SHRINK_TO_FIT(_a, _arr, _size, _capacity) { _arr = realloc(_arr, sizeof(*_arr) * _size); _capacity = _size; }
-
+inline Object *get_object(World *world, ObjectHandle h);
+bool object_get_box(World *world, ObjectHandle obj_handle, Bounds3 *box);
 
 // Adds some kind of resource to world
-TextureHandle add_texture(World *world, Texture texture);
-MaterialHandle add_material(World *world, Material material);
-ObjectHandle add_object(World *world, Object object);
+inline TextureHandle  new_texture(World *world, Texture texture);
+inline MaterialHandle new_material(World *world, Material material);
+inline ObjectHandle   new_object(World *world, Object object);
 
-void  
-add_object_to_list(World *world, ObjectHandle list_handle, ObjectHandle object) {
-    Object *list = world->objects + list_handle.v;
-    assert(list->type = ObjectType_ObjectList);
-    
-    EXPAND_IF_NEEDED(&world->arena, list->object_list.objects, list->object_list.objects_size, list->object_list.objects_capacity);
-    
-    list->object_list.objects[list->object_list.objects_size++] = object;
-}
+inline void add_object(World *world, ObjectHandle list_handle, ObjectHandle object);
+#define add_object_to_world(_world, _obj) add_object(_world, _world->object_list, _obj)
 
-void 
-object_list_shrink_to_fit(World *world, ObjectHandle list_handle) {
-    Object *list = world->objects + list_handle.v;
-    assert(list->type == ObjectType_ObjectList);
-    
-    SHRINK_TO_FIT(&world->arena, list->object_list.objects, list->object_list.objects_size, list->object_list.objects_capacity);
-}
+inline void add_new_object(World *world, ObjectHandle list_handle, Object object);
+#define add_new_object_to_world(_world, _obj) add_new_object(_world, _world->object_list, _obj)
 
-void 
-add_xy_rect(World *world, ObjectHandle list, f32 x0, f32 x1, f32 y0, f32 y1, f32 z, MaterialHandle mat) {
-    Vec3 v00 = v3(x0, y0, z);
-    Vec3 v01 = v3(x0, y1, z);
-    Vec3 v10 = v3(x1, y0, z);
-    Vec3 v11 = v3(x1, y1, z);
-    
-    add_object_to_list(world, list, add_object(world, object_triangle(v00, v01, v11, mat)));
-    add_object_to_list(world, list, add_object(world, object_triangle(v00, v11, v10, mat)));
-}
-
-void 
-add_yz_rect(World *world, ObjectHandle list, f32 y0, f32 y1, f32 z0, f32 z1, f32 x, MaterialHandle mat) {
-    Vec3 v00 = v3(x, y0, z0);
-    Vec3 v01 = v3(x, y0, z1);
-    Vec3 v10 = v3(x, y1, z0);
-    Vec3 v11 = v3(x, y1, z1);
-    
-    add_object_to_list(world, list, add_object(world, object_triangle(v00, v01, v11, mat)));
-    add_object_to_list(world, list, add_object(world, object_triangle(v00, v11, v10, mat)));
-}
-
-void 
-add_xz_rect(World *world, ObjectHandle list, f32 x0, f32 x1, f32 z0, f32 z1, f32 y, MaterialHandle mat) {
-    Vec3 v00 = v3(x0, y, z0);
-    Vec3 v01 = v3(x0, y, z1);
-    Vec3 v10 = v3(x1, y, z0);
-    Vec3 v11 = v3(x1, y, z1);
-    
-    add_object_to_list(world, list, add_object(world, object_triangle(v00, v01, v11, mat)));
-    add_object_to_list(world, list, add_object(world, object_triangle(v00, v11, v10, mat)));
-}
-
-void 
-add_box(World *world, ObjectHandle list, Vec3 p0, Vec3 p1, MaterialHandle mat) {
-    add_xy_rect(world, list, p0.x, p1.x, p0.y, p1.y, p1.z, mat);
-    add_xy_rect(world, list, p0.x, p1.x, p0.y, p1.y, p0.z, mat);
-    add_xz_rect(world, list, p0.x, p1.x, p0.z, p1.z, p1.y, mat);
-    add_xz_rect(world, list, p0.x, p1.x, p0.z, p1.z, p0.y, mat);
-    add_yz_rect(world, list, p0.y, p1.y, p0.z, p1.z, p1.x, mat);
-    add_yz_rect(world, list, p0.y, p1.y, p0.z, p1.z, p0.x, mat);
-}
+void add_xy_rect(World *world, ObjectHandle list, f32 x0, f32 x1, f32 y0, f32 y1, f32 z, MaterialHandle mat);
+void add_yz_rect(World *world, ObjectHandle list, f32 y0, f32 y1, f32 z0, f32 z1, f32 x, MaterialHandle mat);
+void add_xz_rect(World *world, ObjectHandle list, f32 x0, f32 x1, f32 z0, f32 z1, f32 y, MaterialHandle mat);
+void add_box(World *world, ObjectHandle list, Vec3 p0, Vec3 p1, MaterialHandle mat);
 
 typedef struct {
     u64 bounce_count;
     u64 ray_triangle_collision_tests;
     u64 object_collision_tests;
 } RayCastData;
+
+// Settings of ray casting
+// @NOTE This better should be passed as arguments, but let it be global for now 
+extern u32 max_bounce_count;
+extern u32 rays_per_pixel;
 
 // This is main function used in raycasting.
 // Called from multiple threads, so everything should be thread-safe.

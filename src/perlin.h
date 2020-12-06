@@ -24,8 +24,8 @@ perlin_permute(RandomSeries *rs, i32 *p, u32 n) {
 }
 
 static i32 *
-perlin_generate_perm(RandomSeries *rs) {
-    i32 *p = calloc(PERLIN_POINT_COUNT, sizeof(i32));
+perlin_generate_perm(MemoryArena *arena, RandomSeries *rs) {
+    i32 *p = arena_alloc(arena, PERLIN_POINT_COUNT * sizeof(i32));
     
     for (u32 i = 0;
          i < PERLIN_POINT_COUNT;
@@ -38,7 +38,7 @@ perlin_generate_perm(RandomSeries *rs) {
 }
 
 Perlin 
-make_perlin(RandomSeries *rs) {
+make_perlin(MemoryArena *arena, RandomSeries *rs) {
     Perlin perlin = {0};
     
     perlin.ranvec = calloc(PERLIN_POINT_COUNT, sizeof(Vec3));
@@ -48,9 +48,9 @@ make_perlin(RandomSeries *rs) {
         perlin.ranvec[i] = normalize(random_vector(rs, -1, 1));        
     }
     
-    perlin.perm_x = perlin_generate_perm(rs);
-    perlin.perm_y = perlin_generate_perm(rs);
-    perlin.perm_z = perlin_generate_perm(rs);
+    perlin.perm_x = perlin_generate_perm(arena, rs);
+    perlin.perm_y = perlin_generate_perm(arena, rs);
+    perlin.perm_z = perlin_generate_perm(arena, rs);
     
     return perlin;
 }
