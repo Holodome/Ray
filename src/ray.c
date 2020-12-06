@@ -5,7 +5,7 @@
 #include "trace.c"
 #include "scenes.c"
 
-RandomSeries global_entropy = { 546674572 };
+RandomSeries global_entropy = { 546674573 };
 
 u32 max_bounce_count;
 u32 samples_per_pixel;
@@ -35,15 +35,14 @@ render_tile(RenderWorkQueue *queue) {
             for (u32 sample_index = 0;
                 sample_index < samples_per_pixel;
                 ++sample_index) {
-                f32 u = ((f32)x + random_bilateral(&order->entropy) * 0.5f) / (f32)queue->output->w;
-                f32 v = ((f32)y + random_bilateral(&order->entropy) * 0.5f) / (f32)queue->output->h;
+                f32 u = ((f32)x + random(&order->entropy)) / (f32)queue->output->w;
+                f32 v = ((f32)y + random(&order->entropy)) / (f32)queue->output->h;
                 Ray ray = camera_make_ray(&queue->world->camera, &order->entropy, u, v);
                 
-                RayCastData cast_data = {0};
-                Vec3 sample_color = ray_cast(queue->world, ray, &order->entropy, &cast_data);
-                bounce_count += cast_data.bounce_count;
-                ray_triangle_collision_tests += cast_data.ray_triangle_collision_tests;
-                object_collision_tests += cast_data.object_collision_tests;
+                Vec3 sample_color = ray_cast(queue->world, ray, &order->entropy, max_bounce_count);
+                // bounce_count += cast_data.bounce_count;
+                // ray_triangle_collision_tests += cast_data.ray_triangle_collision_tests;
+                // object_collision_tests += cast_data.object_collision_tests;
                 
                 f32 color_multiplier = 1.0f / (f32)samples_per_pixel;
                 pixel_color = v3add(pixel_color, v3muls(sample_color, color_multiplier));
@@ -135,6 +134,7 @@ parse_command_line_arguments(u32 argc, char **argv, RaySettings *s) {
 
 int 
 main(int argc, char **argv) {
+    assert(false);
     RaySettings s = {
         .image_w = 480,
         .image_h = 480,
@@ -156,7 +156,7 @@ main(int argc, char **argv) {
     World world = {0};
     world.arena.data_capacity = MEGABYTES(16);
     world.arena.data = malloc(world.arena.data_capacity);
-    init_cornell_box(&world, &output_image);
+    init_scene3(&world, &output_image);
     
     char bytes_buffer[32];
     format_bytes(bytes_buffer, sizeof(bytes_buffer), world.arena.data_size);

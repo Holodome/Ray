@@ -9,11 +9,18 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <math.h>
-#include <assert.h>
 #include <time.h>
 #include <search.h>
 #include <string.h>
 #include <float.h>
+
+#if HL_INTERNAL
+#include <assert.h>
+#else 
+// @NOTE Supresses warnings about unused variables
+#define assert(...) ((void)(__VA_ARGS__))
+#endif 
+#define INVALID_DEFAULT_CASE assert(!"Invalid default case")
 
 typedef int8_t  i8;
 typedef int16_t i16;

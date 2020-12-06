@@ -35,9 +35,9 @@ random_uniform(RandomSeries *series, f32 low, f32 high) {
     return result;
 }
 
-inline i64
-random_int(RandomSeries *rs, i64 low, i64 high) {
-    return (i64)floorf(random_uniform(rs, low, high + 1));
+inline i32
+random_int(RandomSeries *rs, i32 low, i32 high) {
+    return low + (xorshift32(rs) % (u32)(high - low));
 } 
 
 
@@ -82,6 +82,31 @@ random_vector(RandomSeries *rs, f32 low, f32 high) {
                      random_uniform(rs, low, high),
                      random_uniform(rs, low, high));
     return result;
+}
+
+inline Vec3
+random_cosine_direction(RandomSeries *rs) {
+    f32 r1 = random(rs);
+    f32 r2 = random(rs);
+    f32 z = sqrtf(1 - r2);
+    
+    f32 phi = TWO_PI * r1;
+    f32 x = cosf(phi) * sqrtf(r2);
+    f32 y = sinf(phi) * sqrtf(r2);
+    
+    return v3(x, y, z);
+}
+
+inline Vec3 
+random_to_sphere(RandomSeries *entropy, f32 r, f32 dsq) {
+    f32 r1 = random(entropy);
+    f32 r2 = random(entropy);
+    f32 z = 1.0f + r2 * (sqrtf(1.0f - r * r / dsq) - 1);
+    
+    f32 phi = TWO_PI * r1;
+    f32 x = cosf(phi) * sqrtf(1.0f - z * z);
+    f32 y = sinf(phi) * sqrtf(1.0f - z * z);
+    return v3(x, y, z);
 }
 
 extern RandomSeries global_entropy;

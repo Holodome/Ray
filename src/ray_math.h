@@ -75,6 +75,11 @@ v3add(Vec3 a, Vec3 b) {
     return result;
 }
 
+inline Vec3
+v3add3(Vec3 a, Vec3 b, Vec3 c) {
+    return v3add(a, v3add(b, c));
+}
+
 inline Vec3 
 v3sub(Vec3 a, Vec3 b) {
     Vec3 result;
@@ -557,6 +562,32 @@ bounds3_extend(Bounds3 a, Vec3 p) {
     result.max.z = fmaxf(a.max.z, p.z);
     
     return result;
+}
+
+typedef union {
+    struct {
+        Vec3 u;
+        Vec3 v;
+        Vec3 w;
+    };
+    Vec3 e[3];
+} ONB;
+
+inline ONB
+onb_from_w(Vec3 n) {
+    ONB result;
+    result.w = normalize(n);
+    Vec3 a = (fabsf(result.w.x) > 0.9f) ? v3(0, 1, 0) : v3(1, 0, 0);
+    result.v = normalize(cross(result.w, a));
+    result.u = cross(result.w, result.v);
+    return result;
+}
+
+inline Vec3
+onb_local(ONB onb, Vec3 v) {
+    return v3add3(v3muls(onb.u, v.x),
+                  v3muls(onb.v, v.y),
+                  v3muls(onb.w, v.z));
 }
 
 #define RAY_MATH_H 1

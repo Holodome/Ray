@@ -237,18 +237,25 @@ init_cornell_box(World *world, Image *image) {
     MaterialHandle light = new_material(world, (Material) {
         .type = MaterialType_DiffuseLight,
         .diffuse_light = {
-            .emit = new_texture(world, texture_solid(v3s(7)))
+            .emit = new_texture(world, texture_solid(v3s(15)))
         }
     });
     
     add_yz_rect(world, world->object_list, 0, 555, 0, 555, 555, green);
     add_yz_rect(world, world->object_list, 0, 555, 0, 555, 0, red);
-    add_xz_rect(world, world->object_list, 213, 343, 227, 332, 554, light);
+    ObjectHandle flipped = new_object(world, OBJECT_LIST);
+    add_xz_rect(world, flipped, 213, 343, 227, 332, 554, light);
+    add_new_object_to_world(world, object_flip_face(flipped));
     // add_xz_rect(world, world->object_list, 113, 443, 127, 432, 554, light);
     add_xz_rect(world, world->object_list, 0, 555, 0, 555, 0, white);
     add_xz_rect(world, world->object_list, 0, 555, 0, 555, 555, white);
     add_xy_rect(world, world->object_list, 0, 555, 0, 555, 555, white);
     
+    ObjectHandle light_list = new_object(world, OBJECT_LIST);
+    add_xz_rect(world, light_list, 213, 343, 227, 332, 554, light);
+    world->light = light_list;
+    
+    // MaterialHandle aluminum = new_material(world, material_metal(new_texture(world, texture_solid(v3(0.8, 0.85, 0.88))), 0.0));
     ObjectHandle box1 = new_object(world, object_instance(world,
         new_object(world, object_box(world, v3(0, 0, 0), v3(165, 330, 165), white)),
         v3(265,0,295), v3(0, DEG2RAD(15), 0)));
@@ -256,13 +263,18 @@ init_cornell_box(World *world, Image *image) {
         // new_material(world, material_isotropic(new_texture(world, texture_solid(v3s(0))))), box1));
     add_object(world, world->object_list, box1);
     
-    ObjectHandle box2 = new_object(world, object_instance(world,
-        new_object(world, object_box(world, v3(0, 0, 0), v3(165, 165, 165), white)),
-        v3(130, 0, 65), v3(0, DEG2RAD(-18), 0)));
+    MaterialHandle glass = new_material(world, material_dielectric(1.5f));
+    add_new_object_to_world(world, object_sphere(v3(190, 90, 190), 90, glass));
+    // ObjectHandle box2 = new_object(world, object_instance(world,
+    //     new_object(world, object_box(world, v3(0, 0, 0), v3(165, 165, 165), white)),
+    //     v3(130, 0, 65), v3(0, DEG2RAD(-18), 0)));
     // ObjectHandle smoke2 = new_object(world, object_constant_medium(0.01f,
     //     new_material(world, material_isotropic(new_texture(world, texture_solid(v3s(1))))), box2));
-    add_object(world, world->object_list, box2);
+    // add_object(world, world->object_list, box2);
     
+    world->light = new_object(world, OBJECT_LIST);
+    add_object(world, world->light, new_object(world, object_sphere(v3(190, 90, 190), 90, white)));
+    add_object(world, world->light, light_list);
     // ObjectList bvh = {0};
     // add_object_to_list(&world->arena, &bvh, box1);
     // add_object_to_list(&world->arena, &bvh, box2);
@@ -318,8 +330,12 @@ init_scene3(World *world, Image *image) {
             .emit = new_texture(world, texture_solid(v3s(7)))
         }
     });
-    add_xz_rect(world, world->object_list, 123, 423, 147, 412, 554, light);
-
+    // add_xz_rect(world, world->object_list, 123, 423, 147, 412, 554, light);
+    
+    world->light = new_object(world, OBJECT_LIST);
+    add_xz_rect(world, world->light, 123, 423, 147, 412, 554, light);
+    add_new_object_to_world(world, object_flip_face(world->light));
+        
     add_new_object_to_world(world, object_sphere(v3(260, 150, 45), 50, new_material(world, material_dielectric(1.5))));
     add_new_object_to_world(world, object_sphere(v3(0, 150, 145), 50, 
         new_material(world, material_metal(new_texture(world, texture_solid(v3(0.8, 0.8, 0.9))), 1))));

@@ -113,17 +113,21 @@ Ray camera_make_ray(Camera *camera, RandomSeries *entropy, f32 u, f32 v);
 //
 
 typedef struct {
+    // Hit distance
     f32 t;
+    // Point of hit
     Vec3 p;
+    // Surface normal
     Vec3 n;
     bool is_front_face;
+    // UV coordinates for material sampling
     f32 u;
     f32 v;
-    
+    // Object material
     MaterialHandle mat;
 } HitRecord;
 
-static void 
+inline void 
 hit_set_normal(HitRecord *hit, Vec3 n, Ray ray) {
     if (dot(ray.dir, n) < 0.0f) {
         hit->is_front_face = true;
@@ -171,7 +175,6 @@ typedef struct {
     };
 } Texture;
 
-// Texture constructors
 inline Texture
 texture_solid(Vec3 c) {
     return (Texture) {
@@ -192,7 +195,7 @@ texture_perlin(Perlin perlin, f32 s) {
         }
     };
 }
-// Recursive texture sampler
+
 Vec3 sample_texture(World *world, TextureHandle handle, HitRecord *hit);
 
 //
@@ -292,6 +295,7 @@ enum {
     ObjectType_Instance,
     ObjectType_BVHNode,
     ObjectType_Box,
+    ObjectType_FlipFace
 };
 
 typedef struct Object {
@@ -328,11 +332,22 @@ typedef struct Object {
             Bounds3 box;
             ObjectHandle sides_list;
         } box;
+        struct {
+            ObjectHandle obj;
+        } flip_face;
     };
 } Object;
 
 #define OBJECT_LIST ( (Object) { .type = ObjectType_ObjectList } )
 
+inline Object object_flip_face(ObjectHandle obj) {
+    return (Object) {
+        .type = ObjectType_FlipFace,
+        .flip_face = {
+            .obj = obj
+        }
+    };
+}
 Object object_sphere(Vec3 p, f32 r, MaterialHandle mat);
 Object object_instance(World *world, ObjectHandle obj, Vec3 t, Vec3 r);
 Object object_triangle(Vec3 p0, Vec3 p1, Vec3 p2, MaterialHandle mat);
@@ -345,6 +360,64 @@ void add_object_to_list(MemoryArena *arena, ObjectList *list, ObjectHandle o);
 void object_list_shrink_to_fit(MemoryArena *arena, ObjectList *list);
 
 //
+// PDF
+//
+
+typedef u32 PDFType;
+enum {
+    PDFType_None = 0x0,
+    PDFType_Cosine,
+    PDFType_Object,
+    PDFType_Mixture,
+};
+
+typedef struct PDF {
+    PDFType type;
+    union {
+        struct {
+            ONB uvw;
+        } cosine;
+        struct {
+            ObjectHandle object;
+            Vec3 o;
+        } object;
+        struct {
+            struct PDF *p[2];
+        } mix;
+    };
+} PDF;
+
+inline PDF
+cosine_pdf(Vec3 w) {
+    return (PDF) {
+        .type = PDFType_Cosine,
+        .cosine = {
+            .uvw = onb_from_w(w)
+        }
+    };
+}
+
+inline PDF
+object_pdf(ObjectHandle obj, Vec3 orig) {
+    return (PDF) {
+        .type = PDFType_Object,
+        .object = {
+            .o = orig,
+            .object = obj
+        }
+    };
+}
+
+
+typedef struct {
+    Vec3 specular_dir;
+    bool is_specular;
+    Vec3 attenuation;
+    PDF  pdf;
+} ScatterRecord;
+
+
+//
 // World 
 //
 
@@ -353,23 +426,22 @@ struct World {
     // Due to a excessive use of dynamic arrays, currently a lot of memory is being wasted,
     // but whatever 
     MemoryArena arena;
-    
-    Camera camera;
-    
-    Vec3 backgorund_color;
-    
+    // Storage of different assets in world. Use handles to get certain object
     Texture *textures;
     u64 textures_size;
     u64 textures_capacity;
-
     Material *materials;
     u64 materials_size;
     u64 materials_capacity;
-    
     Object *objects;
     u64 objects_size;
     u64 objects_capacity;
-    
+    // Scene settings    
+    Camera camera;
+    Vec3 backgorund_color;
+    // Object list, objects in which are sampled directly (more rays are sent towards them) 
+    ObjectHandle lights;
+    // List of objects in scene
     ObjectHandle object_list;
 };
 
@@ -392,11 +464,11 @@ void add_yz_rect(World *world, ObjectHandle list, f32 y0, f32 y1, f32 z0, f32 z1
 void add_xz_rect(World *world, ObjectHandle list, f32 x0, f32 x1, f32 z0, f32 z1, f32 y, MaterialHandle mat);
 void add_box(World *world, ObjectHandle list, Vec3 p0, Vec3 p1, MaterialHandle mat);
 
-typedef struct {
-    u64 bounce_count;
-    u64 ray_triangle_collision_tests;
-    u64 object_collision_tests;
-} RayCastData;
+// typedef struct {
+//     u64 bounce_count;
+//     u64 ray_triangle_collision_tests;
+//     u64 object_collision_tests;
+// } RayCastData;
 
 // Settings of ray casting
 // @NOTE This better should be passed as arguments, but let it be global for now 
@@ -407,7 +479,7 @@ extern u32 rays_per_pixel;
 // Called from multiple threads, so everything should be thread-safe.
 // Returns color of casted ray.
 // Also writes some statistics to _data_
-Vec3 ray_cast(World *world, Ray ray, RandomSeries *entropy, RayCastData *data);
+Vec3 ray_cast(World *world, Ray ray, RandomSeries *entropy, i32 depth);
 
 #define TRACE_H 1
 #endif
