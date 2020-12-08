@@ -2,7 +2,6 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#include <intrin.h>
 
 u64
 atomic_add64(volatile u64 *value, u64 addend) {
@@ -26,4 +25,25 @@ create_thread(ThreadProc *proc, void *param) {
 void
 exit_thread(void) {
     ExitThread(0);
+}
+
+void 
+memory_barrier() {
+	_ReadWriteBarrier();
+}
+
+
+u32 
+get_core_count(void) {
+	SYSTEM_INFO info;
+	GetSystemInfo(&info);
+	return info.dwNumberOfProcessors;
+}
+
+u32 
+get_thread_id(void) {
+	// @NOTE this is basically GetThreadID function disassembly made with intrinsics
+	// so we achieve the same stuff without system calls
+	u8 *tls = (u8 *)__readgsqword(0x30);
+	return *(u32 *)(tls + 0x48);
 }

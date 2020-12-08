@@ -88,11 +88,11 @@ inline Vec3
 random_cosine_direction(RandomSeries *rs) {
     f32 r1 = random(rs);
     f32 r2 = random(rs);
-    f32 z = sqrtf(1 - r2);
+    f32 z = sqrt32(1 - r2);
     
     f32 phi = TWO_PI * r1;
-    f32 x = cosf(phi) * sqrtf(r2);
-    f32 y = sinf(phi) * sqrtf(r2);
+    f32 x = cosf(phi) * sqrt32(r2);
+    f32 y = sinf(phi) * sqrt32(r2);
     
     return v3(x, y, z);
 }
@@ -101,11 +101,11 @@ inline Vec3
 random_to_sphere(RandomSeries *entropy, f32 r, f32 dsq) {
     f32 r1 = random(entropy);
     f32 r2 = random(entropy);
-    f32 z = 1.0f + r2 * (sqrtf(1.0f - r * r / dsq) - 1);
+    f32 z = 1.0f + r2 * (sqrt32(1.0f - r * r / dsq) - 1);
     
     f32 phi = TWO_PI * r1;
-    f32 x = cosf(phi) * sqrtf(1.0f - z * z);
-    f32 y = sinf(phi) * sqrtf(1.0f - z * z);
+    f32 x = cosf(phi) * sqrt32(1.0f - z * z);
+    f32 y = sinf(phi) * sqrt32(1.0f - z * z);
     return v3(x, y, z);
 }
 

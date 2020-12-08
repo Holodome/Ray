@@ -19,9 +19,7 @@ render_tile(RenderWorkQueue *queue) {
     
     RenderWorkOrder *order = queue->orders + work_order_index;
     
-    u64 bounce_count = 0;
-    u64 ray_triangle_collision_tests = 0;
-    u64 object_collision_tests = 0;
+    RayCastStatistics tile_stats = {0};
     for (u32 y = order->y_min;
          y < order->y_max;
          ++y) {
@@ -39,10 +37,7 @@ render_tile(RenderWorkQueue *queue) {
                 f32 v = ((f32)y + random(&order->entropy)) / (f32)queue->output->h;
                 Ray ray = camera_make_ray(&queue->world->camera, &order->entropy, u, v);
                 
-                Vec3 sample_color = ray_cast(queue->world, ray, &order->entropy, max_bounce_count);
-                // bounce_count += cast_data.bounce_count;
-                // ray_triangle_collision_tests += cast_data.ray_triangle_collision_tests;
-                // object_collision_tests += cast_data.object_collision_tests;
+                Vec3 sample_color = ray_cast(queue->world, ray, &order->entropy, max_bounce_count, &tile_stats);
                 
                 f32 color_multiplier = 1.0f / (f32)samples_per_pixel;
                 pixel_color = v3add(pixel_color, v3muls(sample_color, color_multiplier));
@@ -56,9 +51,9 @@ render_tile(RenderWorkQueue *queue) {
     }
     
     atomic_add64(&queue->orders_done, 1);
-    atomic_add64(&queue->total_bounce_count, bounce_count);
-    atomic_add64(&queue->total_ray_triangle_collision_tests, ray_triangle_collision_tests);
-    atomic_add64(&queue->object_collision_tests, object_collision_tests);
+    atomic_add64(&queue->stats.bounce_count, tile_stats.bounce_count);
+    atomic_add64(&queue->stats.object_collision_tests, tile_stats.ray_triangle_collision_tests);
+    atomic_add64(&queue->stats.object_collision_tests, tile_stats.object_collision_tests);
     
     return true;
 }
@@ -233,10 +228,11 @@ main(int argc, char **argv) {
     printf("\nRaycasting done\n");
     
     clock_t end_clock = clock();
-    clock_t time_elapsed = end_clock - start_clock;
+    clock_t elapsed = end_clock - start_clock;
+    u64 time_elapsed = (u64)(elapsed * 1000 / CLOCKS_PER_SEC);
     
     char time_string[64];
-    format_time_ms(time_string, sizeof(time_string), (u64)time_elapsed);
+    format_time_ms(time_string, sizeof(time_string), time_elapsed);
     
     char number_buffer[100];
     printf("Raycasting time: %s\n", time_string);
@@ -244,14 +240,14 @@ main(int argc, char **argv) {
     format_number_with_thousand_separators(number_buffer, sizeof(number_buffer), samples_per_pixel * output_image.w * output_image.h);
     printf("Primary ray count: %s\n", number_buffer);
     printf("Perfomace: %fms/primary ray\n", (f64)time_elapsed / (f64)(samples_per_pixel * output_image.w * output_image.h));
-    format_number_with_thousand_separators(number_buffer, sizeof(number_buffer), render_queue.total_bounce_count);
+    format_number_with_thousand_separators(number_buffer, sizeof(number_buffer), render_queue.stats.bounce_count);
     printf("Total bounces: %s\n", number_buffer);
-    printf("Perfomance: %fms/bounce\n", (f64)time_elapsed / (f64)render_queue.total_bounce_count);
-    format_number_with_thousand_separators(number_buffer, sizeof(number_buffer), render_queue.total_ray_triangle_collision_tests);
+    printf("Perfomance: %fms/bounce\n", (f64)time_elapsed / (f64)render_queue.stats.bounce_count);
+    format_number_with_thousand_separators(number_buffer, sizeof(number_buffer), render_queue.stats.ray_triangle_collision_tests);
     printf("Triangle collision tests: %s\n", number_buffer);
-    format_number_with_thousand_separators(number_buffer, sizeof(number_buffer), render_queue.object_collision_tests);
+    format_number_with_thousand_separators(number_buffer, sizeof(number_buffer), render_queue.stats.object_collision_tests);
     printf("Object collision tests: %s\n", number_buffer);
-    printf("Average bounce count per ray: %f\n", (f64)render_queue.total_bounce_count / (f64)(samples_per_pixel * output_image.w * output_image.h));
+    printf("Average bounce count per ray: %f\n", (f64)render_queue.stats.bounce_count / (f64)(samples_per_pixel * output_image.w * output_image.h));
     
     char *out = s.image_filename;
     image_save(&output_image, out);

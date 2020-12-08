@@ -8,6 +8,10 @@
 #include "trace.h"
 #include "perlin.h"
 
+// 
+// RenderWorkQueue
+//
+
 typedef struct {
     u32 x_min;
     u32 x_max;
@@ -28,9 +32,7 @@ typedef struct {
     volatile u64 next_order_index;
     volatile u64 orders_done;
     
-    volatile u64 total_bounce_count;
-    volatile u64 total_ray_triangle_collision_tests;
-    volatile u64 object_collision_tests;
+    volatile RayCastStatistics stats;
 } RenderWorkQueue;
 
 typedef struct {

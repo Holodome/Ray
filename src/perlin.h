@@ -129,7 +129,7 @@ perlin_turb(Perlin *perlin, Vec3 p, u32 octaves) {
         temp_p = v3muls(temp_p, 2);        
     }
     
-    return fabsf(accum);
+    return abs32(accum);
 }
 
 #define PERLIN_H 1

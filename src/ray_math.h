@@ -2,6 +2,8 @@
 
 #include "general.h"
 
+#include "ray_math_intrinsics.h"
+
 #define PI 3.14159265359f
 #define TWO_PI 6.28318530718f
 #define HALF_PI 1.57079632679f
@@ -15,6 +17,9 @@ lerp(f32 a, f32 b, f32 t) {
 
 inline f32 
 clamp(f32 x, f32 low, f32 high) {
+#if 1
+    return max32(min32(high, x), low);
+#else 
     if (x < low) {
         x = low;
     }
@@ -22,11 +27,7 @@ clamp(f32 x, f32 low, f32 high) {
         x = high;
     }
     return x;
-}
-
-inline f32 
-rsqrtf(f32 a) {
-    return 1.0f / sqrtf(a);
+#endif 
 }
 
 typedef union {
@@ -148,14 +149,14 @@ length_sq(Vec3 a) {
 
 inline f32 
 length(Vec3 a) {
-    f32 result = sqrtf(length_sq(a));
+    f32 result = sqrt32(length_sq(a));
     return result;
 }
 
 inline Vec3 
 normalize(Vec3 a)
 {
-    Vec3 result = v3muls(a, rsqrtf(length_sq(a)));
+    Vec3 result = v3muls(a, rsqrt32(length_sq(a)));
     return result;
 }
 
@@ -171,7 +172,7 @@ v3lerp(Vec3 a, Vec3 b, f32 t) {
 inline bool 
 vec3_is_near_zero(Vec3 a) {
     const f32 epsilon = 1e-4f;
-    bool result = (fabsf(a.x) < epsilon) && (fabsf(a.y) < epsilon) && (fabsf(a.z) < epsilon);
+    bool result = (abs32(a.x) < epsilon) && (abs32(a.y) < epsilon) && (abs32(a.z) < epsilon);
     return result;
 }
 
@@ -183,8 +184,7 @@ typedef union {
 } Vec4;
 
 inline Vec4 
-v4neg(Vec4 a)
-{
+v4neg(Vec4 a) {
     Vec4 result;
     result.x = -a.x;
     result.y = -a.y;
@@ -194,8 +194,7 @@ v4neg(Vec4 a)
 }
 
 inline Vec4 
-v4add(Vec4 a, Vec4 b)
-{
+v4add(Vec4 a, Vec4 b) {
     Vec4 result;
     result.x = a.x + b.x;
     result.y = a.y + b.y;
@@ -205,8 +204,7 @@ v4add(Vec4 a, Vec4 b)
 }
 
 inline Vec4 
-v4sub(Vec4 a, Vec4 b)
-{
+v4sub(Vec4 a, Vec4 b) {
     Vec4 result;
     result.x = a.x - b.x;
     result.y = a.y - b.y;
@@ -216,8 +214,7 @@ v4sub(Vec4 a, Vec4 b)
 }
 
 inline Vec4 
-v4div(Vec4 a, Vec4 b)
-{
+v4div(Vec4 a, Vec4 b) {
     Vec4 result;
     result.x = a.x / b.x;
     result.y = a.y / b.y;
@@ -227,8 +224,7 @@ v4div(Vec4 a, Vec4 b)
 }
 
 inline Vec4 
-v4mul(Vec4 a, Vec4 b)
-{
+v4mul(Vec4 a, Vec4 b) {
     Vec4 result;
     result.x = a.x * b.x;
     result.y = a.y * b.y;
@@ -238,8 +234,7 @@ v4mul(Vec4 a, Vec4 b)
 }
 
 inline Vec4
-v4divs(Vec4 a, f32 b)
-{
+v4divs(Vec4 a, f32 b) {
     Vec4 result;
     result.x = a.x / b;
     result.y = a.y / b;
@@ -249,8 +244,7 @@ v4divs(Vec4 a, f32 b)
 }
 
 inline Vec4
-v4muls(Vec4 a, f32 b)
-{
+v4muls(Vec4 a, f32 b) {
     Vec4 result;
     result.x = a.x * b;
     result.y = a.y * b;
@@ -260,8 +254,7 @@ v4muls(Vec4 a, f32 b)
 }
 
 inline Vec4 
-v4(f32 x, f32 y, f32 z, f32 w)
-{
+v4(f32 x, f32 y, f32 z, f32 w) {
     Vec4 result;
     result.x = x;
     result.y = y;
@@ -271,8 +264,7 @@ v4(f32 x, f32 y, f32 z, f32 w)
 }
 
 inline Vec4 
-v4s(f32 s)
-{
+v4s(f32 s) {
     Vec4 result;
     result.x = s;
     result.y = s;
@@ -496,8 +488,9 @@ mat4x4_mul_vec3(Mat4x4 m, Vec3 v) {
     f32 b = v.e[0] * m.e[0][1] + v.e[1] * m.e[1][1] + v.e[2] * m.e[2][1] + m.e[3][1]; 
     f32 c = v.e[0] * m.e[0][2] + v.e[1] * m.e[1][2] + v.e[2] * m.e[2][2] + m.e[3][2]; 
     f32 w = v.e[0] * m.e[0][3] + v.e[1] * m.e[1][3] + v.e[2] * m.e[2][3] + m.e[3][3]; 
-
-    Vec3 result = v3(a / w, b / w, c / w);
+    
+    f32 one_over_w = 1.0f / w;
+    Vec3 result = v3(a * one_over_w, b * one_over_w, c * one_over_w);
     return result;
 }
 
@@ -510,11 +503,6 @@ mat4x4_as_3x3_mul_vec3(Mat4x4 m, Vec3 v) {
     Vec3 result = v3(a, b, c);
     return result;    
 }
-
-typedef struct {
-    f32 x_min, y_min;
-    f32 x_max, y_max;
-} Rect2;
 
 typedef struct {
     Vec3 min;
@@ -538,13 +526,12 @@ inline Bounds3
 bounds3_join(Bounds3 a, Bounds3 b) {
     Bounds3 result;
     
-    result.min.x = fminf(a.min.x, b.min.x);
-    result.min.y = fminf(a.min.y, b.min.y);
-    result.min.z = fminf(a.min.z, b.min.z);
-    
-    result.max.x = fmaxf(a.max.x, b.max.x);
-    result.max.y = fmaxf(a.max.y, b.max.y);
-    result.max.z = fmaxf(a.max.z, b.max.z);
+    result.min.x = min32(a.min.x, b.min.x);
+    result.min.y = min32(a.min.y, b.min.y);
+    result.min.z = min32(a.min.z, b.min.z);
+    result.max.x = max32(a.max.x, b.max.x);
+    result.max.y = max32(a.max.y, b.max.y);
+    result.max.z = max32(a.max.z, b.max.z);
     
     return result;    
 }
@@ -553,13 +540,12 @@ inline Bounds3
 bounds3_extend(Bounds3 a, Vec3 p) {
     Bounds3 result;
     
-    result.min.x = fminf(a.min.x, p.x);
-    result.min.y = fminf(a.min.y, p.y);
-    result.min.z = fminf(a.min.z, p.z);
-    
-    result.max.x = fmaxf(a.max.x, p.x);
-    result.max.y = fmaxf(a.max.y, p.y);
-    result.max.z = fmaxf(a.max.z, p.z);
+    result.min.x = min32(a.min.x, p.x);
+    result.min.y = min32(a.min.y, p.y);
+    result.min.z = min32(a.min.z, p.z);
+    result.max.x = max32(a.max.x, p.x);
+    result.max.y = max32(a.max.y, p.y);
+    result.max.z = max32(a.max.z, p.z);
     
     return result;
 }
@@ -577,7 +563,7 @@ inline ONB
 onb_from_w(Vec3 n) {
     ONB result;
     result.w = normalize(n);
-    Vec3 a = (fabsf(result.w.x) > 0.9f) ? v3(0, 1, 0) : v3(1, 0, 0);
+    Vec3 a = (abs32(result.w.x) > 0.9f) ? v3(0, 1, 0) : v3(1, 0, 0);
     result.v = normalize(cross(result.w, a));
     result.u = cross(result.w, result.v);
     return result;
@@ -589,6 +575,8 @@ onb_local(ONB onb, Vec3 v) {
                   v3muls(onb.v, v.y),
                   v3muls(onb.w, v.z));
 }
+
+typedef Vec3 Color;
 
 #define RAY_MATH_H 1
 #endif

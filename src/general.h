@@ -4,6 +4,22 @@
 #define RAY_INTERNAL 0
 #endif 
 
+#define COMPILER_MSVC 0 
+#define COMPILER_CLANG 0
+#define COMPILER_GCC 0 
+#if defined(__clang__)
+#undef COMPILER_CLANG
+#define COMPILER_CLANG 1
+#elif defined(_MSC_VER)
+#undef COMPILER_MSVC 
+#define COMPILER_MSVC 1
+#elif defined(__GNUC__)
+#undef COMPILER_GCC 
+#define COMPILER_GCC 1
+#else 
+#error "Unsupported compiler"
+#endif 
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -111,22 +127,24 @@ inline void *
 arena_alloc_align(MemoryArena *a, u64 size, u64 align) {
     void *result = 0;
     
-    umm curr_ptr = (umm)a->data + a->data_size;
-    umm offset = align_forward(curr_ptr, align);
-    offset -= (umm)a->data;
-    
-    if (offset + size < a->data_capacity) {
-        u8 *ptr = a->data + offset;
-        a->last_data_size = offset;
-        a->data_size = offset + size;
+    if (size) {
+        umm curr_ptr = (umm)a->data + a->data_size;
+        umm offset = align_forward(curr_ptr, align);
+        offset -= (umm)a->data;
         
-        result = ptr;
-    } else {
-        assert(!"Memory is out of bounds");
-    }
-    
-    if (result) {
-        memset(result, 0, size);
+        if (offset + size < a->data_capacity) {
+            u8 *ptr = a->data + offset;
+            a->last_data_size = offset;
+            a->data_size = offset + size;
+            
+            result = ptr;
+        } else {
+            assert(!"Memory is out of bounds");
+        }
+        
+        if (result) {
+            memset(result, 0, size);
+        }
     }
     
     return result;

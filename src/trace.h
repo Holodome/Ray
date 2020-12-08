@@ -6,99 +6,28 @@
 #include "image.h"
 #include "perlin.h"
 
-//
-// See World definition.
-// This is pointer-like handles to objects in world
 typedef struct { u64 v; } TextureHandle;
 typedef struct { u64 v; } MaterialHandle;
 typedef struct { u64 v; } ObjectHandle;
 typedef struct World World;
 
-//
-// Helper functions
-//
-
-inline Vec3 
-reflect(Vec3 v, Vec3 n) {
-    Vec3 result = v3sub(v, v3muls(n, 2.0f * dot(v, n)));
-    return result;
-}
-
-inline Vec3 
-refract(Vec3 v, Vec3 n, f32 etai_over_etat) {
-    f32 cos_theta = fminf(dot(v3neg(v), n), 1.0f);
-    Vec3 r_out_perp = v3muls(v3add(v, v3muls(n, cos_theta)), etai_over_etat);
-    Vec3 r_out_parallel = v3muls(n, -sqrtf(fabsf(1.0f - length_sq(r_out_perp))));
-    Vec3 result = v3add(r_out_perp, r_out_parallel);
-    return result; 
-}
-
-inline f32
-schlick(f32 cosine, f32 ref_idx) {
-    f32 r0 = (1.0f - ref_idx) / (1.0f + ref_idx);
-    r0 = r0 * r0;
-    f32 result = r0 + (1.0f - r0) * powf((1.0f - cosine), 5.0f);
-    return result;
-}
-
-inline void 
-sphere_get_uv(Vec3 p, f32 *u, f32 *v) {
-#if 1
-    f32 theta = acosf(-p.y);
-    f32 phi = atan2f(-p.z, p.x) + PI;
-    
-    *u = phi / TWO_PI;
-    *v = theta / PI;
-#else 
-    f32 phi = atan2f(p.y, p.x);
-    f32 theta = asinf(p.z);
-    
-    *u = 1.0f - (phi + PI) / TWO_PI;
-    *v = (theta + HALF_PI) / PI;
-#endif 
-}
-
-
-//
-// Ray
-//
-
 typedef struct {
+    // Ray origin 
     Vec3 orig;
+    // Direction vector
     Vec3 dir;
 } Ray;
 
-inline Ray 
-make_ray(Vec3 orig, Vec3 dir) {
-    return (Ray) {
-        .orig = orig,
-        .dir = dir
-    };
-}
+Ray make_ray(Vec3 orig, Vec3 dir);
+Vec3 ray_at(Ray ray, f32 t);
 
-inline Vec3 
-ray_at(Ray ray, f32 t) {
-    Vec3 result = v3add(ray.orig, v3muls(ray.dir, t));
-    return result;
-}
-
-//
-// Camera
-//
-
-// Perspective projection camera
 typedef struct {
     Vec3 orig;
-    // Orthonormal basis
-    Vec3 x;
-    Vec3 y;
-    Vec3 z;
-    
-    f32 lens_radius;
-    
+    Vec3 x, y, z;
     Vec3 lower_left_corner;
     Vec3 horizontal;
     Vec3 vertical;
+    f32 lens_radius;
 } Camera;
 
 // Camera constructor
@@ -108,10 +37,7 @@ Camera make_camera(Vec3 look_from, Vec3 look_at, Vec3 v_up,
 
 Ray camera_make_ray(Camera *camera, RandomSeries *entropy, f32 u, f32 v);
 
-//
-// Hit record
-//
-
+// Packed information about collision
 typedef struct {
     // Hit distance
     f32 t;
@@ -127,20 +53,8 @@ typedef struct {
     MaterialHandle mat;
 } HitRecord;
 
-inline void 
-hit_set_normal(HitRecord *hit, Vec3 n, Ray ray) {
-    if (dot(ray.dir, n) < 0.0f) {
-        hit->is_front_face = true;
-        hit->n = n;
-    } else {
-        hit->is_front_face = false;
-        hit->n = v3neg(n);
-    }
-}
-
-//
-// Textures
-//
+// Sets normal and is_front_face
+inline void hit_set_normal(HitRecord *hit, Vec3 n, Ray ray);
 
 typedef u32 TextureType;
 enum {
@@ -153,8 +67,6 @@ enum {
     TextureType_Normal,
 };
 
-// Texture is essentially a function that returns some color with given 
-// hit characteristics
 typedef struct {
     TextureType type;
     union {
@@ -174,33 +86,6 @@ typedef struct {
         } perlin;
     };
 } Texture;
-
-inline Texture
-texture_solid(Vec3 c) {
-    return (Texture) {
-        .type = TextureType_Solid,
-        .solid = {
-            .c = c
-        }
-    };
-}
-
-inline Texture
-texture_perlin(Perlin perlin, f32 s) {
-    return (Texture) {
-        .type = TextureType_Perlin,
-        .perlin = {
-            .p = perlin,
-            .s = s
-        }
-    };
-}
-
-Vec3 sample_texture(World *world, TextureHandle handle, HitRecord *hit);
-
-//
-// Metarial
-//
 
 typedef u32 MaterialType;
 enum {
@@ -233,57 +118,15 @@ typedef struct {
     };
 } Material;
 
-// Material constructors
-inline Material
-material_lambertian(TextureHandle tex) {
-    return (Material) {
-        .type = MaterialType_Lambertian,
-        .lambertian = {
-            .albedo = tex
-        }
-    };
-}
-
-inline Material
-material_isotropic(TextureHandle tex) {
-    return (Material) {
-        .type = MaterialType_Isotropic,
-        .isotropic = {
-            .albedo = tex
-        }
-    };
-}
-
-inline Material
-material_dielectric(f32 ir) {
-    return (Material) {
-        .type = MaterialType_Dielectric,
-        .dielectric = {
-            .ir = ir
-        }
-    };
-}
-
-inline Material 
-material_metal(TextureHandle albedo, f32 fuzz) {
-    return (Material) {
-        .type = MaterialType_Metal,
-        .metal = {
-            .albedo = albedo,
-            .fuzz = fuzz
-        }
-    };
-}
-
-//
-// Objects
-//
-
 typedef struct {
     ObjectHandle *a;
     u64 size;
     u64 capacity;
 } ObjectList;
+
+ObjectList object_list_init(MemoryArena *arena, u32 reserve);
+void add_object_to_list(MemoryArena *arena, ObjectList *list, ObjectHandle o);
+void object_list_shrink_to_fit(MemoryArena *arena, ObjectList *list);
 
 typedef u32 ObjectType;
 enum {
@@ -326,10 +169,10 @@ typedef struct Object {
         struct {
             ObjectHandle left;
             ObjectHandle right;
-            Bounds3 box;
+            Bounds3 bounds;
         } bvh_node;
         struct {
-            Bounds3 box;
+            Bounds3 bounds;
             ObjectHandle sides_list;
         } box;
         struct {
@@ -337,31 +180,6 @@ typedef struct Object {
         } flip_face;
     };
 } Object;
-
-#define OBJECT_LIST ( (Object) { .type = ObjectType_ObjectList } )
-
-inline Object object_flip_face(ObjectHandle obj) {
-    return (Object) {
-        .type = ObjectType_FlipFace,
-        .flip_face = {
-            .obj = obj
-        }
-    };
-}
-Object object_sphere(Vec3 p, f32 r, MaterialHandle mat);
-Object object_instance(World *world, ObjectHandle obj, Vec3 t, Vec3 r);
-Object object_triangle(Vec3 p0, Vec3 p1, Vec3 p2, MaterialHandle mat);
-Object object_box(World *world, Vec3 min, Vec3 max, MaterialHandle mat);
-Object object_constant_medium(f32 d, MaterialHandle phase, ObjectHandle bound);
-// @NOTE: Object list is passed by value because it is not changed
-Object object_bvh_node(World *world, ObjectList object_list, u64 start, u64 end);
-
-void add_object_to_list(MemoryArena *arena, ObjectList *list, ObjectHandle o);
-void object_list_shrink_to_fit(MemoryArena *arena, ObjectList *list);
-
-//
-// PDF
-//
 
 typedef u32 PDFType;
 enum {
@@ -387,27 +205,8 @@ typedef struct PDF {
     };
 } PDF;
 
-inline PDF
-cosine_pdf(Vec3 w) {
-    return (PDF) {
-        .type = PDFType_Cosine,
-        .cosine = {
-            .uvw = onb_from_w(w)
-        }
-    };
-}
-
-inline PDF
-object_pdf(ObjectHandle obj, Vec3 orig) {
-    return (PDF) {
-        .type = PDFType_Object,
-        .object = {
-            .o = orig,
-            .object = obj
-        }
-    };
-}
-
+PDF cosine_pdf(Vec3 w);
+PDF object_pdf(ObjectHandle obj, Vec3 orig);
 
 typedef struct {
     Vec3 specular_dir;
@@ -415,11 +214,6 @@ typedef struct {
     Vec3 attenuation;
     PDF  pdf;
 } ScatterRecord;
-
-
-//
-// World 
-//
 
 struct World {
     // Arena used to allocate all arrays of world into.
@@ -445,41 +239,69 @@ struct World {
     ObjectHandle object_list;
 };
 
-inline Object *get_object(World *world, ObjectHandle h);
-bool object_get_box(World *world, ObjectHandle obj_handle, Bounds3 *box);
-
-// Adds some kind of resource to world
-inline TextureHandle  new_texture(World *world, Texture texture);
-inline MaterialHandle new_material(World *world, Material material);
-inline ObjectHandle   new_object(World *world, Object object);
-
-inline void add_object(World *world, ObjectHandle list_handle, ObjectHandle object);
-#define add_object_to_world(_world, _obj) add_object(_world, _world->object_list, _obj)
-
-inline void add_new_object(World *world, ObjectHandle list_handle, Object object);
-#define add_new_object_to_world(_world, _obj) add_new_object(_world, _world->object_list, _obj)
-
-void add_xy_rect(World *world, ObjectHandle list, f32 x0, f32 x1, f32 y0, f32 y1, f32 z, MaterialHandle mat);
-void add_yz_rect(World *world, ObjectHandle list, f32 y0, f32 y1, f32 z0, f32 z1, f32 x, MaterialHandle mat);
-void add_xz_rect(World *world, ObjectHandle list, f32 x0, f32 x1, f32 z0, f32 z1, f32 y, MaterialHandle mat);
-void add_box(World *world, ObjectHandle list, Vec3 p0, Vec3 p1, MaterialHandle mat);
-
-// typedef struct {
-//     u64 bounce_count;
-//     u64 ray_triangle_collision_tests;
-//     u64 object_collision_tests;
-// } RayCastData;
-
-// Settings of ray casting
-// @NOTE This better should be passed as arguments, but let it be global for now 
-extern u32 max_bounce_count;
-extern u32 rays_per_pixel;
+typedef struct {
+    u64 bounce_count;
+    u64 ray_triangle_collision_tests;
+    u64 object_collision_tests;
+} RayCastStatistics;
 
 // This is main function used in raycasting.
 // Called from multiple threads, so everything should be thread-safe.
 // Returns color of casted ray.
 // Also writes some statistics to _data_
-Vec3 ray_cast(World *world, Ray ray, RandomSeries *entropy, i32 depth);
+Vec3 ray_cast(World *world, Ray ray, RandomSeries *entropy, i32 depth, RayCastStatistics *stats);
+
+inline TextureHandle  new_texture(World *world, Texture texture);
+inline MaterialHandle new_material(World *world, Material material);
+inline ObjectHandle   new_object(World *world, Object object);
+inline Texture  *get_texture(World *world, TextureHandle h);
+inline Material *get_material(World *world, MaterialHandle h);
+inline Object *get_object(World *world, ObjectHandle h);
+
+inline void add_object(World *world, ObjectHandle list_handle, ObjectHandle o);
+inline void add_object_to_world(World *world, ObjectHandle o);
+
+TextureHandle texture_solid(World *world, Vec3 c);
+TextureHandle texture_checkered(World *world, TextureHandle t1, TextureHandle t2);
+TextureHandle texture_image(World *world, Image i);
+TextureHandle texture_perlin(World *world, Perlin perlin, f32 s);
+TextureHandle texture_uv(World *world);
+TextureHandle texture_normal(World *world);
+
+MaterialHandle material_lambertian(World *world, TextureHandle albedo);
+MaterialHandle material_isotropic(World *world, TextureHandle albedo);
+MaterialHandle material_metal(World *world, TextureHandle albedo, f32 fuzz);
+MaterialHandle material_dielectric(World *world, f32 ir);
+MaterialHandle material_diffuse_light(World *world, TextureHandle t);
+
+ObjectHandle object_list(World *world);
+ObjectHandle object_flip_face(World *world, ObjectHandle obj);
+ObjectHandle object_sphere(World *world, Vec3 p, f32 r, MaterialHandle mat);
+ObjectHandle object_instance(World *world, ObjectHandle obj, Vec3 t, Vec3 r);
+ObjectHandle object_triangle(World *world, Vec3 p0, Vec3 p1, Vec3 p2, MaterialHandle mat);
+ObjectHandle object_box(World *world, Vec3 min, Vec3 max, MaterialHandle mat);
+ObjectHandle object_constant_medium(World *world, f32 d, MaterialHandle phase, ObjectHandle bound);
+ObjectHandle object_bvh_node(World *world, ObjectList object_list, u64 start, u64 end);
+// Returns texture color for given hit characteristics
+Vec3 sample_texture(World *world, TextureHandle handle, HitRecord *hit);
+// BRDF 
+bool material_scatter(World *world, RandomSeries *entropy, MaterialHandle mat, 
+                      Ray ray, HitRecord hit, ScatterRecord *scatter);
+f32 material_scattering_pdf(World *world, MaterialHandle mat, HitRecord hit, Ray ray);
+// Returns color of emited light for given hit characteristics
+Vec3 material_emit(World *world, RandomSeries *entropy, MaterialHandle mat, HitRecord hit, Ray ray);
+
+bool get_object_bounds(World *world, ObjectHandle obj_handle, Bounds3 *box);
+f32 get_object_pdf_value(World *world, RandomSeries *entropy, ObjectHandle object_handle, Vec3 orig, Vec3 v, RayCastStatistics *stats);
+Vec3 get_object_random(World *world, RandomSeries *entropy, ObjectHandle object_handle, Vec3 o);
+bool object_hit(World *world, ObjectHandle obj_handle, Ray ray, HitRecord *hit, f32 t_min, f32 t_max, RandomSeries *entropy, RayCastStatistics *stats);
+
+// Helper functions, used for scene generation
+// @TODO move them to some other place because they are not related to world construction or ray tracing
+void add_xy_rect(World *world, ObjectHandle list, f32 x0, f32 x1, f32 y0, f32 y1, f32 z, MaterialHandle mat);
+void add_yz_rect(World *world, ObjectHandle list, f32 y0, f32 y1, f32 z0, f32 z1, f32 x, MaterialHandle mat);
+void add_xz_rect(World *world, ObjectHandle list, f32 x0, f32 x1, f32 z0, f32 z1, f32 y, MaterialHandle mat);
+void add_box(World *world, ObjectHandle list, Vec3 p0, Vec3 p1, MaterialHandle mat);
 
 #define TRACE_H 1
 #endif
