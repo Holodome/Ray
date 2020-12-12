@@ -32,6 +32,90 @@ clamp(f32 x, f32 low, f32 high) {
 
 typedef union {
     struct {
+        f32 x, y;
+    };
+    f32 e[2];
+} Vec2;
+
+inline Vec2 
+v2(f32 x, f32 y) {
+    Vec2 result;
+    result.x = x;
+    result.y = y;
+    return result;
+}
+
+inline Vec2 
+v2s(f32 s) {
+    Vec2 result;
+    result.x = s;
+    result.y = s;
+    return result;
+}
+
+inline Vec2 
+v2neg(Vec2 a) {
+    Vec2 result;
+    result.x = -a.x;
+    result.y = -a.y;
+    return result;
+}
+
+inline Vec2 
+v2add(Vec2 a, Vec2 b) {
+    Vec2 result;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    return result;
+}
+
+inline Vec2
+v2add3(Vec2 a, Vec2 b, Vec2 c) {
+    return v2add(a, v2add(b, c));
+}
+
+inline Vec2 
+v2sub(Vec2 a, Vec2 b) {
+    Vec2 result;
+    result.x = a.x - b.x;
+    result.y = a.y - b.y;
+    return result;
+}
+
+inline Vec2 
+v2div(Vec2 a, Vec2 b) {
+    Vec2 result;
+    result.x = a.x / b.x;
+    result.y = a.y / b.y;
+    return result;
+}
+
+inline Vec2 
+v2mul(Vec2 a, Vec2 b) {
+    Vec2 result;
+    result.x = a.x * b.x;
+    result.y = a.y * b.y;
+    return result;
+}
+
+inline Vec2 
+v2divs(Vec2 a, f32 b) {
+    Vec2 result;
+    result.x = a.x / b;
+    result.y = a.y / b;
+    return result;
+}
+
+inline Vec2 
+v2muls(Vec2 a, f32 b) {
+    Vec2 result;
+    result.x = a.x * b;
+    result.y = a.y * b;
+    return result;
+}
+
+typedef union {
+    struct {
         f32 x, y, z;  
     };
     struct {
@@ -272,6 +356,17 @@ v4s(f32 s) {
     result.w = s;
     return result;
 }
+
+inline f32 
+v4dot(Vec4 a, Vec4 b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+}
+
+inline Vec4
+v4normalize(Vec4 a) {
+    Vec4 result = v4muls(a, rsqrt32(v4dot(a, a)));
+    return result;
+} 
 
 typedef union {
     f32  e[4][4];
@@ -517,6 +612,11 @@ bounds3(Vec3 min, Vec3 max) {
     };
 }
 
+inline Bounds3 
+bounds3empty(void) {
+    return bounds3(v3s(INFINITY), v3s(-INFINITY));   
+}
+
 inline Bounds3
 bounds3i(Vec3 v) {
     return bounds3(v, v);
@@ -574,6 +674,118 @@ onb_local(ONB onb, Vec3 v) {
     return v3add3(v3muls(onb.u, v.x),
                   v3muls(onb.v, v.y),
                   v3muls(onb.w, v.z));
+}
+
+typedef union {
+    struct {
+        f32 x, y, z, w;
+    };
+    Vec4 v;
+    f32 e[4];
+} Quat4;
+
+#define QUAT4_IDENTITY ((Quat4) { .w = 1.0f })
+
+inline Quat4 
+q4(f32 x, f32 y, f32 z, f32 w) {
+    return (Quat4) { .x = x, .y = y, .z = z, .w = w };    
+}
+
+inline Quat4 
+q4euler(f32 pitch, f32 yaw, f32 roll) {
+    f32 cy = cosf(yaw * 0.5f);
+    f32 sy = sinf(yaw * 0.5f);
+    f32 cp = cosf(pitch * 0.5f);
+    f32 sp = sinf(pitch * 0.5f);
+    f32 cr = cosf(roll * 0.5f);
+    f32 sr = sinf(roll * 0.5f);
+
+    return q4(sr * cp * cy - cr * sp * sy,
+              cr * sp * cy + sr * cp * sy,
+              cr * cp * sy - sr * sp * cy,
+              cr * cp * cy + sr * sp * sy);
+}
+
+inline Quat4 
+q4add(Quat4 a, Quat4 b) { 
+    Quat4 result; 
+    result.v = v4add(a.v, b.v); 
+    return result; 
+}
+
+inline Quat4 
+q4sub(Quat4 a, Quat4 b) { 
+    Quat4 result; 
+    result.v = v4sub(a.v, b.v); 
+    return result; 
+}
+
+inline Quat4 
+q4divs(Quat4 q, f32 s) { 
+    Quat4 result; 
+    result.v = v4divs(q.v, s); return 
+    result; 
+}
+
+inline Quat4 
+q4muls(Quat4 q, f32 s) { 
+    Quat4 result; 
+    result.v = v4muls(q.v, s); return 
+    result; 
+}
+
+inline Quat4 
+q4normalize(Quat4 q) { 
+    Quat4 result; 
+    result.v = v4normalize(q.v); 
+    return result; 
+}
+
+inline f32
+q4dot(Quat4 a, Quat4 b) {
+    return v4dot(a.v, b.v);
+}
+
+inline Mat4x4 
+mat4x4_from_quat4(Quat4 q) {
+    f32 xx = q.x * q.x;    
+    f32 yy = q.y * q.y;    
+    f32 zz = q.z * q.z;
+    f32 xy = q.x * q.y;    
+    f32 xz = q.x * q.z;    
+    f32 yz = q.y * q.z;    
+    f32 wx = q.w * q.x;    
+    f32 wy = q.w * q.y;    
+    f32 wz = q.w * q.z;
+    
+    Mat4x4 result = MAT4X4_IDENTITIY;
+    result.e[0][0] = 1 - 2 * (yy + zz);
+    result.e[0][1] = 2 * (xy + wz);
+    result.e[0][2] = 2 * (xz - wy);
+    result.e[1][0] = 2 * (xy - wz);
+    result.e[1][1] = 1 - 2 * (xx + zz);
+    result.e[1][2] = 2 * (yz + wx);
+    result.e[2][0] = 2 * (xz + wy);
+    result.e[2][1] = 2 * (yz - wx);
+    result.e[2][2] = 1 - 2 * (xx + yy);  
+    return result;    
+}
+
+inline Quat4 
+q4lerp(Quat4 a, Quat4 b, f32 t) {
+    Quat4 result;
+    
+    f32 cos_theta = q4dot(a, b);
+    if (cos_theta > 0.9995f) {
+        result = q4normalize(q4add(q4muls(a, 1 - t), q4muls(b, t)));
+    } else {
+        f32 theta = acosf(clamp(cos_theta, -1, 1));
+        f32 thetap = theta * t;
+        Quat4 qperp = q4normalize(q4sub(b, q4muls(a, cos_theta)));
+        result = q4add(q4muls(a, cosf(thetap)), q4muls(qperp, sinf(thetap)));
+    }
+    
+    return result;
 }
 
 typedef Vec3 Color;

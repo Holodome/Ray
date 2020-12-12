@@ -7,16 +7,16 @@
 inline u32 
 rgba_pack_4x8(u32 r, u32 g, u32 b, u32 a) {
     // If values passed here are greater that 255 something for sure went wrong
-    assert(r < 0xFF && b < 0xFF && b < 0xFF && a < 0xFF);
+    assert(r <= 0xFF && b <= 0xFF && b <= 0xFF && a <= 0xFF);
     return r << 0 | g << 8 | b << 16 | a << 24;
 }
 
 inline u32
 rgba_pack_4x8_linear1(f32 r, f32 g, f32 b, f32 a) {
-    if (isnan(r)) r = 0.0f;
-    if (isnan(g)) g = 0.0f;
-    if (isnan(b)) b = 0.0f;
-    if (isnan(a)) a = 0.0f;
+    if (r != r) { r = 0.0f; }
+    if (g != g) { g = 0.0f; }
+    if (b != b) { b = 0.0f; }
+    if (a != a) { a = 0.0f; }
     
     u32 ru = roundf(clamp(r, 0, 0.999f) * 255.0f);
     u32 gu = roundf(clamp(g, 0, 0.999f) * 255.0f);

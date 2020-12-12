@@ -36,10 +36,16 @@ random_uniform(RandomSeries *series, f32 low, f32 high) {
 }
 
 inline i32
-random_int(RandomSeries *rs, i32 low, i32 high) {
-    return low + (xorshift32(rs) % (u32)(high - low));
+random_int(RandomSeries *rs, i32 modulo) {
+    assert(modulo);
+    return xorshift32(rs) % modulo;
 } 
 
+inline i32
+random_int_range(RandomSeries *rs, i32 low, i32 high) {
+    assert(low != high);
+    return low + (xorshift32(rs) % (u32)(high - low));
+} 
 
 inline Vec3 
 random_unit_vector(RandomSeries *rs) {

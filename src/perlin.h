@@ -1,6 +1,7 @@
 #if !defined(PERLIN_H)
 
 #include "general.h"
+#include "memory_arena.h"
 
 #define PERLIN_POINT_COUNT 256 
 
@@ -16,7 +17,7 @@ perlin_permute(RandomSeries *rs, i32 *p, u32 n) {
     for (i32 i = n - 1; 
          i > 0;
          --i) {
-        i32 target = random_int(rs, 0, i);
+        i32 target = random_int_range(rs, 0, i);
         i32 tmp = p[i];
         p[i] = p[target];
         p[target] = tmp; 
