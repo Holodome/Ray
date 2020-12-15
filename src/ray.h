@@ -7,6 +7,7 @@
 #include "image.h"
 #include "trace.h"
 #include "perlin.h"
+#include "obj.h"
 
 // 
 // RenderWorkQueue

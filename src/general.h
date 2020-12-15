@@ -35,6 +35,7 @@
 #include <search.h>
 #include <string.h>
 #include <float.h>
+#include <ctype.h>
 
 #if RAY_INTERNAL
 #include <assert.h>

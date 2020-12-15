@@ -8,7 +8,10 @@
 #define TWO_PI 6.28318530718f
 #define HALF_PI 1.57079632679f
 
-#define DEG2RAD(_deg) ((f32)(_deg) * PI / 180.0f)
+inline f32 
+rad(f32 deg) {
+    return deg * PI / 180.0f;
+}
 
 inline f32 
 lerp(f32 a, f32 b, f32 t) {
@@ -379,7 +382,7 @@ typedef union {
     f32 i[16];
 } Mat4x4;
 
-const Mat4x4 MAT4X4_IDENTITIY = { 
+const Mat4x4 MAT4X4_IDENTITY = { 
     .m00 = 1,
     .m11 = 1,
     .m22 = 1,
@@ -388,7 +391,7 @@ const Mat4x4 MAT4X4_IDENTITIY = {
 
 inline Mat4x4
 mat4x4_translate(Vec3 t) {
-	Mat4x4 result = MAT4X4_IDENTITIY;
+	Mat4x4 result = MAT4X4_IDENTITY;
     result.e[3][0] = t.x;
     result.e[3][1] = t.y;
     result.e[3][2] = t.z;
@@ -650,6 +653,12 @@ bounds3_extend(Bounds3 a, Vec3 p) {
     return result;
 }
 
+inline f32 
+bound3_surface_area(Bounds3 b) {
+    Vec3 d = v3sub(b.max, b.min);
+    return 2 * (d.x * d.y + d.y * d.z + d.z * d.z);
+}
+
 typedef union {
     struct {
         Vec3 u;
@@ -692,7 +701,7 @@ q4(f32 x, f32 y, f32 z, f32 w) {
 }
 
 inline Quat4 
-q4euler(f32 pitch, f32 yaw, f32 roll) {
+q4euler(f32 roll, f32 pitch, f32 yaw) {
     f32 cy = cosf(yaw * 0.5f);
     f32 sy = sinf(yaw * 0.5f);
     f32 cp = cosf(pitch * 0.5f);
@@ -723,15 +732,15 @@ q4sub(Quat4 a, Quat4 b) {
 inline Quat4 
 q4divs(Quat4 q, f32 s) { 
     Quat4 result; 
-    result.v = v4divs(q.v, s); return 
-    result; 
+    result.v = v4divs(q.v, s); 
+    return result; 
 }
 
 inline Quat4 
 q4muls(Quat4 q, f32 s) { 
     Quat4 result; 
-    result.v = v4muls(q.v, s); return 
-    result; 
+    result.v = v4muls(q.v, s); 
+    return result; 
 }
 
 inline Quat4 
@@ -758,7 +767,7 @@ mat4x4_from_quat4(Quat4 q) {
     f32 wy = q.w * q.y;    
     f32 wz = q.w * q.z;
     
-    Mat4x4 result = MAT4X4_IDENTITIY;
+    Mat4x4 result = MAT4X4_IDENTITY;
     result.e[0][0] = 1 - 2 * (yy + zz);
     result.e[0][1] = 2 * (xy + wz);
     result.e[0][2] = 2 * (xz - wy);

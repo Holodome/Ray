@@ -59,8 +59,10 @@ render_tile(RenderWorkQueue *queue) {
     
     atomic_add64(&queue->orders_done, 1);
     atomic_add64(&queue->stats.bounce_count, tile_stats.bounce_count);
-    atomic_add64(&queue->stats.object_collision_tests, tile_stats.ray_triangle_collision_tests);
+    atomic_add64(&queue->stats.ray_triangle_collision_tests, tile_stats.ray_triangle_collision_tests);
+    atomic_add64(&queue->stats.ray_triangle_collision_test_succeses, tile_stats.ray_triangle_collision_test_succeses);
     atomic_add64(&queue->stats.object_collision_tests, tile_stats.object_collision_tests);
+    atomic_add64(&queue->stats.object_collision_test_successes, tile_stats.object_collision_test_successes);
     
     return true;
 }
@@ -210,7 +212,7 @@ main(int argc, char **argv) {
     // Initialize world
     World world;
     world_init(&world);
-    init_scene_test(&world, &output_image);
+    init_scene3(&world, &output_image);
     // Print world information    
     char bytes_buffer[32];
     format_bytes(bytes_buffer, sizeof(bytes_buffer), world.arena.data_size);
@@ -264,8 +266,10 @@ main(int argc, char **argv) {
     printf("Perfomance: %fms/bounce\n", (f64)time_elapsed / (f64)render_queue.stats.bounce_count);
     format_number_with_thousand_separators(number_buffer, sizeof(number_buffer), render_queue.stats.ray_triangle_collision_tests);
     printf("Triangle collision tests: %s\n", number_buffer);
+    printf("Triangle collision tests failed: %.2f%%\n", 100.0f * (1.0 - (f64)render_queue.stats.ray_triangle_collision_test_succeses / (f64)render_queue.stats.ray_triangle_collision_tests));
     format_number_with_thousand_separators(number_buffer, sizeof(number_buffer), render_queue.stats.object_collision_tests);
     printf("Object collision tests: %s\n", number_buffer);
+    printf("Object collision tests failed: %.2f%%\n", 100.0f * (1.0 - (f64)render_queue.stats.object_collision_test_successes / (f64)render_queue.stats.object_collision_tests));
     printf("Average bounce count per ray: %f\n", (f64)render_queue.stats.bounce_count / (f64)(samples_per_pixel * output_image.w * output_image.h));
     
     char *out = s.image_filename;

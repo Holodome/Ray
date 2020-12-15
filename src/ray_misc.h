@@ -63,6 +63,8 @@ format_time_ms(char *buffer, u64 buffer_size, u64 time) {
 
 inline void 
 format_number_with_thousand_separators(char *buffer, u64 buffer_size, u64 number) {
+    memset(buffer, 0, buffer_size);
+    
     char digits_ascii[64];
     i32 cursor = 63;
     u64 n = number;
