@@ -192,15 +192,15 @@ triangle_area(Vec3 p0, Vec3 p1, Vec3 p2) {
 typedef BOX_COMPARATOR_SIGNATURE(BoxComparator);
 
 static int 
-box_comapre(World *world, ObjectHandle a, ObjectHandle b, u32 axis) {
+bounds3_compare(World *world, ObjectHandle a, ObjectHandle b, u32 axis) {
     Bounds3 b0 = get_object_bounds(world, a);
     Bounds3 b1 = get_object_bounds(world, b);
     return b0.min.e[axis] < b1.min.e[axis];
 }
 
-static BOX_COMPARATOR_SIGNATURE(box_compare_x) { return box_comapre((World *)w, *((ObjectHandle *)a), *((ObjectHandle *)b), 0); }
-static BOX_COMPARATOR_SIGNATURE(box_compare_y) { return box_comapre((World *)w, *((ObjectHandle *)a), *((ObjectHandle *)b), 1); }
-static BOX_COMPARATOR_SIGNATURE(box_compare_z) { return box_comapre((World *)w, *((ObjectHandle *)a), *((ObjectHandle *)b), 2); }
+static BOX_COMPARATOR_SIGNATURE(bounds3_compare_x) { return bounds3_compare((World *)w, *((ObjectHandle *)a), *((ObjectHandle *)b), 0); }
+static BOX_COMPARATOR_SIGNATURE(bounds3_compare_y) { return bounds3_compare((World *)w, *((ObjectHandle *)a), *((ObjectHandle *)b), 1); }
+static BOX_COMPARATOR_SIGNATURE(bounds3_compare_z) { return bounds3_compare((World *)w, *((ObjectHandle *)a), *((ObjectHandle *)b), 2); }
 
 static Vec3 
 reflect(Vec3 v, Vec3 n) {
@@ -416,20 +416,41 @@ object_list_init(MemoryArena *arena, u32 reserve) {
     ObjectList lst = {0};
     lst.capacity = reserve;
     lst.a = arena_alloc(arena, lst.capacity * sizeof(*lst.a));
-    
+	lst.arena = arena;
+
+#if RAY_INTERNAL
+    lst.is_initialized = true;
+#endif 
     return lst;
 }
 
 void
-add_object_to_list(MemoryArena *arena, ObjectList *list, ObjectHandle o) {
-    EXPAND_IF_NEEDED(arena, list->a, list->size, list->capacity);
+add_object_to_list(ObjectList *list, ObjectHandle o) {
+#if RAY_INTERNAL
+    assert(list->is_initialized);
+#endif 
+    EXPAND_IF_NEEDED(list->arena, list->a, list->size, list->capacity);
     
     list->a[list->size++] = o;   
 }
 
 void
-object_list_shrink_to_fit(MemoryArena *arena, ObjectList *list) {
-    SHRINK_TO_FIT(arena, list->a, list->size, list->capacity);
+object_list_shrink_to_fit(ObjectList *list) {
+#if RAY_INTERNAL
+    assert(list->is_initialized);
+#endif 
+    SHRINK_TO_FIT(list->arena, list->a, list->size, list->capacity);
+    
+}
+
+ObjectHandle 
+object_list_get(ObjectList *list, u64 index) {
+#if RAY_INTERNAL
+    assert(list->is_initialized);
+    assert(index < list->size);
+#endif
+    
+    return list->a[index];
 }
 
 PDF
@@ -469,7 +490,7 @@ world_init(World *world) {
     world->arena.data_capacity = MEGABYTES(16);
     world->arena.data = malloc(world->arena.data_capacity);
     
-    world->object_list = object_list(world);
+    world->obj_list = object_list(world);
     world->important_objects = object_list(world);
 }
 
@@ -523,13 +544,13 @@ add_object(World *world, ObjectHandle list_handle, ObjectHandle obj) {
     Object *list = get_object(world, list_handle);
     assert(list->type = ObjectType_ObjectList);
  
-    add_object_to_list(&world->arena, &list->object_list, obj);   
+    add_object_to_list(&list->obj_list, obj);   
     return obj;
 }
 
 ObjectHandle 
 add_object_to_world(World *world, ObjectHandle o) {
-    add_object(world, world->object_list, o);
+    add_object(world, world->obj_list, o);
     return o;
 }
 
@@ -655,11 +676,11 @@ material_dielectric(World *world, f32 ir) {
 }
 
 MaterialHandle 
-material_diffuse_light(World *world, TextureHandle t, bool is_both_sided) {
+material_diffuse_light(World *world, TextureHandle t, LightFlags flags) {
     Material material;
     material.type = MaterialType_DiffuseLight;
     material.diffuse_light.emit = t;
-    material.diffuse_light.is_both_sided = is_both_sided;
+    material.diffuse_light.flags = flags;
     
     return new_material(world, material);    
 }
@@ -668,7 +689,7 @@ ObjectHandle
 object_list(World *world) {
     Object obj;
     obj.type = ObjectType_ObjectList;
-    obj.object_list = object_list_init(&world->arena, 0);
+    obj.obj_list = object_list_init(&world->arena, 0);
     
     return new_object(world, obj);        
 }
@@ -740,7 +761,7 @@ object_box(World *world, Vec3 min, Vec3 max, MaterialHandle mat) {
     obj.box.bounds = bounds3(min, max);
     obj.box.sides_list = object_list(world);
     add_box(world, obj.box.sides_list, min, max, mat);
-    object_list_shrink_to_fit(&world->arena, &get_object(world, obj.box.sides_list)->object_list);
+    object_list_shrink_to_fit(&get_object(world, obj.box.sides_list)->obj_list);
     
     return new_object(world, obj);        
 }
@@ -757,45 +778,81 @@ object_constant_medium(World *world, f32 d, MaterialHandle phase, ObjectHandle b
 }
 
 ObjectHandle 
-object_bvh_node(World *world, ObjectList object_list, u64 start, u64 end) {
+object_bvh_node(World *world, ObjectHandle *objs, i64 n) {
     Object obj;
     obj.type = ObjectType_BVHNode;
     
-    u32 axis = random_int_range(&global_entropy, 0, 2);
-    BoxComparator *cs[] = { box_compare_x, box_compare_y, box_compare_z };
-    BoxComparator *comparator = cs[axis];
-// #define COMPARATOR (axis == 0 ? box_compare_x : axis == 1 ? box_compare_y : box_compare_z)
-                                            
-    assert(end > start);
-    u64 object_count = end - start;
-    
     TempMemory temp_mem = temp_memory_begin(&world->arena);
-    ObjectHandle *objects = arena_alloc(&world->arena, sizeof(ObjectHandle) * object_list.size);
-    memcpy(objects, object_list.a, sizeof(ObjectHandle) * object_list.size);
+    Bounds3 *objs_bounds = arena_alloc(&world->arena, sizeof(Bounds3) * n); 
+    f32 *left_area  = arena_alloc(&world->arena, sizeof(f32) * n); 
+    f32 *right_area = arena_alloc(&world->arena, sizeof(f32) * n); 
     
-    if (object_count == 1) {
-        obj.bvh_node.left = obj.bvh_node.right = objects[start];    
-    } else if (object_count == 2) {
-        if (comparator(world, objects + start, objects + start + 1)) {
-            obj.bvh_node.left = objects[start];
-            obj.bvh_node.right = objects[start + 1];
-        } else {
-            obj.bvh_node.left = objects[start + 1];
-            obj.bvh_node.right = objects[start];
-        }
-    } else {
-        qsort_s(objects + start, object_count, sizeof(ObjectHandle), comparator, world);
-        
-        u64 mid = start + object_count / 2;
-        
-        obj.bvh_node.left = object_bvh_node(world, object_list, start, mid);
-        obj.bvh_node.right = object_bvh_node(world, object_list, mid, end);
+    Bounds3 main_bounds = bounds3empty();
+    for (u32 obj_index = 0;
+         obj_index < n;
+         ++obj_index) {
+        ObjectHandle obj_handle = objs[obj_index];
+        Bounds3 temp_bounds = get_object_bounds(world, obj_handle);
+        main_bounds = bounds3_join(main_bounds, temp_bounds);
     }
-    temp_memory_end(temp_mem);
     
-    Bounds3 bounds_left = get_object_bounds(world, obj.bvh_node.left);
-    Bounds3 bounds_right = get_object_bounds(world, obj.bvh_node.right);
-    obj.bvh_node.bounds = bounds3_join(bounds_left, bounds_right);
+    u32 axis = bounds3s_longest_axis(main_bounds);
+    if (axis == 0) {
+        qsort_s(objs, n, sizeof(ObjectHandle), bounds3_compare_x, world);
+    } else if (axis == 1) {
+        qsort_s(objs, n, sizeof(ObjectHandle), bounds3_compare_y, world);
+    } else {
+        qsort_s(objs, n, sizeof(ObjectHandle), bounds3_compare_z, world);
+    }
+    
+    for (u32 obj_index = 0;
+         obj_index < n;
+         ++obj_index) {
+        ObjectHandle obj_handle = objs[obj_index];
+        objs_bounds[obj_index] = get_object_bounds(world, obj_handle);
+    }
+    
+    Bounds3 left_bounds = bounds3empty();
+    for (u32 obj_index = 0;
+         obj_index < n;
+         ++obj_index) {
+        left_bounds = bounds3_join(left_bounds, objs_bounds[obj_index]);
+        left_area[obj_index] = bound3s_surface_area(left_bounds);
+    }
+    Bounds3 right_bounds = bounds3empty();
+    for (i32 obj_index = n - 1;
+         obj_index > 0;
+         --obj_index) {
+        right_bounds = bounds3_join(right_bounds, objs_bounds[obj_index]);
+        right_area[obj_index] = bound3s_surface_area(right_bounds);        
+    }
+    
+    f32 min_sah = INFINITY;
+    u32 min_sah_index;
+    for (u32 object_index = 0;
+         object_index < n - 1;
+         ++object_index) {
+        f32 sah = object_index * left_area[object_index] + (n - object_index - 1) * right_area[object_index + 1];
+        if (sah < min_sah) {
+            min_sah_index = object_index;
+            min_sah = sah;
+        }        
+    }
+    
+    if (min_sah_index == 0) {
+        obj.bvh_node.left = objs[0];
+    } else {
+        obj.bvh_node.left = object_bvh_node(world, objs, min_sah_index + 1);
+    }
+    
+    if (min_sah_index == n - 2) {
+        obj.bvh_node.right = objs[min_sah_index + 1];
+    } else {
+        obj.bvh_node.right = object_bvh_node(world, objs + min_sah_index + 1, n - min_sah_index - 1);
+    }
+    
+    temp_memory_end(temp_mem);
+    obj.bvh_node.bounds = main_bounds;
     
     return new_object(world, obj);        
 }
@@ -1099,7 +1156,12 @@ material_emit(World *world, Ray ray, HitRecord hrec, RayCastData data) {
     Material *material = get_material(world, hrec.mat);
     switch(material->type) {
         case MaterialType_DiffuseLight: {
-            if (!material->diffuse_light.is_both_sided && !hrec.is_front_face) {
+            bool is_front_face = hrec.is_front_face;
+            if (material->diffuse_light.flags & LightFlags_FlipFace) {
+                is_front_face = !is_front_face;
+            }
+            
+            if (!(material->diffuse_light.flags & LightFlags_BothSided) && !is_front_face) {
                 break;
             }
             
@@ -1120,12 +1182,12 @@ get_object_bounds(World *world, ObjectHandle obj_handle) {
     Object *obj = get_object(world, obj_handle);
     switch (obj->type) {
         case ObjectType_ObjectList: {
-            if (obj->object_list.size) {
+            if (obj->obj_list.size) {
                 bool is_first_box = true;
-                for (u64 object_index = 0;
-                     object_index < obj->object_list.size;
-                     ++object_index) {
-                    ObjectHandle test_object = obj->object_list.a[object_index];
+                for (u64 obj_index = 0;
+                     obj_index < obj->obj_list.size;
+                     ++obj_index) {
+                    ObjectHandle test_object = object_list_get(&obj->obj_list, obj_index);
                     Bounds3 temp_box = get_object_bounds(world, test_object);
                     result = is_first_box ? temp_box : bounds3_join(result, temp_box);
                     is_first_box = false;
@@ -1215,13 +1277,13 @@ get_object_pdf_value(World *world, ObjectHandle object_handle, Vec3 orig, Vec3 v
             }
         } break;
         case ObjectType_ObjectList: {
-            f32 weight = 1.0f / obj->object_list.size;
+            f32 weight = 1.0f / obj->obj_list.size;
             f32 sum = 0;
             
-            for (u32 object_index = 0;
-                 object_index < obj->object_list.size;
-                 ++object_index) {
-                sum += weight * get_object_pdf_value(world, obj->object_list.a[object_index], orig, v, data);        
+            for (u32 obj_index = 0;
+                 obj_index < obj->obj_list.size;
+                 ++obj_index) {
+                sum += weight * get_object_pdf_value(world, obj->obj_list.a[obj_index], orig, v, data);        
             }
 			result = sum;
         } break;
@@ -1284,8 +1346,8 @@ get_object_random(World *world, ObjectHandle object_handle, Vec3 o, RayCastData 
             result = onb_local(uvw, random_to_sphere(data.entropy, obj->sphere.r, dist_sq));
         } break;
         case ObjectType_ObjectList: {
-            u32 random_index = random_int(data.entropy, obj->object_list.size);
-            result = get_object_random(world, obj->object_list.a[random_index], o, data);
+            u32 random_index = random_int(data.entropy, obj->obj_list.size);
+            result = get_object_random(world, object_list_get(&obj->obj_list, random_index), o, data);
         } break;
         INVALID_DEFAULT_CASE;
     }
@@ -1373,10 +1435,10 @@ object_hit(World *world, Ray ray, ObjectHandle obj_handle, f32 t_min, f32 t_max,
             bool has_hit_anything = false;
             
             f32 closest_so_far = t_max;
-            for (u64 object_index = 0;
-                object_index < obj->object_list.size;
-                ++object_index) {
-                ObjectHandle test_object = obj->object_list.a[object_index];
+            for (u64 obj_index = 0;
+                obj_index < obj->obj_list.size;
+                ++obj_index) {
+                ObjectHandle test_object = object_list_get(&obj->obj_list, obj_index);
               
                 HitRecord temp_hit;  
                 if (object_hit(world, ray, test_object, t_min, closest_so_far, &temp_hit, data)) {
@@ -1588,7 +1650,7 @@ ray_cast(World *world, Ray ray, i32 depth, RayCastData data) {
     HitRecord hrec = {0};
     hrec.t = INFINITY;
         
-    if (!object_hit(world, ray, world->object_list, 0.001f, INFINITY, &hrec, data)) {
+    if (!object_hit(world, ray, world->obj_list, 0.001f, INFINITY, &hrec, data)) {
         return world->backgorund_color;
     }
     

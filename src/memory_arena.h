@@ -9,6 +9,8 @@ typedef struct {
     u64 last_data_size;
     u64 data_size;
     u64 data_capacity;
+    
+    u64 peak_size;
 } MemoryArena;
 
 typedef struct {
@@ -79,6 +81,9 @@ arena_alloc_align(MemoryArena *a, u64 size, u64 align) {
         }
     }
     
+    if (a->data_size > a->peak_size) {
+        a->peak_size = a->data_size;
+    }
     return result;
 }
 

@@ -6,6 +6,7 @@
 #include "image.h"
 #include "perlin.h"
 
+// Describes mesh constructed from polygons, where each face can have vertices_per_face[i] vertices
 typedef struct { 
     u64 nfaces;
     u32 *vertices_per_face;
@@ -15,6 +16,7 @@ typedef struct {
     Vec2 *uv;
 } PolygonMeshData;
 
+// Describes mesh constructed from triangles
 typedef struct {
     u64 ntrig, nvert;
     u32 *tri_indices;
@@ -32,8 +34,12 @@ typedef struct {
 } RayCastStatistics;
 
 typedef struct {
+    // Statistics of raycasting
     RayCastStatistics *stats;
+    // Seeded RNG
     RandomSeries *entropy;
+    // Arena where to allocate per-cast data, like PDFs 
+    MemoryArena *arena;
 } RayCastData;
 
 typedef struct {
@@ -48,13 +54,12 @@ typedef struct {
 Ray make_ray(Vec3 orig, Vec3 dir, f32 time);
 Vec3 ray_at(Ray ray, f32 t);
 
-typedef u32 CameraType;
-enum {
+typedef enum {
     CameraType_None = 0x0,
     CameraType_Perspective,
     CameraType_Orthographic,
     CameraType_Environment,
-};
+} CameraType;
 
 typedef struct {
     CameraType type;
@@ -117,8 +122,7 @@ typedef struct {
 
 typedef struct { u64 v; } MaterialHandle;
 
-typedef u32 MaterialType;
-enum {
+typedef enum {
     MaterialType_None = 0x0,
     // Describes purely specular surface
     MaterialType_Metal,
@@ -129,7 +133,12 @@ enum {
     MaterialType_Dielectric,
     MaterialType_DiffuseLight,
     MaterialType_Isotropic,
-};
+} MaterialType;
+
+typedef enum {
+    LightFlags_BothSided = 0x1,
+    LightFlags_FlipFace  = 0x2
+} LightFlags;
 
 // Material controls how rays behave when they hrec certain surface and 
 // what color does this surface have at given point
@@ -148,7 +157,7 @@ typedef struct {
         } dielectric;
         struct {
             TextureHandle emit;
-            bool is_both_sided;
+            LightFlags flags;
         } diffuse_light;
     };
 } Material;
@@ -158,7 +167,10 @@ typedef struct {
     Mat4x4 w2o;
 } Transform;
 
+#define EMPTY_TRANSFORM ((Transform) { .o2w = MAT4X4_IDENTITY, .w2o = MAT4X4_IDENTITY })
+// Transform without rotation 
 #define transform_t(_t) transform_tr(_t, QUAT4_IDENTITY)
+// Transform with rotation given in euler angles
 #define transform_t_euler(_t, _pitch, _yaw, _roll) transform_tr(_t, q4euler(_pitch, _yaw, _roll))
 inline Transform 
 transform_tr(Vec3 t, Quat4 r) { 
@@ -170,7 +182,6 @@ transform_tr(Vec3 t, Quat4 r) {
         .w2o = mat4x4_inverse(o2w)
     };
 }
-#define EMPTY_TRANSFORM ((Transform) { .o2w = MAT4X4_IDENTITY, .w2o = MAT4X4_IDENTITY })
 
 typedef struct { u64 v; } ObjectHandle;
 
@@ -178,14 +189,19 @@ typedef struct {
     ObjectHandle *a;
     u64 size;
     u64 capacity;
+
+    MemoryArena *arena;
+#if RAY_INTERNAL
+    bool is_initialized;    
+#endif 
 } ObjectList;
 
 ObjectList object_list_init(MemoryArena *arena, u32 reserve);
-void add_object_to_list(MemoryArena *arena, ObjectList *list, ObjectHandle o);
-void object_list_shrink_to_fit(MemoryArena *arena, ObjectList *list);
+void add_object_to_list(ObjectList *list, ObjectHandle o);
+void object_list_shrink_to_fit(ObjectList *list);
+ObjectHandle object_list_get(ObjectList *lsit, u64 index);
 
-typedef u32 ObjectType;
-enum {
+typedef enum {
     ObjectType_None = 0x0,
     
     ObjectType_Disk,
@@ -201,9 +217,9 @@ enum {
     
     ObjectType_ConstantMedium,
     ObjectType_Box,
-};
+} ObjectType;
 
-typedef struct Object {
+typedef struct {
     ObjectType type;
     union {
         struct {
@@ -260,17 +276,16 @@ typedef struct Object {
             
             f32 surface_area;
         } triangle_mesh;
-        ObjectList object_list;
+        ObjectList obj_list;
     };
 } Object;
 
-typedef u32 PDFType;
-enum {
+typedef enum {
     PDFType_None = 0x0,
     PDFType_Cosine,
     PDFType_Object,
     PDFType_Mixture,
-};
+} PDFType;
 
 typedef struct PDF {
     PDFType type;
@@ -341,7 +356,7 @@ typedef struct {
     ObjectHandle important_objects;
     bool has_importance_sampling;
     // List of objects in scene
-    ObjectHandle object_list;
+    ObjectHandle obj_list;
 } World;
 
 void world_init(World *world);
@@ -375,7 +390,7 @@ MaterialHandle material_isotropic(World *world, TextureHandle albedo);
 MaterialHandle material_metal(World *world, TextureHandle albedo, f32 fuzz);
 MaterialHandle material_plastic(World *world, TextureHandle albedo, f32 fuzz);
 MaterialHandle material_dielectric(World *world, f32 ir);
-MaterialHandle material_diffuse_light(World *world, TextureHandle t, bool is_both_sided);
+MaterialHandle material_diffuse_light(World *world, TextureHandle t, LightFlags flags);
 
 ObjectHandle object_list(World *world);
 ObjectHandle object_disk(World *world, Vec3 p, Vec3 n, f32 r, MaterialHandle mat);
@@ -384,7 +399,8 @@ ObjectHandle object_transform(World *world, ObjectHandle obj, Transform transfor
 ObjectHandle object_triangle(World *world, Vec3 p0, Vec3 p1, Vec3 p2, MaterialHandle mat);
 ObjectHandle object_box(World *world, Vec3 min, Vec3 max, MaterialHandle mat);
 ObjectHandle object_constant_medium(World *world, f32 d, MaterialHandle phase, ObjectHandle bound);
-ObjectHandle object_bvh_node(World *world, ObjectList object_list, u64 start, u64 end);
+// ObjectHandle object_bvh_node(World *world, ObjectList obj_list, u64 start, u64 end);
+ObjectHandle object_bvh_node(World *world, ObjectHandle *objs, i64 n);
 ObjectHandle object_animated_transform(World *world, ObjectHandle obj, f32 time0, f32 time1, 
                                       Vec3 t0, Vec3 t1, Quat4 r0, Quat4 r1);
 #define object_triangle_mesh_p(_world, _pm, _mat) object_triangle_mesh_pt(_world, _pm, _mat, EMPTY_TRANSFORM)

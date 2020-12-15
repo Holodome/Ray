@@ -654,9 +654,15 @@ bounds3_extend(Bounds3 a, Vec3 p) {
 }
 
 inline f32 
-bound3_surface_area(Bounds3 b) {
+bound3s_surface_area(Bounds3 b) {
     Vec3 d = v3sub(b.max, b.min);
     return 2 * (d.x * d.y + d.y * d.z + d.z * d.z);
+}
+
+inline u32 
+bounds3s_longest_axis(Bounds3 b) {
+    Vec3 d = v3sub(b.max, b.min);
+    return (d.x > d.y && d.x > d.z) ? 0 : (d.y > d.x && d.y > d.z) ? 1 : 2;
 }
 
 typedef union {

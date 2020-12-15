@@ -129,6 +129,10 @@ skip_to_next_line(char *cursor) {
     return cursor;
 }
 
+inline char *
+bool_to_cstring(bool v) {
+    return v ? "true" : "false";
+}
 
 #define STRING_H 1
 #endif
