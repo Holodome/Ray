@@ -85,13 +85,11 @@ init_cornell_box(World *world, Image *image) {
     MaterialHandle red   = material_lambertian(world, texture_solid(world, v3(0.65, 0.05, 0.05)));
     MaterialHandle white = material_lambertian(world, texture_solid(world, v3(0.73, 0.73, 0.73)));
     MaterialHandle green = material_lambertian(world, texture_solid(world, v3(0.12, 0.45, 0.15)));
-    MaterialHandle light = material_diffuse_light(world, texture_solid(world, v3s(15)), false);
+    MaterialHandle light = material_diffuse_light(world, texture_solid(world, v3s(15)), LightFlags_FlipFace);
     
     add_yz_rect(world, world->obj_list, 0, 555, 0, 555, 555, green);
     add_yz_rect(world, world->obj_list, 0, 555, 0, 555, 0, red);
-    ObjectHandle flipped = object_list(world);
-    add_xz_rect(world, flipped, 213, 343, 227, 332, 554, light);
-    add_object_to_world(world, flipped);
+    add_xz_rect(world, world->obj_list, 213, 343, 227, 332, 554, light);
     // add_xz_rect(world, world->obj_list, 113, 443, 127, 432, 554, light);
     add_xz_rect(world, world->obj_list, 0, 555, 0, 555, 0, white);
     add_xz_rect(world, world->obj_list, 0, 555, 0, 555, 555, white);
@@ -235,4 +233,66 @@ init_scene_test(World *world, Image *image) {
     f32 dtf = 10;
     f32 aperture = 0.0f;
     world->camera = camera_perspective(look_from, look_at, v3(0, 1, 0), aspect_ratio, rad(20), aperture, dtf, 0, 1);
+}
+
+void 
+init_scene_test_light(World *world, Image *image) {
+    // MaterialHandle light = ;
+    MaterialHandle floor = material_lambertian(world, texture_solid(world, v3(0.4, 0.04, 0.04)));
+#if 1
+    MaterialHandle plate1 = material_plastic(world, texture_solid(world, v3(0.2, 0.2, 0.2)), 0.010);
+    MaterialHandle plate2 = material_plastic(world, texture_solid(world, v3(0.2, 0.2, 0.2)), 0.050);
+    MaterialHandle plate3 = material_plastic(world, texture_solid(world, v3(0.2, 0.2, 0.2)), 0.100);
+    MaterialHandle plate4 = material_plastic(world, texture_solid(world, v3(0.2, 0.2, 0.2)), 0.150);
+#else 
+    MaterialHandle plate1 = material_metal(world, texture_solid(world, v3(0.2, 0.2, 0.2)));
+    MaterialHandle plate2 = material_metal(world, texture_solid(world, v3(0.2, 0.2, 0.2)));
+    MaterialHandle plate3 = material_metal(world, texture_solid(world, v3(0.2, 0.2, 0.2)));
+    MaterialHandle plate4 = material_metal(world, texture_solid(world, v3(0.2, 0.2, 0.2)));
+#endif     
+
+    add_xz_rect(world, world->obj_list, -10, 10, -10, 10, -4.146150112, floor);
+    add_xy_rect(world, world->obj_list, -10, 10, -10, 10, -2, floor);
+    
+    add_rect(world, world->obj_list, v3(4 ,-2.706510067, 0.2560899854),
+                                     v3(4 ,-2.08375001, -0.5263199806),
+                                     v3(-4, -2.08375001, -0.5263199806),
+                                     v3(-4, -2.706510067, 0.2560899854), plate1);
+    
+    add_rect(world, world->obj_list, v3(4, -3.288249969, 1.369719982),
+                                     v3(4, -2.838560104, 0.4765399992),
+                                     v3(-4, -2.838560104, 0.4765399992),
+                                     v3(-4, -3.288249969, 1.369719982), plate2);
+                                     
+    add_rect(world, world->obj_list, v3(4, -3.730959892, 2.700459957),
+                                     v3(4, -3.433779955, 1.745640039),
+                                     v3(-4, -3.433779955, 1.745640039),
+                                     v3(-4, -3.730959892, 2.700459957), plate3);
+    
+    add_rect(world, world->obj_list, v3(4, -3.996150017, 4.066699982),
+                                     v3(4, -3.820689917, 3.082210064),
+                                     v3(-4, -3.820689917, 3.082210064),
+                                     v3(-4, -3.996150017, 4.066699982), plate4);
+    
+    ObjectHandle sphere1 = add_object_to_world(world, object_sphere(world, v3(-3.75, 0.0, 0), 0.05,
+         material_diffuse_light(world, texture_solid(world, v3s(901)), 0)));
+    ObjectHandle sphere2 = add_object_to_world(world, object_sphere(world, v3(-1.25, 0.0, 0), 0.1,
+         material_diffuse_light(world, texture_solid(world, v3s(100)), 0)));
+    ObjectHandle sphere3 = add_object_to_world(world, object_sphere(world, v3(1.00, 0.0, 0), 0.3, 
+        material_diffuse_light(world, texture_solid(world, v3s(11.1)), 0)));
+    ObjectHandle sphere4 = add_object_to_world(world, object_sphere(world, v3(3.75, 0.0, 0), 0.9,
+         material_diffuse_light(world, texture_solid(world, v3s(5.2)), 0)));
+    add_important_object(world, sphere1);
+    add_important_object(world, sphere2);
+    add_important_object(world, sphere3);
+    add_important_object(world, sphere4);
+    
+    f32 aspect_ratio = (f32)image->w / (f32)image->h;
+    Vec3 look_from =  v3(0, 2, 15);
+    Vec3 look_at = v3(0, 1.69522, 14.0476);
+    Vec3 v_up = v3(0, 1, 0);
+    // Vec3 v_up = v3(0, 1, 0);
+    f32 dtf = 1e6;
+    f32 aperture = 0.0f;
+    world->camera = camera_perspective(look_from, look_at, v_up, aspect_ratio, rad(36.7), aperture, dtf, 0, 1);
 }

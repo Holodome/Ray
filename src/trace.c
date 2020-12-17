@@ -1,5 +1,10 @@
 #include "trace.h"
 
+static bool 
+is_black(Vec3 color) {
+    return !(isfinite(color.x) && isfinite(color.y) && isfinite(color.z));
+}
+
 void 
 add_xy_rect(World *world, ObjectHandle list, f32 x0, f32 x1, f32 y0, f32 y1, f32 z, MaterialHandle mat) {
     Vec3 v00 = v3(x0, y0, z);
@@ -41,6 +46,12 @@ add_box(World *world, ObjectHandle list, Vec3 p0, Vec3 p1, MaterialHandle mat) {
     add_xz_rect(world, list, p0.x, p1.x, p0.z, p1.z, p0.y, mat);
     add_yz_rect(world, list, p0.y, p1.y, p0.z, p1.z, p1.x, mat);
     add_yz_rect(world, list, p0.y, p1.y, p0.z, p1.z, p0.x, mat);
+}
+
+void 
+add_rect(World *world, ObjectHandle list, Vec3 p0, Vec3 p1, Vec3 p2, Vec3 p3, MaterialHandle mat) {
+    add_object(world, list, object_triangle(world, p0, p1, p2, mat));    
+    add_object(world, list, object_triangle(world, p0, p3, p2, mat));    
 }
 
 ObjectHandle 
@@ -1080,7 +1091,7 @@ material_scatter(World *world, Ray ray, HitRecord hrec,
         } break;
         case MaterialType_Plastic: {
             // @NOTE this is not physically correct, we just choose randomly diffuse or specular scattering
-            if (random(data.entropy) > 0.5) {
+            if (random(data.entropy) > 0.6) {
                 Vec3 reflected = reflect(ray.dir, hrec.n);
                 Vec3 random = random_unit_sphere(data.entropy);
                 Vec3 scattered = normalize(v3add(reflected, v3muls(random, material->plastic.roughness)));
@@ -1346,8 +1357,10 @@ get_object_random(World *world, ObjectHandle object_handle, Vec3 o, RayCastData 
             result = onb_local(uvw, random_to_sphere(data.entropy, obj->sphere.r, dist_sq));
         } break;
         case ObjectType_ObjectList: {
-            u32 random_index = random_int(data.entropy, obj->obj_list.size);
-            result = get_object_random(world, object_list_get(&obj->obj_list, random_index), o, data);
+            if (obj->obj_list.size) {
+                u32 random_index = random_int(data.entropy, obj->obj_list.size);
+                result = get_object_random(world, object_list_get(&obj->obj_list, random_index), o, data);
+            }
         } break;
         INVALID_DEFAULT_CASE;
     }
@@ -1598,10 +1611,7 @@ pdf_value(World *world, PDF pdf, Vec3 dir, RayCastData data) {
             f32 cosine = dot(normalize(dir), pdf.cosine.uvw.w);
             if (cosine > 0) {
                 result = cosine / PI;
-            } else {
-                f32 epsilon = 0.001f;
-                result = epsilon;
-            }
+            } 
         } break;
         case PDFType_Object: {
             result = get_object_pdf_value(world, pdf.object.obj, pdf.object.o, dir, data);
@@ -1641,42 +1651,68 @@ pdf_generate(World *world, PDF pdf, RayCastData data) {
 
 Vec3 
 ray_cast(World *world, Ray ray, i32 depth, RayCastData data) {
-    if (depth <= 0) {
-        return v3s(0);
-    }
+    // Resulting color
+    Vec3 color = v3s(0);
+    // How much ray contributes to color
+    Vec3 throughput = v3s(1.0);
     
-    ++data.stats->bounce_count;
-    
-    HitRecord hrec = {0};
-    hrec.t = INFINITY;
+    for(u32 bounce = 0;
+        bounce < depth;
+        ++bounce) {
+        ++data.stats->bounce_count;
         
-    if (!object_hit(world, ray, world->obj_list, 0.001f, INFINITY, &hrec, data)) {
-        return world->backgorund_color;
+        HitRecord hrec = {0};
+        if (!object_hit(world, ray, world->obj_list, 0.001f, INFINITY, &hrec, data)) {
+            color = v3add(color, v3mul(throughput, world->backgorund_color));
+            break;
+        }    
+        
+        ScatterRecord srec = {0};
+        if (!material_scatter(world, ray, hrec, &srec, data)) {
+            Vec3 emitted = material_emit(world, ray, hrec, data);
+            color = v3add(color, v3mul(throughput, emitted));
+            break;
+        }
+        
+        // Specular bounce means that surface does not scatter the ray
+        if (srec.is_specular) {
+            ray.orig = hrec.p;
+            ray.dir = srec.specular_dir;
+            throughput = v3mul(throughput, srec.attenuation);
+            continue;
+        }
+        
+        PDF pdf;
+        PDF ipdf = object_pdf(world->important_objects, hrec.p);
+        if (world->has_importance_sampling) {
+            pdf = mixture_pdf(&ipdf, &srec.pdf);
+        } else {
+            pdf = srec.pdf;
+        }
+        
+        ray.orig = hrec.p;
+        ray.dir = pdf_generate(world, pdf, data);
+        f32 bsdf = material_scattering_pdf(world, ray, hrec);
+        f32 pdf_val = pdf_value(world, pdf, ray.dir, data);
+        f32 weight = bsdf / pdf_val;
+        ray.dir = normalize(ray.dir);
+        if (!isnormal(weight) || is_black(srec.attenuation)) {
+            break;
+        }
+        
+        throughput = v3mul(throughput, v3muls(srec.attenuation, weight));
+#if 1
+        // Russian roulette
+        if (bounce > 3) {
+            f32 p = max32(max32(throughput.x, throughput.y), throughput.z);
+            if (random(data.entropy) > min32(p, 0.95f)) {
+                ++data.stats->russian_roulette_terminated_bounces;
+                break;
+            }
+            throughput = v3muls(throughput, 1.0f / p);
+        }
+#endif 
     }
     
-    ScatterRecord srec = {0};
-    Vec3 emitted = material_emit(world, ray, hrec, data);
-    if (!material_scatter(world, ray, hrec, &srec, data)) {
-        return emitted;
-    }
-    
-    if (srec.is_specular) {
-        Ray scattered = make_ray(hrec.p, srec.specular_dir, ray.time);
-        return v3mul(srec.attenuation, ray_cast(world, scattered, depth - 1, data));
-    }
-    
-    PDF pdf;
-    PDF ipfd = object_pdf(world->important_objects, hrec.p);
-    if (world->has_importance_sampling) {
-        pdf = mixture_pdf(&ipfd, &srec.pdf);
-    } else {
-        pdf = srec.pdf;
-    }
-    
-    Ray scattered = make_ray(hrec.p, pdf_generate(world, pdf, data), ray.time);
-    f32 pdf_val = pdf_value(world, pdf, scattered.dir, data);
-    scattered.dir = normalize(scattered.dir);
-    
-    return v3add(emitted, v3mul(v3muls(srec.attenuation, material_scattering_pdf(world, scattered, hrec)), 
-                                v3divs(ray_cast(world, scattered, depth - 1, data), pdf_val)));
+    return color;
 }

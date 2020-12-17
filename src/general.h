@@ -78,5 +78,7 @@ typedef uintptr_t umm;
 #define KILOBYTES(_b) ((u64)(_b) << 10)
 #define MEGABYTES(_b) (KILOBYTES(_b) << 10)
 
+#define ARRAY_SIZE(_arr) (sizeof(_arr) / sizeof(*(_arr)))
+
 #define GENERAL_H 1
 #endif

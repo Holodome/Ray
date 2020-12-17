@@ -27,12 +27,6 @@ exit_thread(void) {
     ExitThread(0);
 }
 
-void 
-memory_barrier() {
-	_ReadWriteBarrier();
-}
-
-
 u32 
 get_core_count(void) {
 	SYSTEM_INFO info;

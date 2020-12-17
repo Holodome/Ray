@@ -44,13 +44,17 @@ render_tile(RenderWorkQueue *queue) {
                 
                 Vec3 sample_color = ray_cast(queue->world, ray, bounces, data);
                 // Remove NaNs
-                if (sample_color.r != sample_color.r) { sample_color.r = 0; }
-                if (sample_color.g != sample_color.g) { sample_color.g = 0; }
-                if (sample_color.b != sample_color.b) { sample_color.b = 0; }
+                if (!isfinite(sample_color.r)) { sample_color.r = 0; }
+                if (!isfinite(sample_color.g)) { sample_color.g = 0; }
+                if (!isfinite(sample_color.b)) { sample_color.b = 0; }
+                
             
                 pixel_color = v3add(pixel_color, v3muls(sample_color, color_multiplier));
             }
             
+            pixel_color.r = saturate(pixel_color.r);
+            pixel_color.g = saturate(pixel_color.g);
+            pixel_color.b = saturate(pixel_color.b);
             f32 r = linear1_to_srgb1(pixel_color.r);
             f32 g = linear1_to_srgb1(pixel_color.g);
             f32 b = linear1_to_srgb1(pixel_color.b);
@@ -64,6 +68,7 @@ render_tile(RenderWorkQueue *queue) {
     atomic_add64(&queue->stats.ray_triangle_collision_test_succeses, tile_stats.ray_triangle_collision_test_succeses);
     atomic_add64(&queue->stats.object_collision_tests, tile_stats.object_collision_tests);
     atomic_add64(&queue->stats.object_collision_test_successes, tile_stats.object_collision_test_successes);
+    atomic_add64(&queue->stats.russian_roulette_terminated_bounces, tile_stats.russian_roulette_terminated_bounces);
     
     return true;
 }
@@ -211,7 +216,7 @@ main(int argc, char **argv) {
     // Initialize world
     World world;
     world_init(&world);
-    init_scene3(&world, &output_image);
+    init_cornell_box(&world, &output_image);
     // Print world information    
     char bytes_buffer[32];
     format_bytes(bytes_buffer, sizeof(bytes_buffer), world.arena.data_size);
@@ -263,7 +268,8 @@ main(int argc, char **argv) {
     char number_buffer[100];
     format_number_with_thousand_separators(number_buffer, sizeof(number_buffer), s.samples_per_pixel * output_image.w * output_image.h);
     printf("Primary ray count: %s\n", number_buffer);
-    printf("Perfomace: %fms/primary ray\n", (f64)time_elapsed / (f64)(s.samples_per_pixel * output_image.w * output_image.h));
+    u64 primary_ray_count = s.samples_per_pixel * output_image.w * output_image.h;
+    printf("Perfomace: %fms/primary ray\n", (f64)time_elapsed / (f64)primary_ray_count);
     format_number_with_thousand_separators(number_buffer, sizeof(number_buffer), render_queue.stats.bounce_count);
     printf("Total bounces: %s\n", number_buffer);
     printf("Perfomance: %fms/bounce\n", (f64)time_elapsed / (f64)render_queue.stats.bounce_count);
@@ -274,6 +280,7 @@ main(int argc, char **argv) {
     printf("Object collision tests: %s\n", number_buffer);
     printf("Object collision tests failed: %.2f%%\n", 100.0f * (1.0 - (f64)render_queue.stats.object_collision_test_successes / (f64)render_queue.stats.object_collision_tests));
     printf("Average bounce count per ray: %f\n", (f64)render_queue.stats.bounce_count / (f64)(s.samples_per_pixel * output_image.w * output_image.h));
+    printf("Russian rouletted terminated bounces: %llu (%.2f%%)\n", render_queue.stats.russian_roulette_terminated_bounces, (f64)render_queue.stats.russian_roulette_terminated_bounces / (f64)primary_ray_count);
     
     char *out = s.image_filename;
     image_save(&output_image, out);

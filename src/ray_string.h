@@ -1,4 +1,7 @@
 #if !defined(STRING_H)
+//
+// Defines some functions to help to work with strings
+//
 
 #include "general.h"
 

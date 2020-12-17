@@ -31,6 +31,7 @@ typedef struct {
     u64 ray_triangle_collision_test_succeses;
     u64 object_collision_tests;
     u64 object_collision_test_successes;
+    u64 russian_roulette_terminated_bounces;
 } RayCastStatistics;
 
 typedef struct {
@@ -331,6 +332,7 @@ typedef struct {
     Vec3 specular_dir;
     bool is_specular;
     Vec3 attenuation;
+    f32  bsdf;
     PDF  pdf;
 } ScatterRecord;
 
@@ -407,9 +409,8 @@ ObjectHandle object_animated_transform(World *world, ObjectHandle obj, f32 time0
 #define object_triangle_mesh_t(_world, _pm, _mat) object_triangle_mesh_tt(_world, _pm, _mat, EMPTY_TRANSFORM)
 ObjectHandle object_triangle_mesh_pt(World *world, PolygonMeshData  pm, MaterialHandle mat, Transform transform);
 ObjectHandle object_triangle_mesh_tt(World *world, TriangleMeshData tm, MaterialHandle mat, Transform transform);
-// Returns texture color for given hrec characteristics
+
 Vec3 sample_texture(World *world, TextureHandle handle, HitRecord *hrec);
-bool material_scatter(World *world, Ray ray, HitRecord hrec, ScatterRecord *scatter, RayCastData data);
 Vec3 material_emit(World *world, Ray ray, HitRecord hrec, RayCastData data);
 
 bool object_hit(World *world, Ray ray, ObjectHandle obj_handle, f32 t_min, f32 t_max, HitRecord *hrec, RayCastData data);
@@ -425,6 +426,7 @@ Vec3 pdf_generate(World *world, PDF pdf, RayCastData data);
 void add_xy_rect(World *world, ObjectHandle list, f32 x0, f32 x1, f32 y0, f32 y1, f32 z, MaterialHandle mat);
 void add_yz_rect(World *world, ObjectHandle list, f32 y0, f32 y1, f32 z0, f32 z1, f32 x, MaterialHandle mat);
 void add_xz_rect(World *world, ObjectHandle list, f32 x0, f32 x1, f32 z0, f32 z1, f32 y, MaterialHandle mat);
+void add_rect(World *world, ObjectHandle list, Vec3 p0, Vec3 p1, Vec3 p2, Vec3 p3, MaterialHandle mat);
 void add_box(World *world, ObjectHandle list, Vec3 p0, Vec3 p1, MaterialHandle mat);
 ObjectHandle add_poly_sphere(World *world, f32 r, u32 divs, MaterialHandle mat);
 

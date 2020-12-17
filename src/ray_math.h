@@ -33,6 +33,11 @@ clamp(f32 x, f32 low, f32 high) {
 #endif 
 }
 
+inline f32 
+saturate(f32 x) {
+    return clamp(x, 0, 1);
+}
+
 typedef union {
     struct {
         f32 x, y;
