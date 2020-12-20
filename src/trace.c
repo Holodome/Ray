@@ -5,139 +5,114 @@ is_black(Vec3 color) {
     return !(isfinite(color.x) && isfinite(color.y) && isfinite(color.z));
 }
 
-void 
-add_xy_rect(World *world, ObjectHandle list, f32 x0, f32 x1, f32 y0, f32 y1, f32 z, MaterialHandle mat) {
-    Vec3 v00 = v3(x0, y0, z);
-    Vec3 v01 = v3(x0, y1, z);
-    Vec3 v10 = v3(x1, y0, z);
-    Vec3 v11 = v3(x1, y1, z);
+static Vec3 
+align_to_direction(Vec3 n, f32 cos_theta, f32 phi) {
+    f32 sin_theta = sqrt32(1.0 - cos_theta * cos_theta);
     
-    add_object(world, list, object_triangle(world, v00, v01, v11, mat));
-    add_object(world, list, object_triangle(world, v00, v11, v10, mat));
+    ONB onb = onb_from_w(n);
+    return v3add(v3muls(v3add(v3muls(onb.u, cosf(phi)),
+                              v3muls(onb.v, sinf(phi))), 
+                        sin_theta), 
+                 v3muls(n, cos_theta));
 }
 
-void 
-add_yz_rect(World *world, ObjectHandle list, f32 y0, f32 y1, f32 z0, f32 z1, f32 x, MaterialHandle mat) {
-    Vec3 v00 = v3(x, y0, z0);
-    Vec3 v01 = v3(x, y0, z1);
-    Vec3 v10 = v3(x, y1, z0);
-    Vec3 v11 = v3(x, y1, z1);
+static Vec3 
+sample_cosine_weighted_hemisphere(RandomSeries *entropy, Vec3 n) {
+    f32 r0 = random(entropy);
+    f32 r1 = random(entropy);
+    f32 cos_theta = sqrt32(r0);
+    return align_to_direction(n, cos_theta, r1 * TWO_PI);
+}
+
+static Vec3  
+sample_ggx_distribution(RandomSeries *entropy, Vec3 n, f32 alpha_sq) {
+    f32 r0 = random(entropy);
+    f32 r1 = random(entropy);
+    f32 cos_theta = sqrt32(saturate((1.0 - r0) / (r0 * (alpha_sq - 1.0) + 1.0)));
+    return align_to_direction(n, cos_theta, r1 * TWO_PI);
+}
+
+static f32
+ggx_normal_distribution(f32 alpha_sq, Vec3 n, Vec3 m) {
+    f32 cos_theta = dot(n, m);
+    f32 cos_theta_sq = sq(cos_theta);
+    f32 denom = cos_theta_sq * (alpha_sq - 1.0) + 1.0;
+    f32 result = 0;
+    if (cos_theta > 0) {
+        result = alpha_sq / (PI * sq(denom));
+    }
+    return result;
+}
+
+static f32 
+ggx_visibility(f32 alpha_sq, Vec3 w, Vec3 n, Vec3 m) {
+    f32 ndotw = dot(n, w);
+    f32 mdotw = dot(m, w);
+    if (mdotw * ndotw <= 0.0) {
+        return 0;
+    }
+    f32 cos_theta_sq = sq(ndotw);
+    f32 tan_theta_sq = (1.0 - cos_theta_sq) / cos_theta_sq;
+    if (tan_theta_sq == 0.0) {
+        return 1;
+    }
+    return 2.0 / (1.0 + sqrt32(1.0 + alpha_sq * tan_theta_sq));
+}
+
+static f32 
+ggx_visibility_term(f32 alpha_sq, Vec3 wi, Vec3 wo, Vec3 n, Vec3 m) {
+    return ggx_visibility(alpha_sq, wi, n, m) * ggx_visibility(alpha_sq, wo, n, m);
+}
+
+static f32 
+power_heuristic(f32 fpdf, f32 gpdf) {
+    f32 f2 = fpdf * fpdf;
+    f32 g2 = gpdf * gpdf;
+    return f2 / (f2 + g2);
+}
+
+static f32 
+fresnel_conductor(Vec3 i, Vec3 m, f32 etai, f32 etao, f32 k) {
+    f32 cos_theta_i = -dot(i, m);
+    f32 eta = etao / etai;
+    f32 eta_sq = eta * eta;
+    f32 etak = k / etai;
+    f32 etak_sq = etak * etak;
     
-    add_object(world, list, object_triangle(world,  v00, v01, v11, mat));
-    add_object(world, list, object_triangle(world,  v00, v11, v10, mat));
-}
-
-void 
-add_xz_rect(World *world, ObjectHandle list, f32 x0, f32 x1, f32 z0, f32 z1, f32 y, MaterialHandle mat) {
-    Vec3 v00 = v3(x0, y, z0);
-    Vec3 v01 = v3(x0, y, z1);
-    Vec3 v10 = v3(x1, y, z0);
-    Vec3 v11 = v3(x1, y, z1);
+    f32 cos_theta_i_sq = cos_theta_i * cos_theta_i;
+    f32 sin_theta_i_sq = 1.0 - cos_theta_i_sq;
     
-    add_object(world, list, object_triangle(world, v00, v01, v11, mat));
-    add_object(world, list, object_triangle(world, v00, v11, v10, mat));
-}
-
-void 
-add_box(World *world, ObjectHandle list, Vec3 p0, Vec3 p1, MaterialHandle mat) {
-    add_xy_rect(world, list, p0.x, p1.x, p0.y, p1.y, p1.z, mat);
-    add_xy_rect(world, list, p0.x, p1.x, p0.y, p1.y, p0.z, mat);
-    add_xz_rect(world, list, p0.x, p1.x, p0.z, p1.z, p1.y, mat);
-    add_xz_rect(world, list, p0.x, p1.x, p0.z, p1.z, p0.y, mat);
-    add_yz_rect(world, list, p0.y, p1.y, p0.z, p1.z, p1.x, mat);
-    add_yz_rect(world, list, p0.y, p1.y, p0.z, p1.z, p0.x, mat);
-}
-
-void 
-add_rect(World *world, ObjectHandle list, Vec3 p0, Vec3 p1, Vec3 p2, Vec3 p3, MaterialHandle mat) {
-    add_object(world, list, object_triangle(world, p0, p1, p2, mat));    
-    add_object(world, list, object_triangle(world, p0, p3, p2, mat));    
-}
-
-ObjectHandle 
-add_poly_sphere(World *world, f32 r, u32 divs, MaterialHandle mat) {
-    // generate points                                                                                                                                                                                      
-    u32 numVertices = (divs - 1) * divs + 2; 
-    // @TODO(hl): Memory pool!
-    Vec3 *P = arena_alloc(&world->arena, numVertices * sizeof(Vec3)); 
-    Vec3 *N = arena_alloc(&world->arena, numVertices * sizeof(Vec3)); 
-    Vec2 *st = arena_alloc(&world->arena, numVertices *sizeof(Vec2)); 
-	
-    f32 u = -HALF_PI; 
-    f32 v = -PI; 
-    f32 du = PI / divs; 
-    f32 dv = 2 * PI / divs; 
-	
-    P[0] = N[0] = v3(0, -r, 0); 
-    u32 k = 1; 
-    for (u32 i = 0;
-         i < divs - 1;
-         i++) { 
-        u += du; 
-        v = -PI; 
-        for (u32 j = 0; 
-             j < divs;
-             j++) { 
-            f32 x = r * cosf(u) * cosf(v); 
-            f32 y = r * sinf(u); 
-            f32 z = r * cosf(u) * sinf(v) ; 
-            P[k] = N[k] = v3(x, y, z); 
-            st[k].x = -v * 0.5 / PI + 0.5; 
-            st[k].y = u / PI + 0.5; 
-            v += dv, k++; 
-        } 
-    } 
-    P[k] = N[k] = v3(0, r, 0); 
-	
-    u32 npolys = divs * divs; 
-    u32 *faceIndex = arena_alloc(&world->arena, npolys * sizeof(u32)); 
-    u32 *vertsIndex = arena_alloc(&world->arena, ((6 + (divs - 1) * 4) * divs * sizeof(u32))); 
-	
-    // create the connectivity lists                                                                                                                                                                        
-    u32 vid = 1, numV = 0, l = 0; 
-    k = 0; 
-    for (u32 i = 0;
-         i < divs;
-         i++) 
-    { 
-        for (u32 j = 0;
-             j < divs;
-             j++) 
-        { 
-            if (i == 0) { 
-                faceIndex[k++] = 3; 
-                vertsIndex[l] = 0; 
-                vertsIndex[l + 1] = j + vid; 
-                vertsIndex[l + 2] = (j == (divs - 1)) ? vid : j + vid + 1; 
-                l += 3; 
-            } 
-            else if (i == (divs - 1)) { 
-                faceIndex[k++] = 3; 
-                vertsIndex[l] = j + vid + 1 - divs; 
-                vertsIndex[l + 1] = vid + 1; 
-                vertsIndex[l + 2] = (j == (divs - 1)) ? vid + 1 - divs : j + vid + 2 - divs; 
-                l += 3; 
-            } 
-            else { 
-                faceIndex[k++] = 4; 
-                vertsIndex[l] = j + vid + 1 - divs; 
-                vertsIndex[l + 1] = j + vid + 1; 
-                vertsIndex[l + 2] = (j == (divs - 1)) ? vid + 1 : j + vid + 2; 
-                vertsIndex[l + 3] = (j == (divs - 1)) ? vid + 1 - divs : j + vid + 2 - divs; 
-                l += 4; 
-            } 
-            numV++; 
-        } 
-        vid = numV; 
-    } 
+    f32 t0 = eta_sq - etak_sq - sin_theta_i_sq;
+    f32 a_sq_plus_b_sq = sqrt32(t0 * t0 + eta_sq * etak_sq * 4.0);
+    f32 t1 = a_sq_plus_b_sq + cos_theta_i_sq;
+    f32 a = sqrt32((a_sq_plus_b_sq + t0) * 0.5);
+    f32 t2 = a * cos_theta_i * 2.0;
+    f32 rs = (t1 - t2) / (t1 + t2);
     
-    PolygonMeshData pm;
-    pm.nfaces = npolys;
-    pm.vertices_per_face = faceIndex;
-    pm.p = P;
-    pm.n = N;
-    pm.uv = st;
-    return object_triangle_mesh_p(world, pm, mat);
+    f32 t3 = a_sq_plus_b_sq * cos_theta_i_sq + sin_theta_i_sq * sin_theta_i_sq;
+    f32 t4 = t2 * sin_theta_i_sq;
+    f32 rp = rs * (t3 - t4) / (t3 + t4);
+    return (rp + rs) * 0.5;
+}
+
+static f32 
+fresnel_dielectric(Vec3 i, Vec3 m, f32 eta) {
+    f32 result = 1.0;
+    f32 cos_theta_i = abs32(dot(i, m));
+    f32 sin_theta_o_sq = (eta * eta) * (1.0 - cos_theta_i * cos_theta_i);
+    if (sin_theta_o_sq <= 1.0) {
+        f32 cos_theta_o = sqrt32(saturate(1.0f - sin_theta_o_sq));
+        f32 rs = (cos_theta_i - eta * cos_theta_o) / (cos_theta_i + eta * cos_theta_o);
+        f32 rp = (eta * cos_theta_i - cos_theta_o) / (eta * cos_theta_i + cos_theta_o);
+        result = 0.5 * (rs * rs + rp * rp);
+    }
+    return result;
+}
+
+static f32 
+remap_roughness(f32 r, f32 ndoti) {
+    f32 alpha = (1.2 - 0.2 * sqrt32(abs32(ndoti))) * r;
+    return sq(alpha);
 }
 
 static bool 
@@ -266,21 +241,6 @@ transform_bounds(Bounds3 bi, Mat4x4 t) {
     return bounds;
 }
 
-Ray 
-make_ray(Vec3 orig, Vec3 dir, f32 time) {
-    return (Ray) {
-        .orig = orig,
-        .dir = dir,
-        .time = time
-    };
-}
-
-Vec3 
-ray_at(Ray ray, f32 t) {
-    Vec3 result = v3add(ray.orig, v3muls(ray.dir, t));
-    return result;
-}
-
 void 
 hit_set_normal(HitRecord *hrec, Vec3 n, Ray ray) {
     if (dot(ray.dir, n) <= 0.0f) {
@@ -292,728 +252,11 @@ hit_set_normal(HitRecord *hrec, Vec3 n, Ray ray) {
     }
 }
 
-Camera 
-camera_perspective(Vec3 look_from, Vec3 look_at, Vec3 v_up,
-                   f32 aspect_ratio, f32 vfov,
-                   f32 aperture, f32 focus_dist,
-                   f32 time_min, f32 time_max) {
-    Camera camera = {0};
-    camera.type = CameraType_Perspective;
-    
-    camera.orig = look_from;
-    camera.z = normalize(v3sub(look_from, look_at));
-    camera.x = normalize(cross(v_up, camera.z));
-    camera.y = normalize(cross(camera.z, camera.x));
-    
-    f32 viewport_height = 2.0f * tanf(vfov * 0.5f);
-    f32 viewport_width  = aspect_ratio * viewport_height;
-    camera.horizontal = v3muls(camera.x, focus_dist * viewport_width);
-    camera.vertical   = v3muls(camera.y, focus_dist * viewport_height);
-    
-    camera.lower_left_corner = camera.orig;
-    camera.lower_left_corner = v3sub(camera.lower_left_corner, v3muls(camera.horizontal, 0.5f));
-    camera.lower_left_corner = v3sub(camera.lower_left_corner, v3muls(camera.vertical, 0.5f));
-    camera.lower_left_corner = v3sub(camera.lower_left_corner, v3muls(camera.z, focus_dist));   
-    
-    camera.lens_radius = aperture * 0.5f;
-    
-    camera.time_min = time_min;
-    camera.time_max = time_max;    
-    return camera;                         
-}
-
-Camera 
-camera_orhographic(Vec3 look_from, Vec3 look_at, Vec3 v_up, 
-                   f32 aspect_ratio, f32 focus_dist,
-                   f32 time_min, f32 time_max) {
-    Camera camera = {0};
-    camera.type = CameraType_Orthographic;
-    
-    camera.time_min = time_min;
-    camera.time_max = time_max; 
-    
-    camera.orig = look_from;
-    camera.z = normalize(v3sub(look_from, look_at));
-    camera.x = normalize(cross(v_up, camera.z));
-    camera.y = normalize(cross(camera.z, camera.x));
-     
-    f32 viewport_height = 1.0f;
-    f32 viewport_width  = 1.0f;
-    if (aspect_ratio > 1) {
-        viewport_height = 1.0f / aspect_ratio;
-    } else if (aspect_ratio < 1) {
-        viewport_width = aspect_ratio;
-    }
-    
-    camera.horizontal = v3muls(camera.x, focus_dist * viewport_width);
-    camera.vertical   = v3muls(camera.y, focus_dist * viewport_height);
-    
-    camera.lower_left_corner = camera.orig;
-    camera.lower_left_corner = v3sub(camera.lower_left_corner, v3muls(camera.horizontal, 0.5f));
-    camera.lower_left_corner = v3sub(camera.lower_left_corner, v3muls(camera.vertical, 0.5f));
-    camera.lower_left_corner = v3sub(camera.lower_left_corner, v3muls(camera.z, focus_dist));   
-    
-    
-    return camera;                          
-}
-
-Camera 
-camera_environment(Vec3 look_from, Vec3 look_at, Vec3 v_up, f32 time_min, f32 time_max) {
-    Camera camera = {0};
-    camera.type = CameraType_Environment;
-
-    camera.orig = look_from;
-    camera.z = normalize(v3sub(look_from, look_at));
-    camera.x = normalize(cross(v_up, camera.z));
-    camera.y = normalize(cross(camera.z, camera.x));
-
-    camera.time_min = time_min;
-    camera.time_max = time_max;   
-      
-    return camera;
-}
-
-Ray 
-camera_make_ray(Camera *camera, RandomSeries *entropy, f32 u, f32 v) {
-    Vec3 dir, orig;
-    switch(camera->type) {
-        case CameraType_Perspective: {   
-            Vec3 rd = v3muls(random_unit_disk(entropy), camera->lens_radius);
-            Vec3 offset = v3add(v3muls(camera->x, rd.x), v3muls(camera->y, rd.y));
-    
-            dir = camera->lower_left_corner;
-            dir = v3add(dir, v3muls(camera->horizontal, u));
-            dir = v3add(dir, v3muls(camera->vertical, v));
-            dir = v3sub(dir, camera->orig);
-            dir = v3sub(dir, offset);
-            dir = normalize(dir);
-            
-            orig = v3add(camera->orig, offset);
-        } break;
-        case CameraType_Orthographic: {
-            orig = camera->lower_left_corner;
-            orig = v3add(orig, v3muls(camera->horizontal, u));
-            orig = v3add(orig, v3muls(camera->vertical, v));
-            orig = v3add(orig, camera->orig);
-            dir = v3neg(camera->z);
-        } break;
-        case CameraType_Environment: {
-            f32 theta = v * PI;
-            f32 phi = u * TWO_PI;
-            
-            Vec3 angle = v3(sinf(theta) * cosf(phi), -cosf(theta), sinf(theta) * sinf(phi));
-            // angle = v3add3(v3muls(camera->x, angle.x), v3muls(camera->y, angle.y), v3muls(camera->z, angle.z));
-            angle = normalize(angle);
-            dir = angle;
-            orig = camera->orig;
-        } break;
-        INVALID_DEFAULT_CASE;
-    }
-    f32 time = random_uniform(entropy, camera->time_min, camera->time_max);
-    Ray ray = make_ray(orig, dir, time);
-    
-    return ray;
-}
-
-// Dynamic array hacks
-#define DEFAULT_ARRAY_CAPACITY 10
-#define IAMLAZYTOINITWORLD(_a, _arr, _capacity) { if (!_capacity) { _capacity = DEFAULT_ARRAY_CAPACITY; _arr = arena_alloc(_a, sizeof(*_arr) * _capacity); } }
-#define EXPAND_IF_NEEDED(_a, _arr, _size, _capacity) { IAMLAZYTOINITWORLD(_a, _arr, _capacity);  \
-    if (_size + 1 > _capacity) { _arr = arena_realloc(_a, _arr, sizeof(*_arr) * _capacity, sizeof(*_arr) * _capacity * 2); _capacity *= 2; } }
-#define SHRINK_TO_FIT(_a, _arr, _size, _capacity) { _arr = arena_realloc(_a, _arr, sizeof(*_arr) * _capacity, sizeof(*_arr) * _size); _capacity = _size; }
-
-ObjectList 
-object_list_init(MemoryArena *arena, u32 reserve) {
-    ObjectList lst = {0};
-    lst.capacity = reserve;
-    lst.a = arena_alloc(arena, lst.capacity * sizeof(*lst.a));
-	lst.arena = arena;
-
-#if RAY_INTERNAL
-    lst.is_initialized = true;
-#endif 
-    return lst;
-}
-
-void
-add_object_to_list(ObjectList *list, ObjectHandle o) {
-#if RAY_INTERNAL
-    assert(list->is_initialized);
-#endif 
-    EXPAND_IF_NEEDED(list->arena, list->a, list->size, list->capacity);
-    
-    list->a[list->size++] = o;   
-}
-
-void
-object_list_shrink_to_fit(ObjectList *list) {
-#if RAY_INTERNAL
-    assert(list->is_initialized);
-#endif 
-    SHRINK_TO_FIT(list->arena, list->a, list->size, list->capacity);
-    
-}
-
-ObjectHandle 
-object_list_get(ObjectList *list, u64 index) {
-#if RAY_INTERNAL
-    assert(list->is_initialized);
-    assert(index < list->size);
-#endif
-    
-    return list->a[index];
-}
-
-PDF
-cosine_pdf(Vec3 w) {
-    return (PDF) {
-        .type = PDFType_Cosine,
-        .cosine = {
-            .uvw = onb_from_w(w)
-        }
-    };
-}
-
-PDF
-object_pdf(ObjectHandle obj, Vec3 orig) {
-    return (PDF) {
-        .type = PDFType_Object,
-        .object = {
-            .o = orig,
-            .obj = obj
-        }
-    };
-}
-
-PDF 
-mixture_pdf(PDF *p1, PDF *p2) {
-    PDF pdf;
-    pdf.type = PDFType_Mixture;
-    pdf.mix.p[0] = p1;
-    pdf.mix.p[1] = p2;
-    return pdf;
-}
-
-void 
-world_init(World *world) {
-    memset(world, 0, sizeof(*world));
-    
-    world->arena.data_capacity = MEGABYTES(16);
-    world->arena.data = malloc(world->arena.data_capacity);
-    
-    world->obj_list = object_list(world);
-    world->important_objects = object_list(world);
-}
-
-TextureHandle 
-new_texture(World *world, Texture texture) {
-    EXPAND_IF_NEEDED(&world->arena, world->textures, world->textures_size, world->textures_capacity);
-    
-    TextureHandle handle = { world->textures_size };
-    world->textures[world->textures_size++] = texture;
-    
-    return handle;
-}
-
-MaterialHandle 
-new_material(World *world, Material material) {
-    EXPAND_IF_NEEDED(&world->arena, world->materials, world->materials_size, world->materials_capacity);
-    
-    MaterialHandle handle = { world->materials_size };
-    world->materials[world->materials_size++] = material;
-    
-    return handle;
-}
-
-ObjectHandle 
-new_object(World *world, Object obj) {
-    EXPAND_IF_NEEDED(&world->arena, world->objects, world->objects_size, world->objects_capacity);
-    
-    ObjectHandle handle = { world->objects_size };
-    world->objects[world->objects_size++] = obj;
-    
-    return handle;
-}
-
-Texture *
-get_texture(World *world, TextureHandle h) {
-    return world->textures + h.v;
-}
-
-Material *
-get_material(World *world, MaterialHandle h) {
-    return world->materials + h.v;
-}
-
-Object *
-get_object(World *world, ObjectHandle h) {
-    return world->objects + h.v;    
-}
-
-ObjectHandle
-add_object(World *world, ObjectHandle list_handle, ObjectHandle obj) {
-    Object *list = get_object(world, list_handle);
-    assert(list->type = ObjectType_ObjectList);
- 
-    add_object_to_list(&list->obj_list, obj);   
-    return obj;
-}
-
-ObjectHandle 
-add_object_to_world(World *world, ObjectHandle o) {
-    add_object(world, world->obj_list, o);
-    return o;
-}
-
-ObjectHandle 
-add_important_object(World *world, ObjectHandle obj) {
-    world->has_importance_sampling = true;
-    return add_object(world, world->important_objects, obj);
-}
-
-TextureHandle 
-texture_solid(World *world, Vec3 c) {
-    Texture texture;
-    texture.type = TextureType_Solid;
-    texture.solid.c = c;
-    
-    return new_texture(world, texture);    
-}
-
-TextureHandle 
-texture_checkerboard(World *world, TextureHandle t1, TextureHandle t2) {
-    Texture texture;
-    texture.type = TextureType_Checkerboard;
-    texture.checkerboard.t1 = t1;    
-    texture.checkerboard.t2 = t2;    
-    
-    return new_texture(world, texture);
-}
-
-TextureHandle 
-texture_checkerboard3d(World *world, TextureHandle t1, TextureHandle t2) {
-    Texture texture;
-    texture.type = TextureType_Checkerboard3D;
-    texture.checkerboard3d.t1 = t1;    
-    texture.checkerboard3d.t2 = t2;    
-    
-    return new_texture(world, texture);
-}
-
-TextureHandle 
-texture_image(World *world, Image i) {
-    Texture texture;
-    texture.type = TextureType_Image;
-    texture.image.i = i;
-    
-    return new_texture(world, texture);
-}
-
-TextureHandle 
-texture_perlin(World *world, Perlin perlin, f32 s) {
-    Texture texture;
-    texture.type = TextureType_Perlin;
-    texture.perlin.p = perlin;
-    texture.perlin.s = s;
-    
-    return new_texture(world, texture);
-}
-
-TextureHandle 
-texture_uv(World *world) {
-    Texture texture;
-    texture.type = TextureType_UV;
-    
-    return new_texture(world, texture); 
-}
-
-TextureHandle 
-texture_normal(World *world) {
-    Texture texture;
-    texture.type = TextureType_Normal;
-    
-    return new_texture(world, texture);
-}
-
-MaterialHandle 
-material_lambertian(World *world, TextureHandle albedo) {
-    Material material;
-    material.type = MaterialType_Lambertian;
-    material.lambertian.albedo = albedo;
-    
-    return new_material(world, material);    
-}
-
-MaterialHandle 
-material_isotropic(World *world, TextureHandle albedo) {
-    Material material;
-    material.type = MaterialType_Isotropic;
-    material.isotropic.albedo = albedo;
-    
-    return new_material(world, material);    
-}
-
-MaterialHandle 
-material_metal(World *world, TextureHandle albedo, f32 roughness) {
-    assert(roughness <= 1.0f);
-    
-    Material material;
-    material.type = MaterialType_Metal;
-    material.metal.albedo = albedo;
-    material.metal.roughness = roughness;
-    
-    return new_material(world, material);    
-}
-
-MaterialHandle 
-material_plastic(World *world, TextureHandle albedo, f32 roughness) {
-    assert(roughness <= 1.0f);
-    
-    Material material;
-    material.type = MaterialType_Plastic;
-    material.plastic.albedo = albedo;
-    material.plastic.roughness = roughness;
-    
-    return new_material(world, material);    
-}
-
-MaterialHandle 
-material_dielectric(World *world, f32 ir) {
-    Material material;
-    material.type = MaterialType_Dielectric;
-    material.dielectric.ir = ir;
-    
-    return new_material(world, material);    
-}
-
-MaterialHandle 
-material_diffuse_light(World *world, TextureHandle t, LightFlags flags) {
-    Material material;
-    material.type = MaterialType_DiffuseLight;
-    material.diffuse_light.emit = t;
-    material.diffuse_light.flags = flags;
-    
-    return new_material(world, material);    
-}
-
-ObjectHandle 
-object_list(World *world) {
-    Object obj;
-    obj.type = ObjectType_ObjectList;
-    obj.obj_list = object_list_init(&world->arena, 0);
-    
-    return new_object(world, obj);        
-}
-
-ObjectHandle 
-object_sphere(World *world, Vec3 p, f32 r, MaterialHandle mat) {
-    Object obj;
-    obj.type = ObjectType_Sphere;
-    obj.sphere.mat = mat;
-    obj.sphere.p = p;
-    obj.sphere.r = r;
-    
-    return new_object(world, obj);        
-}
-
-ObjectHandle 
-object_disk(World *world, Vec3 p, Vec3 n, f32 r, MaterialHandle mat) {
-    Object obj;
-    obj.type = ObjectType_Disk;
-    obj.disk.mat = mat;
-    obj.disk.p = p;
-    obj.disk.n = n;
-    obj.disk.r = r;
-    
-    return new_object(world, obj);   
-}
-
-ObjectHandle 
-object_transform(World *world, ObjectHandle objh, Transform t) {
-    Bounds3 ob = get_object_bounds(world, objh);
-    
-    Bounds3 bounds = bounds3i(mat4x4_mul_vec3(t.o2w, ob.min));
-    bounds = bounds3_extend(bounds, mat4x4_mul_vec3(t.o2w, v3(ob.max.x, ob.min.y, ob.min.z)));
-    bounds = bounds3_extend(bounds, mat4x4_mul_vec3(t.o2w, v3(ob.min.x, ob.max.y, ob.min.z)));
-    bounds = bounds3_extend(bounds, mat4x4_mul_vec3(t.o2w, v3(ob.min.x, ob.min.y, ob.max.z)));
-    bounds = bounds3_extend(bounds, mat4x4_mul_vec3(t.o2w, v3(ob.min.x, ob.max.y, ob.max.z)));
-    bounds = bounds3_extend(bounds, mat4x4_mul_vec3(t.o2w, v3(ob.max.x, ob.max.y, ob.min.z)));
-    bounds = bounds3_extend(bounds, mat4x4_mul_vec3(t.o2w, v3(ob.max.x, ob.min.y, ob.max.z)));
-    bounds = bounds3_extend(bounds, mat4x4_mul_vec3(t.o2w, v3(ob.max.x, ob.max.y, ob.max.z)));
-    
-    Object obj;
-    obj.type = ObjectType_Transform;
-    obj.transform.bounds = bounds;
-    obj.transform.t = t;
-    obj.transform.obj = objh;
-    
-    return new_object(world, obj);        
-}
-
-ObjectHandle 
-object_triangle(World *world, Vec3 p0, Vec3 p1, Vec3 p2, MaterialHandle mat) {
-    Vec3 n = normalize(cross(v3sub(p1, p0), v3sub(p2, p0)));
-    
-    Object obj;
-    obj.type = ObjectType_Triangle;
-    obj.triangle.p[0] = p0;
-    obj.triangle.p[1] = p1;
-    obj.triangle.p[2] = p2;
-    obj.triangle.n = n;
-    obj.triangle.mat = mat;
-    
-    return new_object(world, obj);        
-}
-
-ObjectHandle 
-object_box(World *world, Vec3 min, Vec3 max, MaterialHandle mat) {
-    Object obj;
-    obj.type = ObjectType_Box;
-    obj.box.bounds = bounds3(min, max);
-    obj.box.sides_list = object_list(world);
-    add_box(world, obj.box.sides_list, min, max, mat);
-    object_list_shrink_to_fit(&get_object(world, obj.box.sides_list)->obj_list);
-    
-    return new_object(world, obj);        
-}
-
-ObjectHandle 
-object_constant_medium(World *world, f32 d, MaterialHandle phase, ObjectHandle bound) {
-    Object obj;
-    obj.type = ObjectType_ConstantMedium;
-    obj.constant_medium.boundary = bound;
-    obj.constant_medium.neg_inv_density = -1.0f / d;
-    obj.constant_medium.phase_function = phase;
-    
-    return new_object(world, obj);        
-}
-
-ObjectHandle 
-object_bvh_node(World *world, ObjectHandle *objs, i64 n) {
-    Object obj;
-    obj.type = ObjectType_BVHNode;
-    
-    TempMemory temp_mem = temp_memory_begin(&world->arena);
-    Bounds3 *objs_bounds = arena_alloc(&world->arena, sizeof(Bounds3) * n); 
-    f32 *left_area  = arena_alloc(&world->arena, sizeof(f32) * n); 
-    f32 *right_area = arena_alloc(&world->arena, sizeof(f32) * n); 
-    
-    Bounds3 main_bounds = bounds3empty();
-    for (u32 obj_index = 0;
-         obj_index < n;
-         ++obj_index) {
-        ObjectHandle obj_handle = objs[obj_index];
-        Bounds3 temp_bounds = get_object_bounds(world, obj_handle);
-        main_bounds = bounds3_join(main_bounds, temp_bounds);
-    }
-    
-    u32 axis = bounds3s_longest_axis(main_bounds);
-    if (axis == 0) {
-        qsort_s(objs, n, sizeof(ObjectHandle), bounds3_compare_x, world);
-    } else if (axis == 1) {
-        qsort_s(objs, n, sizeof(ObjectHandle), bounds3_compare_y, world);
-    } else {
-        qsort_s(objs, n, sizeof(ObjectHandle), bounds3_compare_z, world);
-    }
-    
-    for (u32 obj_index = 0;
-         obj_index < n;
-         ++obj_index) {
-        ObjectHandle obj_handle = objs[obj_index];
-        objs_bounds[obj_index] = get_object_bounds(world, obj_handle);
-    }
-    
-    Bounds3 left_bounds = bounds3empty();
-    for (u32 obj_index = 0;
-         obj_index < n;
-         ++obj_index) {
-        left_bounds = bounds3_join(left_bounds, objs_bounds[obj_index]);
-        left_area[obj_index] = bound3s_surface_area(left_bounds);
-    }
-    Bounds3 right_bounds = bounds3empty();
-    for (i32 obj_index = n - 1;
-         obj_index > 0;
-         --obj_index) {
-        right_bounds = bounds3_join(right_bounds, objs_bounds[obj_index]);
-        right_area[obj_index] = bound3s_surface_area(right_bounds);        
-    }
-    
-    f32 min_sah = INFINITY;
-    u32 min_sah_index;
-    for (u32 object_index = 0;
-         object_index < n - 1;
-         ++object_index) {
-        f32 sah = object_index * left_area[object_index] + (n - object_index - 1) * right_area[object_index + 1];
-        if (sah < min_sah) {
-            min_sah_index = object_index;
-            min_sah = sah;
-        }        
-    }
-    
-    if (min_sah_index == 0) {
-        obj.bvh_node.left = objs[0];
-    } else {
-        obj.bvh_node.left = object_bvh_node(world, objs, min_sah_index + 1);
-    }
-    
-    if (min_sah_index == n - 2) {
-        obj.bvh_node.right = objs[min_sah_index + 1];
-    } else {
-        obj.bvh_node.right = object_bvh_node(world, objs + min_sah_index + 1, n - min_sah_index - 1);
-    }
-    
-    temp_memory_end(temp_mem);
-    obj.bvh_node.bounds = main_bounds;
-    
-    return new_object(world, obj);        
-}
-
-ObjectHandle 
-object_animated_transform(World *world, ObjectHandle objh, f32 time0, f32 time1,
-                          Vec3 t0, Vec3 t1, Quat4 r0, Quat4 r1) {
-    Object obj;
-    obj.type = ObjectType_AnimatedTransform;
-    obj.animated_transform.time[0] = time0;
-    obj.animated_transform.time[1] = time1;
-    obj.animated_transform.t[0] = t0;
-    obj.animated_transform.t[1] = t1;
-    obj.animated_transform.r[0] = r0;
-    obj.animated_transform.r[1] = r1;
-    obj.animated_transform.obj = objh;
-    
-    Bounds3 obj_bounds = get_object_bounds(world, objh);
-    
-    f32 min_d = min32(min32(obj_bounds.min.x, obj_bounds.min.y), obj_bounds.min.z);
-    f32 max_d = max32(min32(obj_bounds.max.x, obj_bounds.max.y), obj_bounds.max.z);
-    Bounds3 bounds_box = bounds3(v3s(min_d), v3s(max_d));
-    
-    Mat4x4 m0 = MAT4X4_IDENTITY, m1 = MAT4X4_IDENTITY;
-    m0 = mat4x4_mul(m0, mat4x4_translate(t0));
-    m1 = mat4x4_mul(m0, mat4x4_translate(t1));
-    m0 = mat4x4_mul(m0, mat4x4_from_quat4(r0));
-    m1 = mat4x4_mul(m1, mat4x4_from_quat4(r1));
-    
-    Bounds3 b0 = transform_bounds(bounds_box, m0);
-    Bounds3 b1 = transform_bounds(bounds_box, m1);
-    Bounds3 bounds = bounds3_join(b0, b1);
-    obj.animated_transform.bounds = bounds;
-    
-    return new_object(world, obj);
-}
-
-ObjectHandle 
-object_triangle_mesh_pt(World *world, PolygonMeshData pm, MaterialHandle mat, Transform transform) {
-    Object obj;
-    obj.type = ObjectType_TriangleMesh;
-    
-    u64 vertex_index_cursor = 0;
-    u32 max_vert_index = 0;
-    u64 triangle_count = 0;
-    for (u32 face_index = 0;
-         face_index < pm.nfaces;
-         ++face_index) {
-        u32 vertices_in_face = pm.vertices_per_face[face_index];
-        triangle_count += vertices_in_face - 2;
-        for (u32 vertex_in_face_index = 0;
-             vertex_in_face_index < pm.vertices_per_face[face_index];
-             ++vertex_in_face_index) {
-            u32 vert_index = pm.vertex_indices[vertex_index_cursor + vertex_in_face_index];    
-            if (vert_index > max_vert_index) {
-                max_vert_index = vert_index;
-            }    
-        }
-        vertex_index_cursor += vertices_in_face;
-    }
-    u64 vertex_count = max_vert_index + 1;
-    
-    obj.triangle_mesh.ntrig = triangle_count;
-    obj.triangle_mesh.nvert = vertex_count;
-    
-    Bounds3 bounds = bounds3empty();
-    obj.triangle_mesh.p = arena_alloc(&world->arena, vertex_count * sizeof(Vec3));
-    obj.triangle_mesh.n = arena_alloc(&world->arena, vertex_count * sizeof(Vec3));
-    obj.triangle_mesh.uv = arena_alloc(&world->arena, vertex_count * sizeof(Vec2));
-    for (u32 vertex_index = 0;
-         vertex_index < vertex_count;
-         ++vertex_index) {
-        obj.triangle_mesh.p[vertex_index] = mat4x4_mul_vec3(transform.o2w, pm.p[vertex_index]);
-        obj.triangle_mesh.n[vertex_index] = mat4x4_as_3x3_mul_vec3(transform.o2w, pm.n[vertex_index]);
-        obj.triangle_mesh.uv[vertex_index] = pm.uv[vertex_index];
-        bounds = bounds3_extend(bounds, obj.triangle_mesh.p[vertex_index]);
-    }
-    obj.triangle_mesh.bounds = bounds;
-    obj.triangle_mesh.tri_indices = arena_alloc(&world->arena, triangle_count * 3 * sizeof(u32));
-    
-    f32 surface_area = 0;
-    vertex_index_cursor = 0;
-    u64 index_cursor = 0;
-    for (u32 face_index = 0;
-         face_index < pm.nfaces;
-         ++face_index) {
-        for (u32 triangle_in_face_index = 0;
-             triangle_in_face_index < pm.vertices_per_face[face_index] - 2;
-             ++triangle_in_face_index) {
-            obj.triangle_mesh.tri_indices[index_cursor    ] = pm.vertex_indices[vertex_index_cursor];
-            obj.triangle_mesh.tri_indices[index_cursor + 1] = pm.vertex_indices[vertex_index_cursor + triangle_in_face_index + 1];
-            obj.triangle_mesh.tri_indices[index_cursor + 2] = pm.vertex_indices[vertex_index_cursor + triangle_in_face_index + 2];
-            
-            surface_area += triangle_area(obj.triangle_mesh.p[obj.triangle_mesh.tri_indices[index_cursor]],
-                                          obj.triangle_mesh.p[obj.triangle_mesh.tri_indices[index_cursor + 1]],
-                                          obj.triangle_mesh.p[obj.triangle_mesh.tri_indices[index_cursor + 2]]);
-                                    
-            index_cursor += 3;
-        }        
-        vertex_index_cursor += pm.vertices_per_face[face_index];
-    }
-    obj.triangle_mesh.mat = mat;
-    obj.triangle_mesh.surface_area = surface_area;
-    
-    return new_object(world, obj);
-}
-
-ObjectHandle 
-object_triangle_mesh_tt(World *world, TriangleMeshData tm, MaterialHandle mat, Transform transform) {
-    Object obj;
-    obj.type = ObjectType_TriangleMesh;
-    
-    obj.triangle_mesh.ntrig = tm.ntrig;
-    obj.triangle_mesh.nvert = tm.nvert;
-    
-    u64 vertex_count = tm.nvert;
-    Bounds3 bounds = bounds3empty();
-    obj.triangle_mesh.p = arena_alloc(&world->arena, vertex_count * sizeof(Vec3));
-    obj.triangle_mesh.n = arena_alloc(&world->arena, vertex_count * sizeof(Vec3));
-    obj.triangle_mesh.uv = arena_alloc(&world->arena, vertex_count * sizeof(Vec2));
-    for (u32 vertex_index = 0;
-         vertex_index < vertex_count;
-         ++vertex_index) {
-        obj.triangle_mesh.p[vertex_index] = mat4x4_mul_vec3(transform.o2w, tm.p[vertex_index]);
-        obj.triangle_mesh.n[vertex_index] = mat4x4_as_3x3_mul_vec3(transform.o2w, tm.n[vertex_index]);
-        obj.triangle_mesh.uv[vertex_index] = tm.uv[vertex_index];
-        bounds = bounds3_extend(bounds, obj.triangle_mesh.p[vertex_index]);
-    }
-    obj.triangle_mesh.bounds = bounds;
-    obj.triangle_mesh.tri_indices = arena_copy(&world->arena, tm.tri_indices, tm.ntrig * 3 * sizeof(u32));
-    
-    f32 surface_area = 0;
-    for (u32 triangle_index = 0;
-         triangle_index < tm.ntrig;
-         ++triangle_index) {
-        surface_area += triangle_area(obj.triangle_mesh.p[obj.triangle_mesh.tri_indices[triangle_index * 3]],
-                                      obj.triangle_mesh.p[obj.triangle_mesh.tri_indices[triangle_index * 3 + 1]],
-                                      obj.triangle_mesh.p[obj.triangle_mesh.tri_indices[triangle_index * 3 + 2]]);
-    }
-    obj.triangle_mesh.mat = mat;
-    obj.triangle_mesh.surface_area = surface_area;
-    
-    return new_object(world, obj);
-}
-
 Vec3
 sample_texture(World *world, TextureHandle handle, HitRecord *hrec) {
     Vec3 result;
     
-    Texture *texture = world->textures + handle.v; 
+    Texture *texture = get_texture(world, handle); 
     switch(texture->type) {
         case TextureType_Solid: {
             result = texture->solid.c;
@@ -1068,115 +311,171 @@ sample_texture(World *world, TextureHandle handle, HitRecord *hrec) {
 } 
 
 bool 
-material_scatter(World *world, Ray ray, HitRecord hrec, 
-                 ScatterRecord *scatter, RayCastData data) {
-    bool result = false;
+material_compute_scattering_functions(World *world, Ray ray, HitRecord hrec, 
+                                      ScatterRecord *srec, RayCastData data) {
+    Vec3 wi = ray.dir, wo;
+    Vec3 no = hrec.n;
     
-    Material *material = get_material(world, hrec.mat);
-    switch (material->type) {
+    Material *mat = get_material(world, hrec.mat);
+    switch (mat->type) {
         case MaterialType_Lambertian: {
-            scatter->is_specular = false;
-            scatter->attenuation = sample_texture(world, material->lambertian.albedo, &hrec);
-            scatter->pdf = cosine_pdf(hrec.n);
-            result = true;
+            // srec->dir = onb_local(onb_from_w(no), random_cosine_direction(data.entropy));
+            wo = sample_cosine_weighted_hemisphere(data.entropy, no);
+            f32 cosine = dot(no, wo);
+            if (cosine > 0) {
+                Vec3 diffuse = sample_texture(world, mat->diffuse, &hrec);
+                srec->bsdf = v3muls(diffuse, cosine * INV_PI);
+                srec->pdf = cosine * INV_PI;
+                srec->weight = diffuse;
+            }
         } break;
         case MaterialType_Metal: {
-            Vec3 reflected = reflect(ray.dir, hrec.n);
-            Vec3 random = random_unit_sphere(data.entropy);
-            Vec3 scattered = normalize(v3add(reflected, v3muls(random, material->metal.roughness)));
-            scatter->specular_dir = scattered;
-            scatter->attenuation = sample_texture(world, material->metal.albedo, &hrec);
-            scatter->is_specular = true;
-            result = true;
+            f32 alpha_sq = sq(mat->roughness);
+            Vec3 microfacet_n = sample_ggx_distribution(data.entropy, no, alpha_sq);
+            wo = reflect(wi, microfacet_n);
+            
+            f32 ndoto = dot(no, wo);
+            f32 ndoti = -dot(no, wi);
+            
+            if ((ndoto * ndoti > 0.0) && (ndoto > 0.0) && (ndoti > 0.0)) {
+                Vec3 m = normalize(v3sub(wo, wi));
+                f32 ndotm = dot(no, m);
+                f32 mdoto = dot(m, wo);
+                
+                f32 a = alpha_sq;
+                f32 d = ggx_normal_distribution(a, no, m);
+                f32 g = ggx_visibility_term(a, wi, wo, no, m);
+                f32 j = 1.0 / (4.0 * mdoto);
+                
+                f32 f = 1.0;
+                Vec3 specular = sample_texture(world, mat->specular, &hrec);
+                srec->bsdf = v3muls(specular, f * (d * g / (4.0 * ndoti)));
+                srec->pdf = d * ndotm * j;
+                srec->weight = v3muls(specular, f * (g * mdoto / (ndotm * ndoti)));
+            }
         } break;
         case MaterialType_Plastic: {
-            // @NOTE this is not physically correct, we just choose randomly diffuse or specular scattering
-            if (random(data.entropy) > 0.6) {
-                Vec3 reflected = reflect(ray.dir, hrec.n);
-                Vec3 random = random_unit_sphere(data.entropy);
-                Vec3 scattered = normalize(v3add(reflected, v3muls(random, material->plastic.roughness)));
-                scatter->specular_dir = scattered;
-                scatter->attenuation = sample_texture(world, material->plastic.albedo, &hrec);
-                scatter->is_specular = true;
-            } else {
-                scatter->attenuation = sample_texture(world, material->plastic.albedo, &hrec);
-                scatter->pdf = cosine_pdf(hrec.n);
+            {
+                Vec3 m = sample_ggx_distribution(data.entropy, no, sq(mat->roughness));
+                f32 f = fresnel_dielectric(wi, m, mat->ext_ior / mat->int_ior);
+                
+                if (random(data.entropy) < f) {
+                    wo = reflect(wi, m);
+                } else {
+                    wo = sample_cosine_weighted_hemisphere(data.entropy, no);
+                }
             }
-            result = true;
+            
+            f32 ndoti = -dot(no, wi);
+            f32 ndoto = dot(no, wo);
+            if ((ndoto * ndoti > 0.0) && (ndoto > 0.0) && (ndoti > 0.0)) {
+                Vec3 m = normalize(v3sub(wo, wi));
+                f32 ndotm = dot(no, m);
+                f32 mdoto = dot(m, wo);
+                
+                f32 a = sq(mat->roughness);
+                f32 f = fresnel_dielectric(wi, m, mat->ext_ior / mat->int_ior);
+                f32 d = ggx_normal_distribution(a, no, m);
+                f32 g = ggx_visibility_term(a, wi, wo, no, m);
+                f32 j = 1.0 / (4.0 * mdoto);
+                
+                Vec3 specular = sample_texture(world, mat->specular, &hrec);
+                Vec3 diffuse = sample_texture(world, mat->diffuse, &hrec);
+
+                srec->bsdf = v3add(v3muls(diffuse, INV_PI * ndoto * (1.0 - f)), 
+                                   v3muls(specular, f * d * g / (4.0 / ndoti)));
+                srec->pdf = INV_PI * ndoto * (1.0 - f) 
+                            + d * ndotm * j * f;
+                srec->weight = v3divs(srec->bsdf, srec->pdf);
+            }
         } break;
         case MaterialType_Dielectric: {
-            f32 refraction_ratio = material->dielectric.ir;
+            Vec3 n = hrec.is_front_face ? no : v3neg(no);
+            f32 eta = mat->int_ior / mat->ext_ior;
             if (hrec.is_front_face) {
-                refraction_ratio = 1.0f / refraction_ratio;
+                eta = 1.0f / eta;
             }
-                
-            f32 cos_theta = min32(-dot(ray.dir, hrec.n), 1.0f);
-            f32 sin_theta = sqrt32(1.0f - cos_theta * cos_theta);
+            f32 ndoti = -dot(n, wi);
+            f32 a = remap_roughness(mat->roughness, ndoti);
+               
+            Vec3 microfacet = sample_ggx_distribution(data.entropy, n, a);
             
-            Vec3 scattered;
-            if ((refraction_ratio * sin_theta > 1.0f) || schlick(cos_theta, refraction_ratio) > random(data.entropy)) {
-                scattered = reflect(ray.dir, hrec.n);
+            if (random(data.entropy) > fresnel_dielectric(wi, microfacet, eta)) {
+                wo = refract(wi, no, eta);
+                if (dot(n, wi) * dot(n, wo) < 0.0) {
+                    break;
+                }
             } else {
-                scattered = refract(ray.dir, hrec.n, refraction_ratio);
+                wo = reflect(wi, microfacet);
+                if (dot(n, wo) * dot(n, wi) > 0.0) {
+                    break;
+                }
             }
-            scatter->specular_dir = normalize(scattered);
-            scatter->is_specular = true;
-            scatter->attenuation = v3s(1);
-        
-            result = true;
+            
+            f32 ndoto = dot(n, wo);
+            bool is_reflection = ndoto * ndoti > 0.0;
+            
+            Vec3 m = normalize(is_reflection ? v3sub(wo, wi) : v3sub(v3muls(wi, eta), wo));
+            if (dot(n, m) < 0.0) {
+                m = v3neg(m);
+            }
+            
+            f32 mdoti = -dot(m, wi);
+            f32 mdoto = dot(m, wo);
+            f32 ndotm = dot(n, m);
+            f32 alpha = remap_roughness(mat->roughness, ndoti);
+            
+            f32 f = fresnel_dielectric(wi, m, eta);
+            f32 d = ggx_normal_distribution(alpha, n, m);
+            f32 g = ggx_visibility_term(alpha, wi, wo, n, m);
+            
+            if (is_reflection) {
+                f32 j = 1.0 / (4.0 * mdoto);
+                
+                Vec3 specular = sample_texture(world, mat->specular, &hrec);
+                srec->bsdf = v3muls(specular, d * g * f / (4.0 * ndoti));
+                srec->pdf = f * j;
+                srec->weight = specular;
+            } else {
+                f32 j = mdoti / sq(mdoti * eta + mdoto);
+                f32 value = (1.0 - f) * d * g * mdoti * mdoto / (ndoti * sq(mdoti * eta + mdoto));
+                Vec3 transmittance = sample_texture(world, mat->transmittance, &hrec);
+                srec->bsdf = v3muls(transmittance, abs32(value));
+                srec->pdf = (1.0 - f) * j;
+                srec->weight = transmittance;
+            }
+            
+            srec->pdf *= d * ndotm;
+            srec->weight = v3muls(srec->weight, abs32(g * mdoti / (ndoti * ndotm)));
         } break;
         case MaterialType_DiffuseLight: {
-        } break;
-        case MaterialType_Isotropic: {
-            scatter->is_specular = true;
-            scatter->specular_dir = random_unit_sphere(data.entropy);
-            scatter->attenuation = sample_texture(world, material->isotropic.albedo, &hrec);
-
-            result = true;
+            return false;
         } break;
         INVALID_DEFAULT_CASE;
     }
     
-    return result;
-}
-
-f32 
-material_scattering_pdf(World *world, Ray ray, HitRecord hrec) {
-    f32 result = 0;
+    srec->dir = wo;    
     
-    Material *material = get_material(world, hrec.mat);
-    switch(material->type) {
-        case MaterialType_Lambertian: 
-        case MaterialType_Plastic: {
-            f32 cosine = dot(hrec.n, normalize(ray.dir));
-            if (cosine > 0) {
-                result = cosine / PI;
-            }
-        } break;
-        case MaterialType_DiffuseLight: {} break;
-        INVALID_DEFAULT_CASE;
-    }
-    
-    return result;
+    return true;
 }
 
 Vec3 
 material_emit(World *world, Ray ray, HitRecord hrec, RayCastData data) {
     Vec3 result = {0};
     
-    Material *material = get_material(world, hrec.mat);
-    switch(material->type) {
+    Material *mat = get_material(world, hrec.mat);
+    switch(mat->type) {
         case MaterialType_DiffuseLight: {
             bool is_front_face = hrec.is_front_face;
-            if (material->diffuse_light.flags & LightFlags_FlipFace) {
+            if (mat->light_flags & LightFlags_FlipFace) {
                 is_front_face = !is_front_face;
             }
             
-            if (!(material->diffuse_light.flags & LightFlags_BothSided) && !is_front_face) {
+            if (!(mat->light_flags & LightFlags_BothSided) && !is_front_face) {
                 break;
             }
             
-            result = sample_texture(world, material->diffuse_light.emit, &hrec);
+            result = sample_texture(world, mat->emittance, &hrec);
         } break;
         default: {
             
@@ -1244,47 +543,55 @@ get_object_bounds(World *world, ObjectHandle obj_handle) {
 }
 
 f32 
-get_object_pdf_value(World *world, ObjectHandle object_handle, Vec3 orig, Vec3 v,
-                     RayCastData data){
+get_object_pdf_value(World *world, ObjectHandle obj_handle, Vec3 orig, Vec3 v,
+                     RayCastData data, Vec3 *emitted){
     f32 result = 0;
     
-    Object *obj = get_object(world, object_handle);
+    Object *obj = get_object(world, obj_handle);
     switch (obj->type) {
         case ObjectType_Triangle: {
             HitRecord hrec;
-            if (object_hit(world, make_ray(orig, v, 0), object_handle, 0.001f, INFINITY, &hrec, data)) {
+            Ray ray = make_ray(orig, v, 0);
+            if (object_hit(world, ray, obj_handle, 0.001f, INFINITY, &hrec, data)) {
                 f32 surface_area = 0.5f * length(cross(v3sub(obj->triangle.p[1], obj->triangle.p[0]), 
                                                        v3sub(obj->triangle.p[2], obj->triangle.p[0])));
                 f32 distance_squared = hrec.t * hrec.t * length_sq(v);
                 f32 cosine = abs32(dot(v, hrec.n) / length(v));
                 result = distance_squared / (cosine * surface_area);
+                *emitted = material_emit(world, ray, hrec, data);
             }
         } break;
         case ObjectType_Sphere: {
             HitRecord hrec;
-            if (object_hit(world, make_ray(orig, normalize(v), 0), object_handle, 0.001f, INFINITY, &hrec, data)) {
+            Ray ray = make_ray(orig, v, 0);
+            if (object_hit(world, ray, obj_handle, 0.001f, INFINITY, &hrec, data)) {
                 f32 cos_theta_max = sqrt32(1 - obj->sphere.r * obj->sphere.r / length_sq(v3sub(obj->sphere.p, orig)));
                 f32 solid_angle = TWO_PI * (1 - cos_theta_max);
                 
                 result = 1.0f / solid_angle;
+                *emitted = material_emit(world, ray, hrec, data);
             }
         } break;
         case ObjectType_Disk: {
             HitRecord hrec;
-            if (object_hit(world, make_ray(orig, v, 0), object_handle, 0.001f, INFINITY, &hrec, data)) {
+            Ray ray = make_ray(orig, v, 0);
+            if (object_hit(world, ray, obj_handle, 0.001f, INFINITY, &hrec, data)) {
                 f32 distance_squared = hrec.t * hrec.t * length_sq(v);
                 f32 surface_area = PI * obj->disk.r * obj->disk.r;
                 f32 cosine = abs32(dot(v, hrec.n) / length(v));
                 result = distance_squared / (cosine * surface_area);
+                *emitted = material_emit(world, ray, hrec, data);
             }
         } break;
         case ObjectType_TriangleMesh: {
             HitRecord hrec;
-            if (object_hit(world, make_ray(orig, normalize(v), 0), object_handle, 0.001f, INFINITY, &hrec, data)) {
+            Ray ray = make_ray(orig, v, 0);
+            if (object_hit(world, ray, obj_handle, 0.001f, INFINITY, &hrec, data)) {
                 f32 surface_area = obj->triangle_mesh.surface_area;
                 f32 distance_squared = hrec.t * hrec.t * length_sq(v);
                 f32 cosine = abs32(dot(v, hrec.n) / length(v));
                 result = distance_squared / (cosine * surface_area);
+                *emitted = material_emit(world, ray, hrec, data);
             }
         } break;
         case ObjectType_ObjectList: {
@@ -1294,7 +601,7 @@ get_object_pdf_value(World *world, ObjectHandle object_handle, Vec3 orig, Vec3 v
             for (u32 obj_index = 0;
                  obj_index < obj->obj_list.size;
                  ++obj_index) {
-                sum += weight * get_object_pdf_value(world, obj->obj_list.a[obj_index], orig, v, data);        
+                sum += weight * get_object_pdf_value(world, obj->obj_list.a[obj_index], orig, v, data, emitted);        
             }
 			result = sum;
         } break;
@@ -1305,9 +612,10 @@ get_object_pdf_value(World *world, ObjectHandle object_handle, Vec3 orig, Vec3 v
 }
 
 Vec3 
-get_object_random(World *world, ObjectHandle object_handle, Vec3 o, RayCastData data) {
+get_object_random(World *world, ObjectHandle obj_handle, Vec3 o, RayCastData data, 
+                  ObjectHandle *target_obj) {
     Vec3 result = {0};
-    Object *obj = get_object(world, object_handle);
+    Object *obj = get_object(world, obj_handle);
     switch (obj->type) {
         case ObjectType_Triangle: {
             f32 u = random(data.entropy);
@@ -1321,10 +629,12 @@ get_object_random(World *world, ObjectHandle object_handle, Vec3 o, RayCastData 
                             v3muls(v3sub(obj->triangle.p[1], obj->triangle.p[0]), u),
                             v3muls(v3sub(obj->triangle.p[2], obj->triangle.p[0]), v));
             result = v3sub(result, o);
+            *target_obj = obj_handle;
         } break;
         case ObjectType_Disk: {
             ONB uvw = onb_from_w(obj->disk.n);
             result = v3add(onb_local(uvw, v3muls(random_unit_disk(data.entropy), obj->disk.r)), obj->disk.p);
+            *target_obj = obj_handle;
         } break;
         case ObjectType_TriangleMesh: {
             for (;;) {
@@ -1338,7 +648,7 @@ get_object_random(World *world, ObjectHandle object_handle, Vec3 o, RayCastData 
                 // f32 t_min = -INFINITY;
                 // for (;;) {
                 //     HitRecord hrec;
-                //     if (object_hit(world, ray, object_handle, t_min, INFINITY, &hrec, data)) {
+                //     if (object_hit(world, ray, obj_handle, t_min, INFINITY, &hrec, data)) {
                 //         ++intersection_count;
                 //         t_min = hrec.t;
                 //     }
@@ -1346,20 +656,23 @@ get_object_random(World *world, ObjectHandle object_handle, Vec3 o, RayCastData 
                 
                 if (intersection_count % 2 == 0) {
                     result = p;
+                    result = v3sub(result, o);
                     break;
                 }
             }
+            *target_obj = obj_handle;
         } break;
         case ObjectType_Sphere: {
             Vec3 dir = v3sub(obj->sphere.p, o);
             f32 dist_sq = length_sq(dir);
             ONB uvw = onb_from_w(dir);
             result = onb_local(uvw, random_to_sphere(data.entropy, obj->sphere.r, dist_sq));
+            *target_obj = obj_handle;
         } break;
         case ObjectType_ObjectList: {
             if (obj->obj_list.size) {
                 u32 random_index = random_int(data.entropy, obj->obj_list.size);
-                result = get_object_random(world, object_list_get(&obj->obj_list, random_index), o, data);
+                result = get_object_random(world, object_list_get(&obj->obj_list, random_index), o, data, target_obj);
             }
         } break;
         INVALID_DEFAULT_CASE;
@@ -1402,6 +715,7 @@ object_hit(World *world, Ray ray, ObjectHandle obj_handle, f32 t_min, f32 t_max,
                     hrec->v = v;
                     
                     hrec->mat = obj->sphere.mat;
+                    hrec->obj = obj_handle;
                     result = true;
                 }
             }
@@ -1417,8 +731,8 @@ object_hit(World *world, Ray ray, ObjectHandle obj_handle, f32 t_min, f32 t_max,
                     hrec->t = t;
                     hrec->p = hp;
                     hit_set_normal(hrec, obj->disk.n, ray);
-                    
                     hrec->mat = obj->disk.mat;
+                    hrec->obj = obj_handle;
                     result = true;
                 }
             }
@@ -1440,6 +754,7 @@ object_hit(World *world, Ray ray, ObjectHandle obj_handle, f32 t_min, f32 t_max,
                     hrec->v = v;
                     
                     hrec->mat = obj->triangle.mat;
+                    hrec->obj = obj_handle;
                     result = true;
                 }
            }
@@ -1490,6 +805,7 @@ object_hit(World *world, Ray ray, ObjectHandle obj_handle, f32 t_min, f32 t_max,
                             // hrec->n = v3(1, 0, 0);
                             // hrec->is_front_face = true;
                             hrec->mat = obj->constant_medium.phase_function;
+                            hrec->obj = obj_handle;;
                             
                             result = true;
                         } 
@@ -1508,6 +824,7 @@ object_hit(World *world, Ray ray, ObjectHandle obj_handle, f32 t_min, f32 t_max,
                 Vec3 ws_p = mat4x4_mul_vec3(obj->transform.t.o2w, hrec->p);
                 Vec3 ws_n = normalize(mat4x4_as_3x3_mul_vec3(obj->transform.t.o2w, hrec->n));
                 
+                hrec->obj = obj_handle;
                 hrec->p = ws_p;
                 hit_set_normal(hrec, ws_n, ray);   
             }
@@ -1528,6 +845,7 @@ object_hit(World *world, Ray ray, ObjectHandle obj_handle, f32 t_min, f32 t_max,
                 Vec3 ws_p = mat4x4_mul_vec3(trans.o2w, hrec->p);
                 Vec3 ws_n = normalize(mat4x4_as_3x3_mul_vec3(trans.o2w, hrec->n));
                 
+                hrec->obj = obj_handle;
                 hrec->p = ws_p;
                 hit_set_normal(hrec, ws_n, ray);   
             }
@@ -1541,6 +859,7 @@ object_hit(World *world, Ray ray, ObjectHandle obj_handle, f32 t_min, f32 t_max,
         } break;
         case ObjectType_Box: {
             result = object_hit(world, ray, obj->box.sides_list, t_min, t_max, hrec, data);
+            hrec->obj = obj_handle;
         } break;
         case ObjectType_TriangleMesh: {
             if (!bounds3_hit(obj->triangle_mesh.bounds, ray, t_min, t_max)) {
@@ -1593,6 +912,7 @@ object_hit(World *world, Ray ray, ObjectHandle obj_handle, f32 t_min, f32 t_max,
                 hrec->v = uv.y;
                 
                 hrec->mat = obj->triangle_mesh.mat;
+                hrec->obj = obj_handle;
             }
         } break;
         INVALID_DEFAULT_CASE;
@@ -1603,59 +923,12 @@ object_hit(World *world, Ray ray, ObjectHandle obj_handle, f32 t_min, f32 t_max,
     return result;
 }
 
-f32 
-pdf_value(World *world, PDF pdf, Vec3 dir, RayCastData data) {
-    f32 result = 0;
-    switch(pdf.type) {
-        case PDFType_Cosine: {
-            f32 cosine = dot(normalize(dir), pdf.cosine.uvw.w);
-            if (cosine > 0) {
-                result = cosine / PI;
-            } 
-        } break;
-        case PDFType_Object: {
-            result = get_object_pdf_value(world, pdf.object.obj, pdf.object.o, dir, data);
-        } break;
-        case PDFType_Mixture: {
-            result = 0.5f * pdf_value(world, *pdf.mix.p[0], dir, data) +
-                     0.5f * pdf_value(world, *pdf.mix.p[1], dir, data);
-        } break;
-        INVALID_DEFAULT_CASE;
-    }
-    
-    return result;
-} 
-
-Vec3 
-pdf_generate(World *world, PDF pdf, RayCastData data) {
-    Vec3 result = {0};
-    switch(pdf.type) {
-        case PDFType_Cosine: {
-            result = onb_local(pdf.cosine.uvw, random_cosine_direction(data.entropy));
-        } break;
-        case PDFType_Object: {
-            result = get_object_random(world, pdf.object.obj, pdf.object.o, data);
-        } break;
-        case PDFType_Mixture: {
-            if (random(data.entropy) < 0.5f) {
-                result = pdf_generate(world, *pdf.mix.p[0], data);
-            } else {
-                result = pdf_generate(world, *pdf.mix.p[1], data);
-            }
-        } break;
-        INVALID_DEFAULT_CASE;
-    }
-    
-    return result;
-}
-
 Vec3 
 ray_cast(World *world, Ray ray, i32 depth, RayCastData data) {
-    // Resulting color
-    Vec3 color = v3s(0);
-    // How much ray contributes to color
+    Vec3 radiance = v3s(0);
     Vec3 throughput = v3s(1.0);
     
+    f32 last_pdf = 1;
     for(u32 bounce = 0;
         bounce < depth;
         ++bounce) {
@@ -1663,46 +936,31 @@ ray_cast(World *world, Ray ray, i32 depth, RayCastData data) {
         
         HitRecord hrec = {0};
         if (!object_hit(world, ray, world->obj_list, 0.001f, INFINITY, &hrec, data)) {
-            color = v3add(color, v3mul(throughput, world->backgorund_color));
+            radiance = v3add(radiance, v3mul(throughput, world->backgorund_color));
             break;
         }    
         
+        Vec3 emitted = material_emit(world, ray, hrec, data);
+        if (length_sq(emitted)) {
+            f32 weight = 1;
+            radiance = v3add(radiance, v3muls(v3mul(throughput, emitted), weight));
+        }
+        
         ScatterRecord srec = {0};
-        if (!material_scatter(world, ray, hrec, &srec, data)) {
-            Vec3 emitted = material_emit(world, ray, hrec, data);
-            color = v3add(color, v3mul(throughput, emitted));
+        if (!material_compute_scattering_functions(world, ray, hrec, &srec, data)) {
             break;
-        }
-        
-        // Specular bounce means that surface does not scatter the ray
-        if (srec.is_specular) {
-            ray.orig = hrec.p;
-            ray.dir = srec.specular_dir;
-            throughput = v3mul(throughput, srec.attenuation);
-            continue;
-        }
-        
-        PDF pdf;
-        PDF ipdf = object_pdf(world->important_objects, hrec.p);
-        if (world->has_importance_sampling) {
-            pdf = mixture_pdf(&ipdf, &srec.pdf);
-        } else {
-            pdf = srec.pdf;
         }
         
         ray.orig = hrec.p;
-        ray.dir = pdf_generate(world, pdf, data);
-        f32 bsdf = material_scattering_pdf(world, ray, hrec);
-        f32 pdf_val = pdf_value(world, pdf, ray.dir, data);
-        f32 weight = bsdf / pdf_val;
-        ray.dir = normalize(ray.dir);
-        if (!isnormal(weight) || is_black(srec.attenuation)) {
+        ray.dir = srec.dir;
+        if (is_black(srec.weight)) {
             break;
         }
         
-        throughput = v3mul(throughput, v3muls(srec.attenuation, weight));
-#if 1
-        // Russian roulette
+        throughput = v3mul(throughput, srec.weight);
+        last_pdf = srec.pdf;
+        
+#if ENABLE_RUSSIAN_ROULETTE
         if (bounce > 3) {
             f32 p = max32(max32(throughput.x, throughput.y), throughput.z);
             if (random(data.entropy) > min32(p, 0.95f)) {
@@ -1714,5 +972,5 @@ ray_cast(World *world, Ray ray, i32 depth, RayCastData data) {
 #endif 
     }
     
-    return color;
+    return radiance;
 }

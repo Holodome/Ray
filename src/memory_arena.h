@@ -11,6 +11,7 @@ typedef struct {
     u64 data_capacity;
     
     u64 peak_size;
+    u32 temp_count;
 } MemoryArena;
 
 typedef struct {
@@ -21,6 +22,7 @@ typedef struct {
 
 inline TempMemory 
 temp_memory_begin(MemoryArena *arena) {
+    ++arena->temp_count;
     return (TempMemory) {
         .arena = arena,
         .data_size = arena->data_size,
@@ -30,6 +32,8 @@ temp_memory_begin(MemoryArena *arena) {
 
 inline void
 temp_memory_end(TempMemory mem) {
+    assert(mem.arena->temp_count);
+    --mem.arena->temp_count;
     mem.arena->data_size = mem.data_size;
     mem.arena->last_data_size = mem.last_data_size;
 }

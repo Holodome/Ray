@@ -13,11 +13,6 @@ rgba_pack_4x8(u32 r, u32 g, u32 b, u32 a) {
 
 inline u32
 rgba_pack_4x8_linear1(f32 r, f32 g, f32 b, f32 a) {
-    if (r != r) { r = 0.0f; }
-    if (g != g) { g = 0.0f; }
-    if (b != b) { b = 0.0f; }
-    if (a != a) { a = 0.0f; }
-    
     u32 ru = roundf(clamp(r, 0, 0.999f) * 255.0f);
     u32 gu = roundf(clamp(g, 0, 0.999f) * 255.0f);
     u32 bu = roundf(clamp(b, 0, 0.999f) * 255.0f);

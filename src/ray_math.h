@@ -7,6 +7,14 @@
 #define PI 3.14159265359f
 #define TWO_PI 6.28318530718f
 #define HALF_PI 1.57079632679f
+#define INV_PI 0.31830988618f
+
+#define ANGLE_EPSILON 0.0001523048f
+
+inline f32 
+sq(f32 a) {
+    return a * a;
+}
 
 inline f32 
 rad(f32 deg) {

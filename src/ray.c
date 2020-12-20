@@ -3,6 +3,7 @@
 
 #include "ray_thread.c"
 #include "trace.c"
+#include "world.c"
 #include "scenes.c"
 
 RandomSeries global_entropy = { 546674573 };
@@ -52,23 +53,22 @@ render_tile(RenderWorkQueue *queue) {
                 pixel_color = v3add(pixel_color, v3muls(sample_color, color_multiplier));
             }
             
-            pixel_color.r = saturate(pixel_color.r);
-            pixel_color.g = saturate(pixel_color.g);
-            pixel_color.b = saturate(pixel_color.b);
-            f32 r = linear1_to_srgb1(pixel_color.r);
-            f32 g = linear1_to_srgb1(pixel_color.g);
-            f32 b = linear1_to_srgb1(pixel_color.b);
+            f32 r = linear1_to_srgb1(saturate(pixel_color.r));
+            f32 g = linear1_to_srgb1(saturate(pixel_color.g));
+            f32 b = linear1_to_srgb1(saturate(pixel_color.b));
             *pixel++ = rgba_pack_4x8_linear1(b, g, r, 1.0f);     
         }        
     }
     
     atomic_add64(&queue->orders_done, 1);
-    atomic_add64(&queue->stats.bounce_count, tile_stats.bounce_count);
-    atomic_add64(&queue->stats.ray_triangle_collision_tests, tile_stats.ray_triangle_collision_tests);
-    atomic_add64(&queue->stats.ray_triangle_collision_test_succeses, tile_stats.ray_triangle_collision_test_succeses);
-    atomic_add64(&queue->stats.object_collision_tests, tile_stats.object_collision_tests);
-    atomic_add64(&queue->stats.object_collision_test_successes, tile_stats.object_collision_test_successes);
-    atomic_add64(&queue->stats.russian_roulette_terminated_bounces, tile_stats.russian_roulette_terminated_bounces);
+    // @HACK increment all stats counters cause they are all u64s
+    for (u32 it_idx = 0;
+         it_idx < sizeof(tile_stats) / sizeof(u64);
+         ++it_idx) {
+        u64 *dst_origin = (u64 *)&queue->stats;
+        u64 *src_orign = (u64 *)&tile_stats; 
+        atomic_add64(dst_origin + it_idx, *(src_orign + it_idx));        
+    }
     
     return true;
 }
@@ -216,7 +216,7 @@ main(int argc, char **argv) {
     // Initialize world
     World world;
     world_init(&world);
-    init_cornell_box(&world, &output_image);
+    init_scene2(&world, &output_image);
     // Print world information    
     char bytes_buffer[32];
     format_bytes(bytes_buffer, sizeof(bytes_buffer), world.arena.data_size);
