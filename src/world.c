@@ -168,7 +168,6 @@ add_object_to_list(ObjectList *list, ObjectHandle o) {
 #endif 
     EXPAND_IF_NEEDED(list->arena, list->a, list->size, list->capacity);
     
-    
     list->a[list->size++] = o;   
 }
 
@@ -195,7 +194,7 @@ void
 world_init(World *world) {
     memset(world, 0, sizeof(*world));
     
-    world->arena.data_capacity = MEGABYTES(32);
+    world->arena.data_capacity = DEFAULT_WORLD_ARENA_SIZE;
     world->arena.data = malloc(world->arena.data_capacity);
     
     world->obj_list = object_list(world);
@@ -358,7 +357,7 @@ MaterialHandle
 material_isotropic(World *world, TextureHandle albedo) {
     Material material;
     material.type = MaterialType_Isotropic;
-    // material.isotropic.albedo = albedo;
+    material.diffuse = albedo;
     
     return new_material(world, material);    
 }
@@ -423,10 +422,10 @@ material_mirror(World *world) {
 }
 
 ObjectHandle 
-object_list(World *world) {
+object_listr(World *world, u32 reserve) {
     Object obj;
     obj.type = ObjectType_ObjectList;
-    obj.obj_list = object_list_init(&world->arena, 0);
+    obj.obj_list = object_list_init(&world->arena, reserve);
     
     return new_object(world, obj);        
 }
@@ -492,14 +491,66 @@ object_triangle(World *world, Vec3 p0, Vec3 p1, Vec3 p2, MaterialHandle mat) {
 }
 
 ObjectHandle 
-object_box(World *world, Vec3 min, Vec3 max, MaterialHandle mat) {
+object_box(World *world, Vec3 p0, Vec3 p1, MaterialHandle mat) {
     Object obj;
     obj.type = ObjectType_Box;
-    obj.box.bounds = bounds3(min, max);
-    obj.box.sides_list = object_list(world);
-    add_box(world, obj.box.sides_list, min, max, mat);
-    object_list_shrink_to_fit(&get_object(world, obj.box.sides_list)->obj_list);
+    obj.box.bounds = bounds3(p0, p1);
+#if 1
+    u32 vi[] = {
+        1, 2, 3, 7, 6, 5, 4, 8, 9, 10, 11, 12, 13, 14, 15, 0, 16,
+        17, 18, 1, 3, 19, 7, 5, 20, 4, 9, 21, 10, 12, 22, 13, 15, 23, 0, 17,  
+    };
+    Vec3 p[] = {
+        v3(p1.x, p0.y, p0.z), v3(p1.x, p0.y, p1.z), 
+        v3(p0.x, p0.y, p1.z), v3(p0.x, p0.y, p0.z),
+        v3(p1.x, p1.y, p0.z), v3(p1.x, p1.y, p1.z), 
+        v3(p0.x, p1.y, p1.z), v3(p0.x, p1.y, p0.z),
+        v3(p1.x, p1.y, p1.z), v3(p1.x, p0.y, p1.z),
+        v3(p1.x, p1.y, p1.z), v3(p0.x, p1.y, p1.z),
+        v3(p0.x, p0.y, p1.z), v3(p0.x, p0.y, p1.z),
+        v3(p0.x, p1.y, p1.z), v3(p0.x, p1.y, p0.z),
+        v3(p0.x, p0.y, p0.z), v3(p0.x, p1.y, p0.z),
+        v3(p1.x, p0.y, p0.z), v3(p1.x, p1.y, p0.z),
+        v3(p1.x, p0.y, p0.z), v3(p1.x, p0.y, p1.z),
+        v3(p0.x, p0.y, p0.z), v3(p1.x, p1.y, p0.z),
+    };
+    Vec3 n[] = {
+        v3(0.000000, 0.000000, -0.999756), v3(0.000000, -0.999756, 0.000000), 
+        v3(0.000000, -0.999756, 0.000000), v3(0.000000, -0.999756, 0.000000),
+        v3(0.999756, 0.000000, 0.000000), v3(0.000000, 0.999756, 0.000000),
+        v3(0.000000, 0.999756, 0.000000), v3(0.000000, 0.999756, 0.000000), 
+        v3(0.999756, 0.000000, 0.000000), v3(0.999756, 0.000000, 0.000000), 
+        v3(-0.000000, 0.000000, 0.999756), v3(-0.000000, 0.000000, 0.999756), 
+        v3(-0.000000, 0.000000, 0.999756), v3(-0.999756, -0.000000, -0.000000), 
+        v3(-0.999756, -0.000000, -0.000000), v3(-0.999756, -0.000000, -0.000000), 
+        v3(0.000000, 0.000000, -0.999756), v3(0.000000, 0.000000, -0.999756), 
+        v3(0.000000, -0.999756, 0.000000), v3(0.000000, 0.999756, 0.000000),
+        v3(0.999756, 0.000000, 0.000000), v3(-0.000000, 0.000000, 0.999756),
+        v3(-0.999756, -0.000000, -0.000000), v3(0.000000, 0.000000, -0.999756),
+    };
+    Vec2 uv[] = {
+        v2(0.000000, 0.333333), v2(0.000000, 1.000000), v2(0.000000, 1.000000), 
+        v2(0.000000, 0.666667), v2(0.000000, 0.000000), v2(0.000000, 0.666667), 
+        v2(0.000000, 0.666667), v2(0.000000, 1.000000), v2(0.000000, 0.000000), 
+        v2(0.000000, 0.333333), v2(0.000000, 0.333333), v2(0.000000, 0.666667), 
+        v2(0.000000, 0.666667), v2(0.000000, 0.333333), v2(0.000000, 0.000000), 
+        v2(0.000000, 0.000000), v2(0.000000, 0.333333), v2(0.000000, 0.000000), 
+        v2(0.000000, 0.666667), v2(0.000000, 1.000000), v2(0.000000, 0.333333), 
+        v2(0.000000, 0.333333), v2(0.000000, 0.333333), v2(0.000000, 0.000000),
+    };
     
+    TriangleMeshData box;
+    box.ntrig = 12;
+    box.nvert = 24;
+    box.tri_indices = vi;
+    box.p = p;
+    box.n = n;
+    box.uv = uv;
+    obj.box.sides = object_triangle_mesh_t(world, box, mat);
+#else 
+    obj.box.sides = object_listr(world, 12);
+    add_box(world,obj.box.sides, p0, p1, mat);
+#endif 
     return new_object(world, obj);        
 }
 
@@ -517,7 +568,7 @@ object_constant_medium(World *world, f32 d, MaterialHandle phase, ObjectHandle b
 ObjectHandle 
 object_bvh_node(World *world, ObjectHandle *objs_init, i64 n) {
     Object obj;
-    obj.type = ObjectType_BVHNode;
+    obj.type = ObjectType_BVH;
     
     has_enough_object_space_or_expand(world, n);
     
@@ -719,6 +770,7 @@ object_triangle_mesh_tt(World *world, TriangleMeshData tm, MaterialHandle mat, T
          ++vertex_index) {
         obj.triangle_mesh.p[vertex_index] = mat4x4_mul_vec3(transform.o2w, tm.p[vertex_index]);
         obj.triangle_mesh.n[vertex_index] = mat4x4_as_3x3_mul_vec3(transform.o2w, tm.n[vertex_index]);
+        // obj.triangle_mesh.n[vertex_index] = tm.n[vertex_index];
         obj.triangle_mesh.uv[vertex_index] = tm.uv[vertex_index];
         bounds = bounds3_extend(bounds, obj.triangle_mesh.p[vertex_index]);
     }
@@ -872,6 +924,7 @@ add_poly_sphere(World *world, f32 r, u32 divs, MaterialHandle mat) {
     pm.p = P;
     pm.n = N;
     pm.uv = st;
+    pm.vertex_indices = vertsIndex;
     return object_triangle_mesh_p(world, pm, mat);
 }
 

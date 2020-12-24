@@ -33,8 +33,9 @@ typedef struct {
     // Point of hrec
     Vec3 p;
     // Surface normal
-    Vec3 n;
+    Vec3 n, no;
     bool is_front_face;
+    f32  ndoti, ndotio;
     // UV coordinates for material sampling
     f32 u, v;
     // Object material

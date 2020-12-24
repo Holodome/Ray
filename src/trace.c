@@ -7,7 +7,7 @@ is_black(Vec3 color) {
 
 static Vec3 
 align_to_direction(Vec3 n, f32 cos_theta, f32 phi) {
-    f32 sin_theta = sqrt32(1.0 - cos_theta * cos_theta);
+    f32 sin_theta = sqrt32(saturate(1.0 - cos_theta * cos_theta));
     
     ONB onb = onb_from_w(n);
     return v3add(v3muls(v3add(v3muls(onb.u, cosf(phi)),
@@ -65,37 +65,6 @@ ggx_visibility_term(f32 alpha_sq, Vec3 wi, Vec3 wo, Vec3 n, Vec3 m) {
 }
 
 static f32 
-power_heuristic(f32 fpdf, f32 gpdf) {
-    f32 f2 = fpdf * fpdf;
-    f32 g2 = gpdf * gpdf;
-    return f2 / (f2 + g2);
-}
-
-static f32 
-fresnel_conductor(Vec3 i, Vec3 m, f32 etai, f32 etao, f32 k) {
-    f32 cos_theta_i = -dot(i, m);
-    f32 eta = etao / etai;
-    f32 eta_sq = eta * eta;
-    f32 etak = k / etai;
-    f32 etak_sq = etak * etak;
-    
-    f32 cos_theta_i_sq = cos_theta_i * cos_theta_i;
-    f32 sin_theta_i_sq = 1.0 - cos_theta_i_sq;
-    
-    f32 t0 = eta_sq - etak_sq - sin_theta_i_sq;
-    f32 a_sq_plus_b_sq = sqrt32(t0 * t0 + eta_sq * etak_sq * 4.0);
-    f32 t1 = a_sq_plus_b_sq + cos_theta_i_sq;
-    f32 a = sqrt32((a_sq_plus_b_sq + t0) * 0.5);
-    f32 t2 = a * cos_theta_i * 2.0;
-    f32 rs = (t1 - t2) / (t1 + t2);
-    
-    f32 t3 = a_sq_plus_b_sq * cos_theta_i_sq + sin_theta_i_sq * sin_theta_i_sq;
-    f32 t4 = t2 * sin_theta_i_sq;
-    f32 rp = rs * (t3 - t4) / (t3 + t4);
-    return (rp + rs) * 0.5;
-}
-
-static f32 
 fresnel_dielectric(Vec3 i, Vec3 m, f32 eta) {
     f32 result = 1.0;
     f32 cos_theta_i = abs32(dot(i, m));
@@ -129,8 +98,8 @@ bounds3_hit(Bounds3 bounds, Ray ray, f32 t_min, f32 t_max) {
             t1 = temp;
         }
         
-        t_min = max(t0, t_min);
-        t_max = min(t1, t_max);
+        t_min = max32(t0, t_min);
+        t_max = min32(t1, t_max);
         
         if (t_max < t_min) {
             return false;
@@ -199,33 +168,16 @@ refract(Vec3 v, Vec3 n, f32 etai_over_etat) {
     f32 cos_theta = min32(-dot(v, n), 1.0f);
     Vec3 r_out_perp = v3muls(v3add(v, v3muls(n, cos_theta)), etai_over_etat);
     Vec3 r_out_parallel = v3muls(n, -sqrt32(abs32(1.0f - length_sq(r_out_perp))));
-    Vec3 result = v3add(r_out_perp, r_out_parallel);
+    Vec3 result = normalize(v3add(r_out_perp, r_out_parallel));
     return result; 
-}
-
-static f32
-schlick(f32 cosine, f32 ref_idx) {
-    f32 r0 = (1.0f - ref_idx) / (1.0f + ref_idx);
-    r0 = r0 * r0;
-    f32 result = r0 + (1.0f - r0) * powf((1.0f - cosine), 5.0f);
-    return result;
 }
 
 static void 
 sphere_get_uv(Vec3 p, f32 *u, f32 *v) {
-#if 1
     f32 theta = acosf(-p.y);
     f32 phi = atan2f(-p.z, p.x) + PI;
-    
     *u = phi / TWO_PI;
     *v = theta / PI;
-#else 
-    f32 phi = atan2f(p.y, p.x);
-    f32 theta = asinf(p.z);
-    
-    *u = 1.0f - (phi + PI) / TWO_PI;
-    *v = (theta + HALF_PI) / PI;
-#endif 
 }
 
 static Bounds3 
@@ -243,12 +195,15 @@ transform_bounds(Bounds3 bi, Mat4x4 t) {
 
 void 
 hit_set_normal(HitRecord *hrec, Vec3 n, Ray ray) {
+    hrec->ndoti = hrec->ndotio = dot(ray.dir, n);
+    hrec->no = n;
     if (dot(ray.dir, n) <= 0.0f) {
         hrec->is_front_face = true;
         hrec->n = n;
     } else {
         hrec->is_front_face = false;
         hrec->n = v3neg(n);
+        hrec->ndoti = -hrec->ndoti;
     }
 }
 
@@ -310,30 +265,84 @@ sample_texture(World *world, TextureHandle handle, HitRecord *hrec) {
     return result;
 } 
 
-bool 
-material_compute_scattering_functions(World *world, Ray ray, HitRecord hrec, 
-                                      ScatterRecord *srec, RayCastData data) {
-    Vec3 wi = ray.dir, wo;
+bool
+material_scatter(World *world, Ray ray, HitRecord hrec, RayCastData data, ScatterRecord *srec) {
+    bool result = false;
     Vec3 no = hrec.n;
-    
+    Vec3 wi = ray.dir;
+
     Material *mat = get_material(world, hrec.mat);
+    switch(mat->type) {
+        case MaterialType_Lambertian: {
+            srec->dir = sample_cosine_weighted_hemisphere(data.entropy, no);
+            result = true;
+        } break;
+        case MaterialType_Metal: {
+            f32 alpha_sq = sq(mat->roughness);
+            Vec3 microfacet_n = sample_ggx_distribution(data.entropy, no, alpha_sq);
+            srec->dir = reflect(wi, microfacet_n);
+            result = true;
+        } break;
+        case MaterialType_Plastic: {
+            Vec3 m = sample_ggx_distribution(data.entropy, no, sq(mat->roughness));
+            if (random(data.entropy) < fresnel_dielectric(wi, m, mat->ext_ior / mat->int_ior)) {
+                srec->dir = sample_cosine_weighted_hemisphere(data.entropy, no);
+            } else {
+                srec->dir = reflect(wi, m);
+            }
+            result = true;
+        } break;
+        case MaterialType_Dielectric: {
+            Vec3 n = hrec.no;
+            f32 eta = mat->int_ior / mat->ext_ior;
+            if (hrec.is_front_face) {
+                eta = 1.0f / eta;
+            }
+            f32 ndoti = -hrec.ndotio;
+            f32 a = remap_roughness(mat->roughness, ndoti);
+               
+            Vec3 microfacet = sample_ggx_distribution(data.entropy, n, a);
+            if (random(data.entropy) > fresnel_dielectric(wi, microfacet, eta)) {
+                srec->dir = refract(wi, no, eta);
+                // assert(dot(n, srec->dir) * dot(n, wi) >= 0.0);
+            } else {
+                srec->dir = reflect(wi, microfacet);
+                // assert(dot(n, srec->dir) * dot(n, wi) <= 0.0);
+            }
+            result = true;
+        } break;
+        case MaterialType_Isotropic: {
+            srec->dir = random_unit_sphere(data.entropy);
+            result = true;
+        } break;
+        case MaterialType_DiffuseLight: {
+            
+        } break;
+        INVALID_DEFAULT_CASE;
+    }
+    
+    return result;   
+}
+
+bool 
+material_compute_scattering_functions(World *world, Vec3 wi, Vec3 no, HitRecord hrec, 
+                                      ScatterRecord *srec, RayCastData data) {
+    Material *mat = get_material(world, hrec.mat);
+    
+    Vec3 wo = srec->dir;
     switch (mat->type) {
         case MaterialType_Lambertian: {
-            // srec->dir = onb_local(onb_from_w(no), random_cosine_direction(data.entropy));
-            wo = sample_cosine_weighted_hemisphere(data.entropy, no);
-            f32 cosine = dot(no, wo);
-            if (cosine > 0) {
+            f32 ndoto = dot(no, wo);
+            f32 ndoti = -dot(no, wi);
+            if (ndoto > 0 && ndoti > 0) {
                 Vec3 diffuse = sample_texture(world, mat->diffuse, &hrec);
-                srec->bsdf = v3muls(diffuse, cosine * INV_PI);
-                srec->pdf = cosine * INV_PI;
+                srec->bsdf = v3muls(diffuse, ndoto * INV_PI);
+                srec->pdf = ndoto * INV_PI;
                 srec->weight = diffuse;
             }
         } break;
         case MaterialType_Metal: {
             f32 alpha_sq = sq(mat->roughness);
-            Vec3 microfacet_n = sample_ggx_distribution(data.entropy, no, alpha_sq);
-            wo = reflect(wi, microfacet_n);
-            
             f32 ndoto = dot(no, wo);
             f32 ndoti = -dot(no, wi);
             
@@ -355,17 +364,6 @@ material_compute_scattering_functions(World *world, Ray ray, HitRecord hrec,
             }
         } break;
         case MaterialType_Plastic: {
-            {
-                Vec3 m = sample_ggx_distribution(data.entropy, no, sq(mat->roughness));
-                f32 f = fresnel_dielectric(wi, m, mat->ext_ior / mat->int_ior);
-                
-                if (random(data.entropy) < f) {
-                    wo = reflect(wi, m);
-                } else {
-                    wo = sample_cosine_weighted_hemisphere(data.entropy, no);
-                }
-            }
-            
             f32 ndoti = -dot(no, wi);
             f32 ndoto = dot(no, wo);
             if ((ndoto * ndoti > 0.0) && (ndoto > 0.0) && (ndoti > 0.0)) {
@@ -390,28 +388,13 @@ material_compute_scattering_functions(World *world, Ray ray, HitRecord hrec,
             }
         } break;
         case MaterialType_Dielectric: {
-            Vec3 n = hrec.is_front_face ? no : v3neg(no);
+            Vec3 n = hrec.no;
             f32 eta = mat->int_ior / mat->ext_ior;
             if (hrec.is_front_face) {
                 eta = 1.0f / eta;
             }
-            f32 ndoti = -dot(n, wi);
+            f32 ndoti = -hrec.ndotio;
             f32 a = remap_roughness(mat->roughness, ndoti);
-               
-            Vec3 microfacet = sample_ggx_distribution(data.entropy, n, a);
-            
-            if (random(data.entropy) > fresnel_dielectric(wi, microfacet, eta)) {
-                wo = refract(wi, no, eta);
-                if (dot(n, wi) * dot(n, wo) < 0.0) {
-                    break;
-                }
-            } else {
-                wo = reflect(wi, microfacet);
-                if (dot(n, wo) * dot(n, wi) > 0.0) {
-                    break;
-                }
-            }
-            
             f32 ndoto = dot(n, wo);
             bool is_reflection = ndoto * ndoti > 0.0;
             
@@ -423,11 +406,10 @@ material_compute_scattering_functions(World *world, Ray ray, HitRecord hrec,
             f32 mdoti = -dot(m, wi);
             f32 mdoto = dot(m, wo);
             f32 ndotm = dot(n, m);
-            f32 alpha = remap_roughness(mat->roughness, ndoti);
             
             f32 f = fresnel_dielectric(wi, m, eta);
-            f32 d = ggx_normal_distribution(alpha, n, m);
-            f32 g = ggx_visibility_term(alpha, wi, wo, n, m);
+            f32 d = ggx_normal_distribution(a, n, m);
+            f32 g = ggx_visibility_term(a, wi, wo, n, m);
             
             if (is_reflection) {
                 f32 j = 1.0 / (4.0 * mdoto);
@@ -451,11 +433,18 @@ material_compute_scattering_functions(World *world, Ray ray, HitRecord hrec,
         case MaterialType_DiffuseLight: {
             return false;
         } break;
+        case MaterialType_Isotropic: {
+            f32 ndoto = dot(no, wo);
+
+            if (ndoto >= 0.0) {
+                Vec3 atten = sample_texture(world, mat->diffuse, &hrec);
+                srec->bsdf = v3muls(atten, 0.25f * INV_PI);
+                srec->pdf = 0.25f * INV_PI;
+                srec->weight = atten;
+            }
+        } break;
         INVALID_DEFAULT_CASE;
     }
-    
-    srec->dir = wo;    
-    
     return true;
 }
 
@@ -527,7 +516,7 @@ get_object_bounds(World *world, ObjectHandle obj_handle) {
         case ObjectType_AnimatedTransform: {
             result = obj->animated_transform.bounds;
         } break;
-        case ObjectType_BVHNode: {
+        case ObjectType_BVH: {
             result = obj->bvh_node.bounds;
         } break;
         case ObjectType_Box: {
@@ -544,7 +533,7 @@ get_object_bounds(World *world, ObjectHandle obj_handle) {
 
 f32 
 get_object_pdf_value(World *world, ObjectHandle obj_handle, Vec3 orig, Vec3 v,
-                     RayCastData data, Vec3 *emitted){
+                     RayCastData data){
     f32 result = 0;
     
     Object *obj = get_object(world, obj_handle);
@@ -553,12 +542,10 @@ get_object_pdf_value(World *world, ObjectHandle obj_handle, Vec3 orig, Vec3 v,
             HitRecord hrec;
             Ray ray = make_ray(orig, v, 0);
             if (object_hit(world, ray, obj_handle, 0.001f, INFINITY, &hrec, data)) {
-                f32 surface_area = 0.5f * length(cross(v3sub(obj->triangle.p[1], obj->triangle.p[0]), 
-                                                       v3sub(obj->triangle.p[2], obj->triangle.p[0])));
+                f32 surface_area = triangle_area(obj->triangle.p[0], obj->triangle.p[1], obj->triangle.p[2]);
                 f32 distance_squared = hrec.t * hrec.t * length_sq(v);
                 f32 cosine = abs32(dot(v, hrec.n) / length(v));
                 result = distance_squared / (cosine * surface_area);
-                *emitted = material_emit(world, ray, hrec, data);
             }
         } break;
         case ObjectType_Sphere: {
@@ -569,7 +556,6 @@ get_object_pdf_value(World *world, ObjectHandle obj_handle, Vec3 orig, Vec3 v,
                 f32 solid_angle = TWO_PI * (1 - cos_theta_max);
                 
                 result = 1.0f / solid_angle;
-                *emitted = material_emit(world, ray, hrec, data);
             }
         } break;
         case ObjectType_Disk: {
@@ -580,7 +566,6 @@ get_object_pdf_value(World *world, ObjectHandle obj_handle, Vec3 orig, Vec3 v,
                 f32 surface_area = PI * obj->disk.r * obj->disk.r;
                 f32 cosine = abs32(dot(v, hrec.n) / length(v));
                 result = distance_squared / (cosine * surface_area);
-                *emitted = material_emit(world, ray, hrec, data);
             }
         } break;
         case ObjectType_TriangleMesh: {
@@ -591,7 +576,6 @@ get_object_pdf_value(World *world, ObjectHandle obj_handle, Vec3 orig, Vec3 v,
                 f32 distance_squared = hrec.t * hrec.t * length_sq(v);
                 f32 cosine = abs32(dot(v, hrec.n) / length(v));
                 result = distance_squared / (cosine * surface_area);
-                *emitted = material_emit(world, ray, hrec, data);
             }
         } break;
         case ObjectType_ObjectList: {
@@ -601,7 +585,7 @@ get_object_pdf_value(World *world, ObjectHandle obj_handle, Vec3 orig, Vec3 v,
             for (u32 obj_index = 0;
                  obj_index < obj->obj_list.size;
                  ++obj_index) {
-                sum += weight * get_object_pdf_value(world, obj->obj_list.a[obj_index], orig, v, data, emitted);        
+                sum += weight * get_object_pdf_value(world, object_list_get(&obj->obj_list, obj_index), orig, v, data);        
             }
 			result = sum;
         } break;
@@ -612,67 +596,47 @@ get_object_pdf_value(World *world, ObjectHandle obj_handle, Vec3 orig, Vec3 v,
 }
 
 Vec3 
-get_object_random(World *world, ObjectHandle obj_handle, Vec3 o, RayCastData data, 
-                  ObjectHandle *target_obj) {
+get_object_random(World *world, ObjectHandle obj_handle, Vec3 o, RayCastData data) {
     Vec3 result = {0};
     Object *obj = get_object(world, obj_handle);
     switch (obj->type) {
         case ObjectType_Triangle: {
-            f32 u = random(data.entropy);
-            f32 v = random(data.entropy);
-            if (u + v >= 1.0f) {
-                u = 1 - u;
-                v = 1 - v;
-            }
-            
-            result = v3add3(obj->triangle.p[0], 
-                            v3muls(v3sub(obj->triangle.p[1], obj->triangle.p[0]), u),
-                            v3muls(v3sub(obj->triangle.p[2], obj->triangle.p[0]), v));
+            f32 r1 = sqrt32(random(data.entropy));
+            f32 r2 = random(data.entropy);
+            result = v3add3(v3muls(obj->triangle.p[0], 1.0f - r1),
+                            v3muls(obj->triangle.p[1], r1 * (1.0f - r2)),
+                            v3muls(obj->triangle.p[2], r1 * r2));
             result = v3sub(result, o);
-            *target_obj = obj_handle;
         } break;
         case ObjectType_Disk: {
             ONB uvw = onb_from_w(obj->disk.n);
             result = v3add(onb_local(uvw, v3muls(random_unit_disk(data.entropy), obj->disk.r)), obj->disk.p);
-            *target_obj = obj_handle;
-        } break;
-        case ObjectType_TriangleMesh: {
-            for (;;) {
-                Bounds3 b = obj->triangle_mesh.bounds;
-                Vec3 p = v3(random_uniform(data.entropy, b.min.x, b.max.x), 
-                            random_uniform(data.entropy, b.min.y, b.max.y),
-                            random_uniform(data.entropy, b.min.z, b.max.z));
-                u32 intersection_count = 0;
-                // @NOTE this needs a lot of optimizing
-                // Ray ray = make_ray(o, normalize(v3sub(p, o)), 0);
-                // f32 t_min = -INFINITY;
-                // for (;;) {
-                //     HitRecord hrec;
-                //     if (object_hit(world, ray, obj_handle, t_min, INFINITY, &hrec, data)) {
-                //         ++intersection_count;
-                //         t_min = hrec.t;
-                //     }
-                // }
-                
-                if (intersection_count % 2 == 0) {
-                    result = p;
-                    result = v3sub(result, o);
-                    break;
-                }
-            }
-            *target_obj = obj_handle;
         } break;
         case ObjectType_Sphere: {
             Vec3 dir = v3sub(obj->sphere.p, o);
             f32 dist_sq = length_sq(dir);
             ONB uvw = onb_from_w(dir);
             result = onb_local(uvw, random_to_sphere(data.entropy, obj->sphere.r, dist_sq));
-            *target_obj = obj_handle;
+        } break;
+        case ObjectType_TriangleMesh: {
+            u32 tri_idx = random_int(data.entropy, obj->triangle_mesh.ntrig);
+            Vec3 p[] = {
+                obj->triangle_mesh.p[obj->triangle_mesh.tri_indices[tri_idx * 3]],
+                obj->triangle_mesh.p[obj->triangle_mesh.tri_indices[tri_idx * 3 + 1]],
+                obj->triangle_mesh.p[obj->triangle_mesh.tri_indices[tri_idx * 3 + 2]],
+            };
+            
+            f32 r1 = sqrt32(random(data.entropy));
+            f32 r2 = random(data.entropy);
+            result = v3add3(v3muls(p[0], 1.0f - r1),
+                            v3muls(p[1], 1.0f - r2),
+                            v3muls(p[2], r1 * r2));
+            result = v3sub(result, o);
         } break;
         case ObjectType_ObjectList: {
             if (obj->obj_list.size) {
                 u32 random_index = random_int(data.entropy, obj->obj_list.size);
-                result = get_object_random(world, object_list_get(&obj->obj_list, random_index), o, data, target_obj);
+                result = get_object_random(world, object_list_get(&obj->obj_list, random_index), o, data);
             }
         } break;
         INVALID_DEFAULT_CASE;
@@ -850,7 +814,7 @@ object_hit(World *world, Ray ray, ObjectHandle obj_handle, f32 t_min, f32 t_max,
                 hit_set_normal(hrec, ws_n, ray);   
             }
         } break;
-        case ObjectType_BVHNode: {
+        case ObjectType_BVH: {
             if (bounds3_hit(obj->bvh_node.bounds, ray, t_min, t_max)) {
                 bool hit_left = object_hit(world, ray, obj->bvh_node.left, t_min, t_max, hrec, data);
                 bool hit_right = object_hit(world, ray, obj->bvh_node.right, t_min, hit_left ? hrec->t : t_max, hrec, data);
@@ -858,7 +822,7 @@ object_hit(World *world, Ray ray, ObjectHandle obj_handle, f32 t_min, f32 t_max,
             }
         } break;
         case ObjectType_Box: {
-            result = object_hit(world, ray, obj->box.sides_list, t_min, t_max, hrec, data);
+            result = object_hit(world, ray, obj->box.sides, t_min, t_max, hrec, data);
             hrec->obj = obj_handle;
         } break;
         case ObjectType_TriangleMesh: {
@@ -895,15 +859,22 @@ object_hit(World *world, Ray ray, ObjectHandle obj_handle, f32 t_min, f32 t_max,
                 hrec->t = hit_t;
                 hrec->p = ray_at(ray, hrec->t);
                 
+#if 1
                 Vec3 n0 = obj->triangle_mesh.n[obj->triangle_mesh.tri_indices[hit_vertex_index]];        
                 Vec3 n1 = obj->triangle_mesh.n[obj->triangle_mesh.tri_indices[hit_vertex_index + 1]];    
                 Vec3 n2 = obj->triangle_mesh.n[obj->triangle_mesh.tri_indices[hit_vertex_index + 2]];    
-                Vec3 outward_normal = v3add3(v3muls(n0, 1 - hit_u - hit_v), v3muls(n1, hit_u), v3muls(n2, hit_v));
-                // @NOTE Problem is that vertices in loaded model are ordered in such way that their normal is pointing outward,
-                // so we don't neeed to negate normal
-                // hit_set_normal(hrec, outward_normal, ray);
-                hrec->n = outward_normal;
-                hrec->is_front_face = true;
+                Vec3 outward_normal = normalize(v3add3(v3muls(n0, 1 - hit_u - hit_v),
+                                                       v3muls(n1, hit_u),
+                                                       v3muls(n2, hit_v)));
+#else 
+                Vec3 p0 = obj->triangle_mesh.p[obj->triangle_mesh.tri_indices[hit_vertex_index]];        
+                Vec3 p1 = obj->triangle_mesh.p[obj->triangle_mesh.tri_indices[hit_vertex_index + 1]];        
+                Vec3 p2 = obj->triangle_mesh.p[obj->triangle_mesh.tri_indices[hit_vertex_index + 2]];    
+                Vec3 outward_normal = normalize(cross(v3sub(p1, p0), v3sub(p2, p0)));
+#endif 
+                // hrec->n = outward_normal;
+                // hrec->is_front_face = true;
+                hit_set_normal(hrec, outward_normal, ray);
                 Vec2 uv0 = obj->triangle_mesh.uv[obj->triangle_mesh.tri_indices[hit_vertex_index]];        
                 Vec2 uv1 = obj->triangle_mesh.uv[obj->triangle_mesh.tri_indices[hit_vertex_index + 1]];    
                 Vec2 uv2 = obj->triangle_mesh.uv[obj->triangle_mesh.tri_indices[hit_vertex_index + 2]];    
@@ -928,37 +899,64 @@ ray_cast(World *world, Ray ray, i32 depth, RayCastData data) {
     Vec3 radiance = v3s(0);
     Vec3 throughput = v3s(1.0);
     
-    f32 last_pdf = 1;
     for(u32 bounce = 0;
         bounce < depth;
         ++bounce) {
         ++data.stats->bounce_count;
         
         HitRecord hrec = {0};
-        if (!object_hit(world, ray, world->obj_list, 0.001f, INFINITY, &hrec, data)) {
+        if (!object_hit(world, ray, world->obj_list, DISTANCE_EPSILON, INFINITY, &hrec, data)) {
             radiance = v3add(radiance, v3mul(throughput, world->backgorund_color));
             break;
         }    
         
         Vec3 emitted = material_emit(world, ray, hrec, data);
-        if (length_sq(emitted)) {
-            f32 weight = 1;
-            radiance = v3add(radiance, v3muls(v3mul(throughput, emitted), weight));
+        if (length_sq(emitted) > 0) {
+            radiance = v3add(radiance, v3mul(throughput, emitted));
         }
         
         ScatterRecord srec = {0};
-        if (!material_compute_scattering_functions(world, ray, hrec, &srec, data)) {
+        if (!material_scatter(world, ray, hrec, data, &srec)) {
+            break;
+        }
+        if (!material_compute_scattering_functions(world, ray.dir, hrec.n, hrec, &srec, data)) {
             break;
         }
         
-        ray.orig = hrec.p;
-        ray.dir = srec.dir;
+        // if (get_material(world, hrec.mat)->type == MaterialType_Lambertian) {
+            // Vec3 dir;
+            // if (random(data.entropy) < 0.5) {
+            //     dir = normalize(get_object_random(world, world->important_objects, hrec.p, data));    
+            // } else {
+            //     dir = srec.dir;
+            // }
+            
+            // srec.dir = dir;    
+            // f32 light_pdf = get_object_pdf_value(world, world->important_objects, hrec.p, dir, data);
+            // f32 pdf = 0.5f * srec.pdf + 0.5f * light_pdf;
+            // srec.weight = v3divs(srec.bsdf, pdf);
+            
+        //     Vec3 dir = normalize(get_object_random(world, world->important_objects, hrec.p, data));    
+        //     f32 light_pdf = get_object_pdf_value(world, world->important_objects, hrec.p, dir, data);
+        //     srec.weight = v3divs(srec.bsdf, light_pdf);
+        // }
+        
+        // if (random(data.entropy) < 0.5) {
+        //     srec.dir = normalize(get_object_random(world, world->important_objects, hrec.p, data));    
+        // }
+        // f32 light_pdf = get_object_pdf_value(world, world->important_objects, hrec.p, srec.dir, data);
+        // f32 pdf = 0.5f * light_pdf + srec.pdf * 0.5f;
+        // srec.weight = v3divs(srec.bsdf, pdf);
+        
+        // srec.weight = v3divs(srec.bsdf, srec.pdf);
+       
+        
         if (is_black(srec.weight)) {
             break;
         }
         
         throughput = v3mul(throughput, srec.weight);
-        last_pdf = srec.pdf;
+        ray = make_ray(hrec.p, srec.dir, ray.time);
         
 #if ENABLE_RUSSIAN_ROULETTE
         if (bounce > 3) {

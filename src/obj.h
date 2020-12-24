@@ -67,12 +67,6 @@ load_obj(char *filename) {
         }
     }
 
-    printf("vertex_count %u\n", file_vertex_count);
-    printf("uv_count %u\n", file_uv_count);
-    printf("normal_count %u\n", file_normal_count);
-    printf("face_count %u\n", file_face_count);
-    printf("index_count %u\n", file_index_count);
-    
     u64 vertices_size = file_vertex_count * sizeof(Vertex) * 100;
     u64 normals_size = file_normal_count * sizeof(Vec3);
     u64 uvs_size = file_uv_count * sizeof(Vec2);

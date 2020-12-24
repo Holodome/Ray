@@ -6,7 +6,7 @@
 #include "world.c"
 #include "scenes.c"
 
-RandomSeries global_entropy = { 546674573 };
+RandomSeries rng = { 546674573 };
 
 bool 
 render_tile(RenderWorkQueue *queue) {
@@ -127,7 +127,7 @@ init_render_queue(RenderWorkQueue *queue, Image *image, World *world,
             
 #define MAKE_SEED(a, b, c, d) ((a) * 13998 + (b) * 39224 + (c) * 60918 + (d) * 14319)
             u32 seed = MAKE_SEED(tile_count_x, tile_count_y, tile_x, tile_y);
-            order->entropy.state = seed;
+            seed_rng(&order->entropy, seed);
         }           
     }
     assert(cursor == queue->order_count);
@@ -211,12 +211,14 @@ main(int argc, char **argv) {
     s.tile_h = 6;
     parse_command_line_arguments(argc, argv, &s);
     
-    Image output_image = make_image_for_writing(s.image_w, s.image_h);
+    seed_rng(&rng, time(0));
     
+    Image output_image = make_image_for_writing(s.image_w, s.image_h);
     // Initialize world
     World world;
     world_init(&world);
-    init_scene2(&world, &output_image);
+    init_scene_bigger(&world, &output_image);
+    validate_world(&world);
     // Print world information    
     char bytes_buffer[32];
     format_bytes(bytes_buffer, sizeof(bytes_buffer), world.arena.data_size);
@@ -280,7 +282,7 @@ main(int argc, char **argv) {
     printf("Object collision tests: %s\n", number_buffer);
     printf("Object collision tests failed: %.2f%%\n", 100.0f * (1.0 - (f64)render_queue.stats.object_collision_test_successes / (f64)render_queue.stats.object_collision_tests));
     printf("Average bounce count per ray: %f\n", (f64)render_queue.stats.bounce_count / (f64)(s.samples_per_pixel * output_image.w * output_image.h));
-    printf("Russian rouletted terminated bounces: %llu (%.2f%%)\n", render_queue.stats.russian_roulette_terminated_bounces, (f64)render_queue.stats.russian_roulette_terminated_bounces / (f64)primary_ray_count);
+    printf("Russian roulette terminated bounces: %llu (%.2f%%)\n", render_queue.stats.russian_roulette_terminated_bounces, (f64)render_queue.stats.russian_roulette_terminated_bounces / (f64)primary_ray_count);
     
     char *out = s.image_filename;
     image_save(&output_image, out);

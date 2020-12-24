@@ -80,5 +80,9 @@ typedef uintptr_t umm;
 
 #define ARRAY_SIZE(_arr) (sizeof(_arr) / sizeof(*(_arr)))
 
+// App settings
+#define ENABLE_RUSSIAN_ROULETTE 1
+#define DISTANCE_EPSILON        0.001f
+
 #define GENERAL_H 1
 #endif

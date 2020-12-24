@@ -3,18 +3,49 @@
 #include "general.h"
 #include "ray_math.h"
 
+#define USE_XORWOW 1
+
 typedef struct {
+#if USE_XORWOW
+    u32 a, b, c, d, e, counter;
+#else 
     u32 state;
+#endif 
 } RandomSeries;
 
 inline u32 
 xorshift32(RandomSeries *series) {
+#if USE_XORWOW 
+    u32 t = series->e;
+    u32 s = series->a;
+    series->e = series->d;
+    series->d = series->c;
+    series->c = series->b;
+    series->b = s;
+    t ^= t >> 2;
+    t ^= t << 1;
+    t ^= s ^ (s << 4);
+    series->a = t;
+    series->counter += 0x587C5;
+    return t + series->counter;
+#else 
     u32 x = series->state;
     x ^= x << 13;
     x ^= x >> 17;
     x ^= x << 5;
     series->state = x;
     return x;
+#endif 
+}
+
+inline void
+seed_rng(RandomSeries *series, u32 seed) {
+#if USE_XORWOW
+    memset(series, 0, sizeof(*series));
+    series->e = seed;
+#else 
+    series->state = seed;
+#endif 
 }
 
 inline f32 
@@ -115,7 +146,7 @@ random_to_sphere(RandomSeries *entropy, f32 r, f32 dsq) {
     return v3(x, y, z);
 }
 
-extern RandomSeries global_entropy;
+extern RandomSeries rng;
 
 #define RAY_RANDOM_H 1
 #endif

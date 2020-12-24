@@ -1,7 +1,5 @@
 #if !defined(RAY_H)
 
-#define ENABLE_RUSSIAN_ROULETTE 1
-
 #include "general.h"
 #include "ray_math.h"
 #include "ray_random.h"

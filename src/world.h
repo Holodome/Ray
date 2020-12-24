@@ -5,6 +5,8 @@
 #include "ray_random.h"
 #include "memory_arena.h"
 
+#define DEFAULT_WORLD_ARENA_SIZE MEGABYTES(512)
+
 // Describes mesh constructed from polygons, where each face can have vertices_per_face[i] vertices
 typedef struct { 
     u64 nfaces;
@@ -189,11 +191,20 @@ typedef enum {
     ObjectType_Transform,
     ObjectType_AnimatedTransform,
     
-    ObjectType_BVHNode,
+    ObjectType_BVH,
     
     ObjectType_ConstantMedium,
     ObjectType_Box,
 } ObjectType;
+
+typedef struct {
+    Bounds3 bounds;
+    union {
+        u32 obj_offset;       // leaf
+        u32 sec_child_offset; // interior
+    };
+    u16 nobj;
+} BVHNode;
 
 typedef struct {
     ObjectType type;
@@ -202,7 +213,6 @@ typedef struct {
             Vec3 p;
             Vec3 n;
             MaterialHandle mat;
-            // For disk
             f32 r;
         } disk;
         struct {
@@ -232,7 +242,7 @@ typedef struct {
         } bvh_node;
         struct {
             Bounds3 bounds;
-            ObjectHandle sides_list;
+            ObjectHandle sides;
         } box;
         struct {
             f32 time[2];
@@ -312,7 +322,8 @@ MaterialHandle material_dielectric(World *world, f32 roughness, f32 ext_ior, f32
 MaterialHandle material_diffuse_light(World *world, TextureHandle t, LightFlags flags);
 MaterialHandle material_mirror(World *world);
 
-ObjectHandle object_list(World *world);
+#define object_list(_world) object_listr(_world, 0)
+ObjectHandle object_listr(World *world, u32 reserve);
 ObjectHandle object_disk(World *world, Vec3 p, Vec3 n, f32 r, MaterialHandle mat);
 ObjectHandle object_sphere(World *world, Vec3 p, f32 r, MaterialHandle mat);
 ObjectHandle object_transform(World *world, ObjectHandle obj, Transform transform);

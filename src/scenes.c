@@ -15,20 +15,20 @@ init_scene2(World *world, Image *image) {
         for (i32 b = -11;
              b < 11;
              b++) {
-            f32 choose_mat = random(&global_entropy);
-            Vec3 center = v3(a + 0.9f * random(&global_entropy),
+            f32 choose_mat = random(&rng);
+            Vec3 center = v3(a + 0.9f * random(&rng),
                              0.2,
-                             b + 0.9 * random(&global_entropy));
+                             b + 0.9 * random(&rng));
 
             if (length(v3sub(center, v3(4, 0.2, 0))) > 0.9) {
                 if (choose_mat < 0.8) {
-                    Vec3 albedo = v3mul(random_vector(&global_entropy, 0.1f, 1.0f), random_vector(&global_entropy, 0.1f, 1.0f));
+                    Vec3 albedo = v3mul(random_vector(&rng, 0.1f, 1.0f), random_vector(&rng, 0.1f, 1.0f));
                     MaterialHandle mat = material_lambertian(world, texture_solid(world, albedo));       
                     add_object_to_list(&bvh, object_sphere(world, center, 0.2f, mat));
                 } else if (choose_mat < 0.95) {
-                    f32 roughness = random_uniform(&global_entropy, 0, 0.5);
-                    Vec3 albedo = random_vector(&global_entropy, 0.5, 1);
-                    // MaterialHandle mat = material_metal(world, texture_solid(world, albedo), fuzz, random_uniform(&global_entropy, 0.5, 1));       
+                    f32 roughness = random_uniform(&rng, 0, 0.5);
+                    Vec3 albedo = random_vector(&rng, 0.5, 1);
+                    // MaterialHandle mat = material_metal(world, texture_solid(world, albedo), fuzz, random_uniform(&rng, 0.5, 1));       
                     MaterialHandle mat = material_metal(world, roughness, texture_solid(world, albedo));       
                     add_object_to_list(&bvh, object_sphere(world, center, 0.2f, mat));
                 } else {
@@ -43,12 +43,12 @@ init_scene2(World *world, Image *image) {
     MaterialHandle di_m = material_dielectric(world, 0, 1, 1.5, texture_solid(world, v3s(1)), texture_solid(world, v3(1, 1, 0)));       
     add_object_to_world(world, object_sphere(world, v3(0, 1, 0), 1, di_m));
     
-    // MaterialHandle la_m = material_lambertian(world, texture_solid(world, v3(0.4, 0.2, 0.1)));
-    // add_object_to_world(world, object_sphere(world, v3(-4, 1, 0), 1, la_m));
+    MaterialHandle la_m = material_lambertian(world, texture_solid(world, v3(0.4, 0.2, 0.1)));
+    add_object_to_world(world, object_sphere(world, v3(-4, 1, 0), 1, la_m));
     
     // MaterialHandle me_m = material_plastic(world, 0, 1, 1.5, texture_solid(world, v3(0.7, 0.6, 0.5)), texture_solid(world, v3s(1)));       
-    // MaterialHandle me_m = material_metal(world, 0, texture_solid(world, v3(0.7, 0.6, 0.5)));
-    // add_object_to_world(world, object_sphere(world, v3(4, 1, 0), 1, me_m));
+    MaterialHandle me_m = material_metal(world, 0, texture_solid(world, v3(0.7, 0.6, 0.5)));
+    add_object_to_world(world, object_sphere(world, v3(4, 1, 0), 1, me_m));
     
     f32 aspect_ratio = (f32)image->w / (f32)image->h;
 
@@ -62,8 +62,72 @@ init_scene2(World *world, Image *image) {
 }
 
 void 
+init_scene_bigger(World *world, Image *image) {
+    world->backgorund_color = v3(0.70, 0.80, 1.00);  
+    
+    MaterialHandle sky = material_diffuse_light(world, texture_image(world, load_bmp("pano.bmp")), LightFlags_BothSided);
+    add_object_to_world(world, object_sphere(world, v3(0, 0, 0), 1000, sky));
+    
+    MaterialHandle ground_mat = material_lambertian(world,
+        texture_checkerboard3d(world,
+        texture_solid(world, v3(0.2, 0.1, 0.3)),
+        texture_solid(world, v3(0.9, 0.9, 0.9))));
+    // add_object_to_world(world, object_sphere(world, v3(0, -1000, 0), 1000, ground_mat));
+    
+    MaterialHandle m0 = material_dielectric(world, 0, 1, 1.5, texture_solid(world, v3s(1)), texture_solid(world, v3(1, 1, 1)));
+    add_object_to_world(world, object_sphere(world, v3(0, 1, 0), 1, m0));
+    MaterialHandle m1 = material_metal(world, 0, texture_solid(world, v3(0.7, 0.6, 0.5)));
+    add_object_to_world(world, object_sphere(world, v3(-4, 1, 0), 1, m1));
+    MaterialHandle m2 = material_lambertian(world, texture_image(world, load_bmp("earth.bmp")));
+    add_object_to_world(world, object_sphere(world, v3(4, 1, 0), 1, m2));
+    
+    MaterialHandle lightm = material_diffuse_light(world, texture_solid(world, v3s(25)), 0);
+    add_object_to_world(world, object_sphere(world, v3(0, 3, 3), 1, lightm));
+    
+    ObjectList bvh = object_list_init(&world->arena, 0);
+    u32 obj_cnt = 100;
+    for (u32 obj_idx = 0;
+         obj_idx < obj_cnt;
+         ++obj_idx) {
+        f32 pos_rad = 10;
+        Vec3 p;
+        do {
+            p = random_vector(&rng, -pos_rad, pos_rad);
+            p.y = 0.0f;
+        } while(length(v3sub(v3(4, 0, 0), p)) < 1 || length(v3sub(v3(-4, 0, 0), p)) < 1 || length(v3sub(v3(0, 0, 0), p)) < 1);
+        
+        MaterialHandle mat;
+        f32 choose_mat = random(&rng);
+        if (choose_mat < 0.5) {
+            f32 r = random(&rng);
+            // f32 r =0.1;
+            Vec3 d = random_vector(&rng, 0, 1);
+            mat = material_plastic(world, r, 1, 1.5, texture_solid(world, d), texture_solid(world, v3s(1)));
+        } else {
+            Vec3 d = random_vector(&rng, 0, 1);
+            Vec3 t = random_vector(&rng, 0, 1);
+            mat = material_dielectric(world, 0, 1, 1.5, texture_solid(world, d), texture_solid(world, t));
+        }
+        
+        ObjectHandle obj;
+        f32 choose_obj = random(&rng);
+        if (choose_obj < 0.5) {
+            obj = object_sphere(world, v3add(p, v3(0, 0.4, 0)), 0.4, mat);
+        } else {
+            obj = object_box(world, v3add(p, v3(-0.2, 0, -0.2)), v3add(p, v3(0.2, 0.4, 0.2)), mat);
+        }
+        add_object_to_list(&bvh, obj);
+    }
+    
+    add_object_to_world(world, object_bvh_node(world, bvh.a, bvh.size));
+    
+    world->camera = camera_perspective(v3(20, 3, 6),  v3(0, 2, 0), v3(0, 1, 0), 
+        (f32)image->w / (f32)image->h, rad(20), 0.0f, 10.0f, 0, 1);
+}
+
+void 
 init_scene1(World *world, Image *image) {
-    MaterialHandle marble = material_lambertian(world, texture_perlin(world, make_perlin(&world->arena, &global_entropy), 4.0f));
+    MaterialHandle marble = material_lambertian(world, texture_perlin(world, make_perlin(&world->arena, &rng), 4.0f));
     add_object_to_world(world, object_sphere(world, v3(0, 2, 0), 2, marble));
     add_object_to_world(world, object_sphere(world, v3(0, -1000, 0), 1000, marble));
     
@@ -86,49 +150,63 @@ init_scene1(World *world, Image *image) {
 
 void 
 init_cornell_box(World *world, Image *image) {
-    MaterialHandle red   = material_lambertian(world, texture_solid(world, v3(0.65, 0.05, 0.05)));
     MaterialHandle white = material_lambertian(world, texture_solid(world, v3(0.73, 0.73, 0.73)));
+    MaterialHandle red   = material_lambertian(world, texture_solid(world, v3(0.65, 0.05, 0.05)));
     MaterialHandle green = material_lambertian(world, texture_solid(world, v3(0.12, 0.45, 0.15)));
     MaterialHandle light = material_diffuse_light(world, texture_solid(world, v3s(15)), LightFlags_FlipFace);
+    MaterialHandle mirror = material_metal(world, 0, texture_solid(world, v3s(1)));
     
-    add_yz_rect(world, world->obj_list, 0, 555, 0, 555, 555, green);
-    add_yz_rect(world, world->obj_list, 0, 555, 0, 555, 0, red);
-    add_xz_rect(world, world->obj_list, 213, 343, 227, 332, 554, light);
-    // add_xz_rect(world, world->obj_list, 113, 443, 127, 432, 554, light);
-    add_xz_rect(world, world->obj_list, 0, 555, 0, 555, 0, white);
-    add_xz_rect(world, world->obj_list, 0, 555, 0, 555, 555, white);
-    add_xy_rect(world, world->obj_list, 0, 555, 0, 555, 555, white);
+    f32 m = 1 / 1.5f;
+    add_yz_rect(world, world->obj_list, 0, 5.55 * m, 0, 5.55 * m, 5.55 * m, green);
+    // add_yz_rect(world, world->obj_list, 0, 5.55 * m, -5.55 * m, 5.55 * m, 5.55 * m, mirror);
+    add_yz_rect(world, world->obj_list, 0, 5.55 * m, 0, 5.55 * m, 0, red);
+    add_xz_rect(world, world->obj_list, 2.13* m, 3.43* m, 2.27* m, 3.32* m, 5.54* m, light);
+    // add_xz_rect(world, world->obj_list, 1.13 *m, 4.43*m, 1.27*m, 4.32*m, 5.54*m, light);
+    add_xz_rect(world, world->obj_list, 0, 5.55 * m, 0, 5.55 * m, 0, white);
+    add_xz_rect(world, world->obj_list, 0, 5.55 * m, 0, 5.55 * m, 5.55 * m, white);
+    add_xy_rect(world, world->obj_list, 0, 5.55 * m, 0, 5.55 * m, 5.55 * m, white);
+    // add_yz_rect(world, world->obj_list, 1.13 *m, 4.43*m, 1.27*m, 4.32*m, 5.54*m, mirror);
     
-    ObjectHandle light_list = object_list(world);
-    add_xz_rect(world, light_list, 213, 343, 227, 332, 554, light);
+    add_xz_rect(world, world->important_objects, 2.13* m, 3.43* m, 2.27* m, 3.32* m, 5.54* m, light);
+    // add_xz_rect(world, world->important_objects, 1.13 *m, 4.43*m, 1.27*m, 4.32*m, 5.54*m, light);
     
     // world->backgorund_color = v3s(1);
     
     // MaterialHandle mirror = material_mirror(world);
-    MaterialHandle mat = material_plastic(world, 0.0, 1, 1.5, texture_solid(world, v3(0.7, 0.6, 0.5)), texture_solid(world, v3s(1)));
-    MaterialHandle mat1 = material_plastic(world, 0.0, 1, 1.5, texture_solid(world, v3(0, 0, 1)), texture_solid(world, v3s(1)));
-    MaterialHandle mat2 = material_plastic(world, 0.0, 1, 1.5, texture_solid(world, v3(1, 0, 0)), texture_solid(world, v3s(1)));
+    // MaterialHandle mat = material_plastic(world, 0.0, 1, 1.5, texture_solid(world, v3(0.7, 0.6, 0.5)), texture_solid(world, v3s(1)));
+    // MaterialHandle m1 = material_plastic(world, 0.0, 1, 1.5, texture_solid(world, v3(0, 0, 1)), texture_solid(world, v3s(1)));
+    // MaterialHandle m2 = material_plastic(world, 0.0, 1, 1.5, texture_solid(world, v3(1, 0, 0)), texture_solid(world, v3s(1)));
+    // MaterialHandle m1 = material_dielectric(world, 0, 1, 1.5, texture_solid(world, v3s(1)), texture_solid(world, v3(1, 1, 0)));       
+    // MaterialHandle m2 = material_dielectric(world, 0, 1, 1.5, texture_solid(world, v3s(1)), texture_solid(world, v3(1, 0, 1)));       
+
     // MaterialHandle mat = white;
-    // ObjectHandle box1 = object_transform(world, object_box(world, v3(0, 0, 0), v3(165, 330, 165), mat),
-    //     transform_t_euler(v3(265,0,295), 0, rad(15), 0));
-    // ObjectHandle box2 = object_transform(world, object_box(world, v3(0, 0, 0), v3(165, 165, 165), mat),
-    //     transform_t_euler(v3(130, 0, 65), 0, rad(-18), 0));
+    // ObjectHandle box1 = object_transform(world, object_box(world, v3(0, 0, 0), v3(1.65 * m, 3.30 * m, 1.65 *m), mat),
+    //     transform_t_euler(v3(2.65*m, 0, 2.95*m), 0, rad(15), 0));
+    // ObjectHandle box2 = object_transform(world, object_box(world, v3(0, 0, 0), v3(1.65*m, 1.65*m, 1.65*m), mat),
+    //     transform_t_euler(v3(1.30*m, 0, 0.65*m), 0, rad(-18), 0));
     // ObjectList bvh = object_list_init(&world->arena, 2);
     // add_object_to_list(&bvh, box2);
     // add_object_to_list(&bvh, box1);
     // add_object_to_world(world, object_bvh_node(world, bvh.a, bvh.size));
     
-    add_object_to_world(world, object_sphere(world, v3(350,100,280), 100, mat1));
-    add_object_to_world(world, object_sphere(world, v3(210, 90, 190), 90, mat2));
+    // add_object_to_world(world, object_sphere(world, v3(400,100,280), 100, m1));
+    // add_object_to_world(world, object_sphere(world, v3(150, 90, 190), 90, m2));
+    // world->backgorund_color = v3s(1);
+    MaterialHandle monk_mot = material_dielectric(world, 0, 1, 1.5, texture_solid(world, v3s(1)), texture_solid(world, v3(0.2, 0.2, 1)));
+    // MaterialHandle monk_mot = material_lambertian(world, texture_solid(world, v3(0.2, 0.2, 1)));
+    // MaterialHandle monk_mot = material_lambertian(world, texture_normal(world));
+
+    // add_object_to_world(world, object_transform(world, add_poly_sphere(world, 1, 10, normal), transform_t(v3(2.7 * m, 2.7 * m, 4.2 * m))));
+    ObjectHandle monkey = object_triangle_mesh_tt(world, load_obj("model.obj"), monk_mot, transform_tr(v3(2.7* m, 2.7* m, 3.5* m), q4euler(rad(-10), PI, 0)));
+    add_object_to_world(world, monkey);
+    // add_important_object(world, monkey);
 
     // MaterialHandle glass = material_dielectric(world, 1.5f);
     // ObjectHandle sphere = object_sphere(world, v3(190, 90, 190), 90, glass);
     
-    add_important_object(world, light_list);
-    
     f32 aspect_ratio = (f32)image->w / (f32)image->h;
-    Vec3 look_from = v3(278, 278, -800);
-    Vec3 look_at = v3(278, 278, 0);
+    Vec3 look_from = v3(2.78 *m, 2.78*m, -8.00*m);
+    Vec3 look_at = v3(2.78*m, 2.78*m, 0);
     f32 dtf = 10;
     f32 aperture = 0.f;
     world->camera = camera_perspective(look_from, look_at, v3(0, 1, 0), aspect_ratio, rad(40), aperture, dtf, 0, 1);
@@ -143,13 +221,10 @@ init_scene3(World *world, Image *image) {
     f32 aperture = 0.f;
     world->camera = camera_perspective(look_from, look_at, v3(0, 1, 0), aspect_ratio, rad(40), aperture, dtf, 0, 1);
     
-    u64 temp_arena_size = MEGABYTES(1);
-    MemoryArena temp_arena = memory_arena(malloc(temp_arena_size), temp_arena_size);
-    
     MaterialHandle ground = material_lambertian(world, texture_solid(world, v3(0.48, 0.83, 0.53)));
 
     const int boxes_per_side = 20;
-    ObjectList boxes_list = object_list_init(&temp_arena, boxes_per_side * boxes_per_side);
+    ObjectList boxes_list = object_list_init(&world->arena, boxes_per_side * boxes_per_side);
     for (int i = 0; i < boxes_per_side; i++) {
         for (int j = 0; j < boxes_per_side; j++) {
             f32 w = 100.0;
@@ -157,7 +232,7 @@ init_scene3(World *world, Image *image) {
             f32 z0 = -1000.0 + j*w;
             f32 y0 = 0.0;
             f32 x1 = x0 + w;
-            f32 y1 = random_uniform(&global_entropy, 1, 101);
+            f32 y1 = random_uniform(&rng, 1, 101);
             f32 z1 = z0 + w;
             
             ObjectHandle object = object_box(world, v3(x0,y0,z0), v3(x1,y1,z1), ground);
@@ -174,38 +249,36 @@ init_scene3(World *world, Image *image) {
     add_object_to_world(world, lights);
     add_important_object(world, lights);
         
-    add_object_to_world(world, object_sphere(world, v3(260, 150, 45), 50, material_dielectric(world, 0, 1, 1.5, texture_solid(world, v3s(1)), texture_solid(world, v3s(1)))));
-    add_object_to_world(world, object_sphere(world, v3(0, 150, 145), 50, material_metal(world, 1, texture_solid(world, v3(0.8, 0.8, 0.9)))));
+    // add_object_to_world(world, object_sphere(world, v3(260, 150, 45), 50, material_dielectric(world, 0, 1, 1.5, texture_solid(world, v3s(1)), texture_solid(world, v3s(1)))));
+    // add_object_to_world(world, object_sphere(world, v3(0, 150, 145), 50, material_metal(world, 0.3, texture_solid(world, v3(0.8, 0.8, 0.9)))));
 
     MaterialHandle sphere_mat = material_lambertian(world, texture_solid(world, v3(0.7, 0.3, 0.1)));
     ObjectHandle sphere = object_sphere(world, v3(400, 400, 200), 50, sphere_mat);
     add_object_to_world(world, object_animated_transform(world, sphere, 0, 1, v3s(0), v3(30, 0, 0), QUAT4_IDENTITY, QUAT4_IDENTITY));
 
-    ObjectHandle bound1 = object_sphere(world, v3(360,150,145), 70, material_dielectric(world, 0, 1, 1.5, texture_solid(world, v3s(1)), texture_solid(world, v3s(1))));
-    add_object_to_world(world, bound1);
-    MaterialHandle smoke1_mat = material_isotropic(world, texture_solid(world, v3(0.2, 0.4, 0.9)));
-    add_object_to_world(world, object_constant_medium(world, 0.2f, smoke1_mat, bound1));
+    // ObjectHandle bound1 = object_sphere(world, v3(360,150,145), 70, material_dielectric(world, 0, 1, 1.5, texture_solid(world, v3s(1)), texture_solid(world, v3s(1))));
+    // add_object_to_world(world, bound1);
+    // MaterialHandle smoke1_mat = material_isotropic(world, texture_solid(world, v3(0.2, 0.4, 0.9)));
+    // add_object_to_world(world, object_constant_medium(world, 0.2f, smoke1_mat, bound1));
     
-    ObjectHandle bound2 = object_sphere(world, v3(0,0,0), 5000, material_dielectric(world, 0, 1, 1.5, texture_solid(world, v3s(1)), texture_solid(world, v3s(1))));
-    add_object(world, world->obj_list, bound2);
-    MaterialHandle smoke2_mat = material_isotropic(world, texture_solid(world, v3s(1)));
-    add_object(world, world->obj_list, object_constant_medium(world, 0.0001f, smoke2_mat, bound2));
+    // ObjectHandle bound2 = object_sphere(world, v3(0,0,0), 5000, material_dielectric(world, 0, 1, 1.5, texture_solid(world, v3s(1)), texture_solid(world, v3s(1))));
+    // add_object(world, world->obj_list, bound2);
+    // MaterialHandle smoke2_mat = material_isotropic(world, texture_solid(world, v3s(1)));
+    // add_object(world, world->obj_list, object_constant_medium(world, 0.0001f, smoke2_mat, bound2));
 
     MaterialHandle emat = material_lambertian(world, texture_image(world, load_bmp("earth.bmp")));
     add_object(world, world->obj_list, object_sphere(world, v3(400,200,400), 100, emat));
-    MaterialHandle marble = material_lambertian(world, texture_perlin(world, make_perlin(&world->arena, &global_entropy), 0.1f));  
+    MaterialHandle marble = material_lambertian(world, texture_perlin(world, make_perlin(&world->arena, &rng), 0.1f));  
     add_object_to_world(world, object_sphere(world, v3(220,280,300), 80, marble));
 
     MaterialHandle white = material_lambertian(world, texture_solid(world, v3(.73, .73, .73)));
     int ns = 1000;
-    ObjectList spheres = object_list_init(&temp_arena, ns);
+    ObjectList spheres = object_list_init(&world->arena, ns);
     for (int j = 0; j < ns; j++) {
-        ObjectHandle sphere = object_sphere(world, v3add(v3(-100,270,395), random_vector(&global_entropy, 0, 165)), 10, white);
+        ObjectHandle sphere = object_sphere(world, v3add(v3(-100,270,395), random_vector(&rng, 0, 165)), 10, white);
         add_object_to_list(&spheres, sphere);
     }
-    add_object_to_world(world, object_bvh_node(world, spheres.a, ns));
-    
-    free(temp_arena.data);
+    // add_object_to_world(world, object_bvh_node(world, spheres.a, ns));
 }
 
 void 
