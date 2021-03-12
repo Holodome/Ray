@@ -26,6 +26,23 @@
 #define UNREACHABLE __builtin_unreachable()
 #endif 
 
+#define OS_WINDOWS 0
+#define OS_MACOS   0
+#define OS_LINUX   0
+
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+#undef  OS_WINDOWS
+#define OS_WINDOWS 1
+#elif defined(__APPLE__)
+#undef OS_MACOS
+#define OS_MACOS 1
+#elif defined(__linux__)
+#undef OS_LINUX
+#define OS_LINUX 1
+#else
+#error Unknown os
+#endif
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>

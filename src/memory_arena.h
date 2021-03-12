@@ -20,7 +20,7 @@ typedef struct {
     u64 last_data_size;
 } TempMemory;
 
-inline TempMemory 
+static inline TempMemory 
 temp_memory_begin(MemoryArena *arena) {
     ++arena->temp_count;
     return (TempMemory) {
@@ -30,7 +30,7 @@ temp_memory_begin(MemoryArena *arena) {
     };
 }
 
-inline void
+static inline void
 temp_memory_end(TempMemory mem) {
     assert(mem.arena->temp_count);
     --mem.arena->temp_count;
@@ -38,7 +38,7 @@ temp_memory_end(TempMemory mem) {
     mem.arena->last_data_size = mem.last_data_size;
 }
 
-inline MemoryArena 
+static inline MemoryArena 
 memory_arena(void *buffer, u64 buffer_size) {
     return (MemoryArena) {
         .data = buffer,
@@ -46,7 +46,7 @@ memory_arena(void *buffer, u64 buffer_size) {
     };
 }
 
-inline umm 
+static inline umm 
 align_forward(umm ptr, u64 align) {
     assert(!(align & (align - 1)));
     
@@ -61,7 +61,7 @@ align_forward(umm ptr, u64 align) {
 }
 
 #define arena_alloc(_a, _size) arena_alloc_align(_a, _size, DEFAULT_ALIGNMENT)
-inline void *
+static inline void *
 arena_alloc_align(MemoryArena *a, u64 size, u64 align) {
     void *result = 0;
     
@@ -92,7 +92,7 @@ arena_alloc_align(MemoryArena *a, u64 size, u64 align) {
 }
 
 #define arena_realloc(_a, _old_mem, _old_size, _new_size) arena_realloc_align(_a, _old_mem, _old_size, _new_size, DEFAULT_ALIGNMENT)
-inline void *
+static inline void *
 arena_realloc_align(MemoryArena *a, void *old_mem_v, u64 old_size, u64 new_size, u64 align) {
     void *result = 0;
     
@@ -123,7 +123,7 @@ arena_realloc_align(MemoryArena *a, void *old_mem_v, u64 old_size, u64 new_size,
     return result;
 }
 
-inline void *
+static inline void *
 arena_copy(MemoryArena *a, void *src, u64 size) {
     void *result = arena_alloc(a, size);
     memcpy(result, src, size);

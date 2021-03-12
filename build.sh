@@ -1,10 +1,10 @@
 #!/bin/bash
 
 mkdir -p build
-pushd ./build 
+pushd ./build
 
-build_options="-Wall -pedantic -Wno-writable-strings -lm -O3 -I../src"
+build_options="-Wall -pedantic -pthread -Wno-writable-strings -lm -O0 -std=gnu11 -I../src"
 
-clang -g $build_options -o ray ../src/main.c
+clang -g $build_options -o ray ../src/ray.c
 
 popd

@@ -4,14 +4,14 @@
 #include "ray_random.h"
 #include "ray_math.h"
 
-inline u32 
+static inline u32 
 rgba_pack_4x8(u32 r, u32 g, u32 b, u32 a) {
     // If values passed here are greater that 255 something for sure went wrong
     assert(r <= 0xFF && b <= 0xFF && b <= 0xFF && a <= 0xFF);
     return r << 0 | g << 8 | b << 16 | a << 24;
 }
 
-inline u32
+static inline u32
 rgba_pack_4x8_linear1(f32 r, f32 g, f32 b, f32 a) {
     u32 ru = roundf(clamp(r, 0, 0.999f) * 255.0f);
     u32 gu = roundf(clamp(g, 0, 0.999f) * 255.0f);
@@ -20,7 +20,7 @@ rgba_pack_4x8_linear1(f32 r, f32 g, f32 b, f32 a) {
     return rgba_pack_4x8(ru, gu, bu, au);
 }
 
-inline f32
+static inline f32
 linear1_to_srgb1(f32 l) {
     l = clamp(l, 0, 0.999f);
     
@@ -31,7 +31,7 @@ linear1_to_srgb1(f32 l) {
     return s;
 }
 
-inline void 
+static inline void 
 format_time_ms(char *buffer, u64 buffer_size, u64 time) {
     u64 ms    = time % 1000;
     u64 sec   = time % 60000 / 1000;
@@ -56,7 +56,7 @@ format_time_ms(char *buffer, u64 buffer_size, u64 time) {
     snprintf(buffer, buffer_size, "%llums", ms);
 }
 
-inline void 
+static inline void 
 format_number_with_thousand_separators(char *buffer, u64 buffer_size, u64 number) {
     memset(buffer, 0, buffer_size);
     
@@ -84,7 +84,7 @@ format_number_with_thousand_separators(char *buffer, u64 buffer_size, u64 number
     }   
 }
 
-inline void 
+static inline void 
 format_bytes(char *buffer, u64 buffer_size, u64 bytes) {
     u64 b  = bytes % (1 << 10);
     u64 kb = bytes % (1 << 20) / (1 << 10);

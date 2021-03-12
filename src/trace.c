@@ -18,16 +18,16 @@ align_to_direction(Vec3 n, f32 cos_theta, f32 phi) {
 
 static Vec3 
 sample_cosine_weighted_hemisphere(RandomSeries *entropy, Vec3 n) {
-    f32 r0 = random(entropy);
-    f32 r1 = random(entropy);
+    f32 r0 = randomu(entropy);
+    f32 r1 = randomu(entropy);
     f32 cos_theta = sqrt32(r0);
     return align_to_direction(n, cos_theta, r1 * TWO_PI);
 }
 
 static Vec3  
 sample_ggx_distribution(RandomSeries *entropy, Vec3 n, f32 alpha_sq) {
-    f32 r0 = random(entropy);
-    f32 r1 = random(entropy);
+    f32 r0 = randomu(entropy);
+    f32 r1 = randomu(entropy);
     f32 cos_theta = sqrt32(saturate((1.0 - r0) / (r0 * (alpha_sq - 1.0) + 1.0)));
     return align_to_direction(n, cos_theta, r1 * TWO_PI);
 }
@@ -285,7 +285,7 @@ material_scatter(World *world, Ray ray, HitRecord hrec, RayCastData data, Scatte
         } break;
         case MaterialType_Plastic: {
             Vec3 m = sample_ggx_distribution(data.entropy, no, sq(mat->roughness));
-            if (random(data.entropy) < fresnel_dielectric(wi, m, mat->ext_ior / mat->int_ior)) {
+            if (randomu(data.entropy) < fresnel_dielectric(wi, m, mat->ext_ior / mat->int_ior)) {
                 srec->dir = sample_cosine_weighted_hemisphere(data.entropy, no);
             } else {
                 srec->dir = reflect(wi, m);
@@ -302,7 +302,7 @@ material_scatter(World *world, Ray ray, HitRecord hrec, RayCastData data, Scatte
             f32 a = remap_roughness(mat->roughness, ndoti);
                
             Vec3 microfacet = sample_ggx_distribution(data.entropy, n, a);
-            if (random(data.entropy) > fresnel_dielectric(wi, microfacet, eta)) {
+            if (randomu(data.entropy) > fresnel_dielectric(wi, microfacet, eta)) {
                 srec->dir = refract(wi, no, eta);
                 // assert(dot(n, srec->dir) * dot(n, wi) >= 0.0);
             } else {
@@ -601,8 +601,8 @@ get_object_random(World *world, ObjectHandle obj_handle, Vec3 o, RayCastData dat
     Object *obj = get_object(world, obj_handle);
     switch (obj->type) {
         case ObjectType_Triangle: {
-            f32 r1 = sqrt32(random(data.entropy));
-            f32 r2 = random(data.entropy);
+            f32 r1 = sqrt32(randomu(data.entropy));
+            f32 r2 = randomu(data.entropy);
             result = v3add3(v3muls(obj->triangle.p[0], 1.0f - r1),
                             v3muls(obj->triangle.p[1], r1 * (1.0f - r2)),
                             v3muls(obj->triangle.p[2], r1 * r2));
@@ -626,8 +626,8 @@ get_object_random(World *world, ObjectHandle obj_handle, Vec3 o, RayCastData dat
                 obj->triangle_mesh.p[obj->triangle_mesh.tri_indices[tri_idx * 3 + 2]],
             };
             
-            f32 r1 = sqrt32(random(data.entropy));
-            f32 r2 = random(data.entropy);
+            f32 r1 = sqrt32(randomu(data.entropy));
+            f32 r2 = randomu(data.entropy);
             result = v3add3(v3muls(p[0], 1.0f - r1),
                             v3muls(p[1], 1.0f - r2),
                             v3muls(p[2], r1 * r2));
@@ -759,7 +759,7 @@ object_hit(World *world, Ray ray, ObjectHandle obj_handle, f32 t_min, f32 t_max,
                         }
                         
                         f32 distance_inside_boundary = hit2.t - hit1.t;
-                        f32 hit_dist = obj->constant_medium.neg_inv_density * logf(random(data.entropy));
+                        f32 hit_dist = obj->constant_medium.neg_inv_density * logf(randomu(data.entropy));
                         
                         if (hit_dist < distance_inside_boundary) {
                             hrec->t = hit1.t + hit_dist;
@@ -925,7 +925,7 @@ ray_cast(World *world, Ray ray, i32 depth, RayCastData data) {
         
         // if (get_material(world, hrec.mat)->type == MaterialType_Lambertian) {
             // Vec3 dir;
-            // if (random(data.entropy) < 0.5) {
+            // if (randomu(data.entropy) < 0.5) {
             //     dir = normalize(get_object_random(world, world->important_objects, hrec.p, data));    
             // } else {
             //     dir = srec.dir;
@@ -941,7 +941,7 @@ ray_cast(World *world, Ray ray, i32 depth, RayCastData data) {
         //     srec.weight = v3divs(srec.bsdf, light_pdf);
         // }
         
-        // if (random(data.entropy) < 0.5) {
+        // if (randomu(data.entropy) < 0.5) {
         //     srec.dir = normalize(get_object_random(world, world->important_objects, hrec.p, data));    
         // }
         // f32 light_pdf = get_object_pdf_value(world, world->important_objects, hrec.p, srec.dir, data);
@@ -961,7 +961,7 @@ ray_cast(World *world, Ray ray, i32 depth, RayCastData data) {
 #if ENABLE_RUSSIAN_ROULETTE
         if (bounce > 3) {
             f32 p = max32(max32(throughput.x, throughput.y), throughput.z);
-            if (random(data.entropy) > min32(p, 0.95f)) {
+            if (randomu(data.entropy) > min32(p, 0.95f)) {
                 ++data.stats->russian_roulette_terminated_bounces;
                 break;
             }

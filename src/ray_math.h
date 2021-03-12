@@ -11,22 +11,22 @@
 
 #define ANGLE_EPSILON 0.0001523048f
 
-inline f32 
+static inline f32 
 sq(f32 a) {
     return a * a;
 }
 
-inline f32 
+static inline f32 
 rad(f32 deg) {
     return deg * PI / 180.0f;
 }
 
-inline f32 
+static inline f32 
 lerp(f32 a, f32 b, f32 t) {
     return (1.0f - t) * a + t * b;
 }
 
-inline f32 
+static inline f32 
 clamp(f32 x, f32 low, f32 high) {
 #if 1
     return max32(min32(high, x), low);
@@ -41,7 +41,7 @@ clamp(f32 x, f32 low, f32 high) {
 #endif 
 }
 
-inline f32 
+static inline f32 
 saturate(f32 x) {
     return clamp(x, 0, 1);
 }
@@ -53,7 +53,7 @@ typedef union {
     f32 e[2];
 } Vec2;
 
-inline Vec2 
+static inline Vec2 
 v2(f32 x, f32 y) {
     Vec2 result;
     result.x = x;
@@ -61,7 +61,7 @@ v2(f32 x, f32 y) {
     return result;
 }
 
-inline Vec2 
+static inline Vec2 
 v2s(f32 s) {
     Vec2 result;
     result.x = s;
@@ -69,7 +69,7 @@ v2s(f32 s) {
     return result;
 }
 
-inline Vec2 
+static inline Vec2 
 v2neg(Vec2 a) {
     Vec2 result;
     result.x = -a.x;
@@ -77,7 +77,7 @@ v2neg(Vec2 a) {
     return result;
 }
 
-inline Vec2 
+static inline Vec2 
 v2add(Vec2 a, Vec2 b) {
     Vec2 result;
     result.x = a.x + b.x;
@@ -85,12 +85,12 @@ v2add(Vec2 a, Vec2 b) {
     return result;
 }
 
-inline Vec2
+static inline Vec2
 v2add3(Vec2 a, Vec2 b, Vec2 c) {
     return v2add(a, v2add(b, c));
 }
 
-inline Vec2 
+static inline Vec2 
 v2sub(Vec2 a, Vec2 b) {
     Vec2 result;
     result.x = a.x - b.x;
@@ -98,7 +98,7 @@ v2sub(Vec2 a, Vec2 b) {
     return result;
 }
 
-inline Vec2 
+static inline Vec2 
 v2div(Vec2 a, Vec2 b) {
     Vec2 result;
     result.x = a.x / b.x;
@@ -106,7 +106,7 @@ v2div(Vec2 a, Vec2 b) {
     return result;
 }
 
-inline Vec2 
+static inline Vec2 
 v2mul(Vec2 a, Vec2 b) {
     Vec2 result;
     result.x = a.x * b.x;
@@ -114,7 +114,7 @@ v2mul(Vec2 a, Vec2 b) {
     return result;
 }
 
-inline Vec2 
+static inline Vec2 
 v2divs(Vec2 a, f32 b) {
     Vec2 result;
     result.x = a.x / b;
@@ -122,7 +122,7 @@ v2divs(Vec2 a, f32 b) {
     return result;
 }
 
-inline Vec2 
+static inline Vec2 
 v2muls(Vec2 a, f32 b) {
     Vec2 result;
     result.x = a.x * b;
@@ -140,7 +140,7 @@ typedef union {
     f32 e[3];
 } Vec3;
 
-inline Vec3 
+static inline Vec3 
 v3(f32 x, f32 y, f32 z) {
     Vec3 result;
     result.x = x;
@@ -149,7 +149,7 @@ v3(f32 x, f32 y, f32 z) {
     return result;
 }
 
-inline Vec3 
+static inline Vec3 
 v3s(f32 s) {
     Vec3 result;
     result.x = s;
@@ -158,7 +158,7 @@ v3s(f32 s) {
     return result;
 }
 
-inline Vec3 
+static inline Vec3 
 v3neg(Vec3 a) {
     Vec3 result;
     result.x = -a.x;
@@ -167,7 +167,7 @@ v3neg(Vec3 a) {
     return result;
 }
 
-inline Vec3 
+static inline Vec3 
 v3add(Vec3 a, Vec3 b) {
     Vec3 result;
     result.x = a.x + b.x;
@@ -176,12 +176,12 @@ v3add(Vec3 a, Vec3 b) {
     return result;
 }
 
-inline Vec3
+static inline Vec3
 v3add3(Vec3 a, Vec3 b, Vec3 c) {
     return v3add(a, v3add(b, c));
 }
 
-inline Vec3 
+static inline Vec3 
 v3sub(Vec3 a, Vec3 b) {
     Vec3 result;
     result.x = a.x - b.x;
@@ -190,7 +190,7 @@ v3sub(Vec3 a, Vec3 b) {
     return result;
 }
 
-inline Vec3 
+static inline Vec3 
 v3div(Vec3 a, Vec3 b) {
     Vec3 result;
     result.x = a.x / b.x;
@@ -199,7 +199,7 @@ v3div(Vec3 a, Vec3 b) {
     return result;
 }
 
-inline Vec3 
+static inline Vec3 
 v3mul(Vec3 a, Vec3 b) {
     Vec3 result;
     result.x = a.x * b.x;
@@ -208,7 +208,7 @@ v3mul(Vec3 a, Vec3 b) {
     return result;
 }
 
-inline Vec3 
+static inline Vec3 
 v3divs(Vec3 a, f32 b) {
     Vec3 result;
     result.x = a.x / b;
@@ -217,7 +217,7 @@ v3divs(Vec3 a, f32 b) {
     return result;
 }
 
-inline Vec3 
+static inline Vec3 
 v3muls(Vec3 a, f32 b) {
     Vec3 result;
     result.x = a.x * b;
@@ -226,13 +226,13 @@ v3muls(Vec3 a, f32 b) {
     return result;
 }
 
-inline f32 
+static inline f32 
 dot(Vec3 a, Vec3 b) {
     f32 result = a.x * b.x + a.y * b.y + a.z * b.z;
     return result;
 }
 
-inline Vec3 
+static inline Vec3 
 cross(Vec3 a, Vec3 b) {
     Vec3 result;
     result.x = a.y * b.z - a.z * b.y;
@@ -241,26 +241,26 @@ cross(Vec3 a, Vec3 b) {
     return result;
 }
 
-inline f32 
+static inline f32 
 length_sq(Vec3 a) {
     f32 result = dot(a, a);
     return result;
 }
 
-inline f32 
+static inline f32 
 length(Vec3 a) {
     f32 result = sqrt32(length_sq(a));
     return result;
 }
 
-inline Vec3 
+static inline Vec3 
 normalize(Vec3 a)
 {
     Vec3 result = v3muls(a, rsqrt32(length_sq(a)));
     return result;
 }
 
-inline Vec3 
+static inline Vec3 
 v3lerp(Vec3 a, Vec3 b, f32 t) {
     Vec3 result;
     result.x = lerp(a.x, b.x, t);
@@ -269,7 +269,7 @@ v3lerp(Vec3 a, Vec3 b, f32 t) {
     return result;
 }
 
-inline bool 
+static inline bool 
 vec3_is_near_zero(Vec3 a) {
     const f32 epsilon = 1e-4f;
     bool result = (abs32(a.x) < epsilon) && (abs32(a.y) < epsilon) && (abs32(a.z) < epsilon);
@@ -283,7 +283,7 @@ typedef union {
     f32 e[4];
 } Vec4;
 
-inline Vec4 
+static inline Vec4 
 v4neg(Vec4 a) {
     Vec4 result;
     result.x = -a.x;
@@ -293,7 +293,7 @@ v4neg(Vec4 a) {
     return result;
 }
 
-inline Vec4 
+static inline Vec4 
 v4add(Vec4 a, Vec4 b) {
     Vec4 result;
     result.x = a.x + b.x;
@@ -303,7 +303,7 @@ v4add(Vec4 a, Vec4 b) {
     return result;
 }
 
-inline Vec4 
+static inline Vec4 
 v4sub(Vec4 a, Vec4 b) {
     Vec4 result;
     result.x = a.x - b.x;
@@ -313,7 +313,7 @@ v4sub(Vec4 a, Vec4 b) {
     return result;
 }
 
-inline Vec4 
+static inline Vec4 
 v4div(Vec4 a, Vec4 b) {
     Vec4 result;
     result.x = a.x / b.x;
@@ -323,7 +323,7 @@ v4div(Vec4 a, Vec4 b) {
     return result;
 }
 
-inline Vec4 
+static inline Vec4 
 v4mul(Vec4 a, Vec4 b) {
     Vec4 result;
     result.x = a.x * b.x;
@@ -333,7 +333,7 @@ v4mul(Vec4 a, Vec4 b) {
     return result;
 }
 
-inline Vec4
+static inline Vec4
 v4divs(Vec4 a, f32 b) {
     Vec4 result;
     result.x = a.x / b;
@@ -343,7 +343,7 @@ v4divs(Vec4 a, f32 b) {
     return result;
 }
 
-inline Vec4
+static inline Vec4
 v4muls(Vec4 a, f32 b) {
     Vec4 result;
     result.x = a.x * b;
@@ -353,7 +353,7 @@ v4muls(Vec4 a, f32 b) {
     return result;
 }
 
-inline Vec4 
+static inline Vec4 
 v4(f32 x, f32 y, f32 z, f32 w) {
     Vec4 result;
     result.x = x;
@@ -363,7 +363,7 @@ v4(f32 x, f32 y, f32 z, f32 w) {
     return result;
 }
 
-inline Vec4 
+static inline Vec4 
 v4s(f32 s) {
     Vec4 result;
     result.x = s;
@@ -373,12 +373,12 @@ v4s(f32 s) {
     return result;
 }
 
-inline f32 
+static inline f32 
 v4dot(Vec4 a, Vec4 b) {
     return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
 
-inline Vec4
+static inline Vec4
 v4normalize(Vec4 a) {
     Vec4 result = v4muls(a, rsqrt32(v4dot(a, a)));
     return result;
@@ -402,7 +402,7 @@ const Mat4x4 MAT4X4_IDENTITY = {
     .m33 = 1
 };
 
-inline Mat4x4
+static inline Mat4x4
 mat4x4_translate(Vec3 t) {
 	Mat4x4 result = MAT4X4_IDENTITY;
     result.e[3][0] = t.x;
@@ -411,7 +411,7 @@ mat4x4_translate(Vec3 t) {
 	return result;
 }
 
-inline Mat4x4
+static inline Mat4x4
 mat4x4_scale(Vec3 s) {
 	Mat4x4 result = {{
         {s.x,   0,   0,  0},
@@ -422,7 +422,7 @@ mat4x4_scale(Vec3 s) {
 	return result;
 }
 
-inline Mat4x4
+static inline Mat4x4
 mat4x4_rotation_x(f32 angle) {
 	const f32 c = cosf(angle);
 	const f32 s = sinf(angle);
@@ -435,7 +435,7 @@ mat4x4_rotation_x(f32 angle) {
 	return(r);
 }
 
-inline Mat4x4
+static inline Mat4x4
 mat4x4_rotation_y(f32 angle) {
 	const f32 c = cosf(angle);
 	const f32 s = sinf(angle);
@@ -448,7 +448,7 @@ mat4x4_rotation_y(f32 angle) {
 	return(r);
 }
 
-inline Mat4x4
+static inline Mat4x4
 mat4x4_rotation_z(f32 angle) {
 	const f32 c = cosf(angle);
 	const f32 s = sinf(angle);
@@ -461,7 +461,7 @@ mat4x4_rotation_z(f32 angle) {
 	return(r);
 }
 
-inline Mat4x4
+static inline Mat4x4
 mat4x4_rotation(f32 angle, Vec3 a) {
 	const f32 c = cosf(angle);
 	const f32 s = sinf(angle);
@@ -480,7 +480,7 @@ mat4x4_rotation(f32 angle, Vec3 a) {
 	return(r);
 }
 
-inline Mat4x4
+static inline Mat4x4
 mat4x4_ortographic_2d(f32 l, f32 r, f32 b, f32 t) {
 	Mat4x4 result =	{{
 		{2.0f / (r - l),    0,                   0, 0},
@@ -491,7 +491,7 @@ mat4x4_ortographic_2d(f32 l, f32 r, f32 b, f32 t) {
 	return result;
 }
 
-inline Mat4x4
+static inline Mat4x4
 mat4x4_ortographic_3d(f32 l, f32 r, f32 b, f32 t, f32 n, f32 f) {
 	Mat4x4 result =	{{
 		{2.0f / (r - l),    0,                   0,                 0},
@@ -502,7 +502,7 @@ mat4x4_ortographic_3d(f32 l, f32 r, f32 b, f32 t, f32 n, f32 f) {
 	return result;
 }
 
-inline Mat4x4
+static inline Mat4x4
 mat4x4_perspective(f32 fov, f32 aspect, f32 n, f32 f) {
 	const f32 toHf = tanf(fov * 0.5f);
 
@@ -515,7 +515,7 @@ mat4x4_perspective(f32 fov, f32 aspect, f32 n, f32 f) {
 	return(r);
 }
 
-inline Mat4x4
+static inline Mat4x4
 mat4x4_mul(Mat4x4 a, Mat4x4 b) {
 	Mat4x4 result;
 	for(int r = 0; r < 4; ++r) {
@@ -529,7 +529,7 @@ mat4x4_mul(Mat4x4 a, Mat4x4 b) {
 	return result;
 }
 
-inline Mat4x4
+static inline Mat4x4
 mat4x4_inverse(Mat4x4 m) {
     f32 coef00 = m.e[2][2] * m.e[3][3] - m.e[3][2] * m.e[2][3];
     f32 coef02 = m.e[1][2] * m.e[3][3] - m.e[3][2] * m.e[1][3];
@@ -593,7 +593,7 @@ mat4x4_inverse(Mat4x4 m) {
     return inverse;
 }
 
-inline Vec3
+static inline Vec3
 mat4x4_mul_vec3(Mat4x4 m, Vec3 v) {
     f32 a = v.e[0] * m.e[0][0] + v.e[1] * m.e[1][0] + v.e[2] * m.e[2][0] + m.e[3][0]; 
     f32 b = v.e[0] * m.e[0][1] + v.e[1] * m.e[1][1] + v.e[2] * m.e[2][1] + m.e[3][1]; 
@@ -605,7 +605,7 @@ mat4x4_mul_vec3(Mat4x4 m, Vec3 v) {
     return result;
 }
 
-inline Vec3   
+static inline Vec3   
 mat4x4_as_3x3_mul_vec3(Mat4x4 m, Vec3 v) {
     f32 a = v.e[0] * m.e[0][0] + v.e[1] * m.e[1][0] + v.e[2] * m.e[2][0]; 
     f32 b = v.e[0] * m.e[0][1] + v.e[1] * m.e[1][1] + v.e[2] * m.e[2][1]; 
@@ -620,7 +620,7 @@ typedef struct {
     Vec3 max;  
 } Bounds3;
 
-inline Bounds3
+static inline Bounds3
 bounds3(Vec3 min, Vec3 max) {
     return (Bounds3) {
         .min = min,
@@ -628,17 +628,17 @@ bounds3(Vec3 min, Vec3 max) {
     };
 }
 
-inline Bounds3 
+static inline Bounds3 
 bounds3empty(void) {
     return bounds3(v3s(INFINITY), v3s(-INFINITY));   
 }
 
-inline Bounds3
+static inline Bounds3
 bounds3i(Vec3 v) {
     return bounds3(v, v);
 }
 
-inline Bounds3 
+static inline Bounds3 
 bounds3_join(Bounds3 a, Bounds3 b) {
     Bounds3 result;
     
@@ -652,7 +652,7 @@ bounds3_join(Bounds3 a, Bounds3 b) {
     return result;    
 }
 
-inline Bounds3 
+static inline Bounds3 
 bounds3_extend(Bounds3 a, Vec3 p) {
     Bounds3 result;
     
@@ -666,13 +666,13 @@ bounds3_extend(Bounds3 a, Vec3 p) {
     return result;
 }
 
-inline f32 
+static inline f32 
 bound3s_surface_area(Bounds3 b) {
     Vec3 d = v3sub(b.max, b.min);
     return 2 * (d.x * d.y + d.y * d.z + d.z * d.z);
 }
 
-inline u32 
+static inline u32 
 bounds3s_longest_axis(Bounds3 b) {
     Vec3 d = v3sub(b.max, b.min);
     return (d.x > d.y && d.x > d.z) ? 0 : (d.y > d.x && d.y > d.z) ? 1 : 2;
@@ -687,7 +687,7 @@ typedef union {
     Vec3 e[3];
 } ONB;
 
-inline ONB
+static inline ONB
 onb_from_w(Vec3 n) {
     ONB result;
     result.w = normalize(n);
@@ -697,7 +697,7 @@ onb_from_w(Vec3 n) {
     return result;
 }
 
-inline Vec3
+static inline Vec3
 onb_local(ONB onb, Vec3 v) {
     return v3add3(v3muls(onb.u, v.x),
                   v3muls(onb.v, v.y),
@@ -714,12 +714,12 @@ typedef union {
 
 #define QUAT4_IDENTITY ((Quat4) { .w = 1.0f })
 
-inline Quat4 
+static inline Quat4 
 q4(f32 x, f32 y, f32 z, f32 w) {
     return (Quat4) { .x = x, .y = y, .z = z, .w = w };    
 }
 
-inline Quat4 
+static inline Quat4 
 q4euler(f32 roll, f32 pitch, f32 yaw) {
     f32 cy = cosf(yaw * 0.5f);
     f32 sy = sinf(yaw * 0.5f);
@@ -734,47 +734,47 @@ q4euler(f32 roll, f32 pitch, f32 yaw) {
               cr * cp * cy + sr * sp * sy);
 }
 
-inline Quat4 
+static inline Quat4 
 q4add(Quat4 a, Quat4 b) { 
     Quat4 result; 
     result.v = v4add(a.v, b.v); 
     return result; 
 }
 
-inline Quat4 
+static inline Quat4 
 q4sub(Quat4 a, Quat4 b) { 
     Quat4 result; 
     result.v = v4sub(a.v, b.v); 
     return result; 
 }
 
-inline Quat4 
+static inline Quat4 
 q4divs(Quat4 q, f32 s) { 
     Quat4 result; 
     result.v = v4divs(q.v, s); 
     return result; 
 }
 
-inline Quat4 
+static inline Quat4 
 q4muls(Quat4 q, f32 s) { 
     Quat4 result; 
     result.v = v4muls(q.v, s); 
     return result; 
 }
 
-inline Quat4 
+static inline Quat4 
 q4normalize(Quat4 q) { 
     Quat4 result; 
     result.v = v4normalize(q.v); 
     return result; 
 }
 
-inline f32
+static inline f32
 q4dot(Quat4 a, Quat4 b) {
     return v4dot(a.v, b.v);
 }
 
-inline Mat4x4 
+static inline Mat4x4 
 mat4x4_from_quat4(Quat4 q) {
     f32 xx = q.x * q.x;    
     f32 yy = q.y * q.y;    
@@ -799,7 +799,7 @@ mat4x4_from_quat4(Quat4 q) {
     return result;    
 }
 
-inline Quat4 
+static inline Quat4 
 q4lerp(Quat4 a, Quat4 b, f32 t) {
     Quat4 result;
     

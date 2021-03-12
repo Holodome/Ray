@@ -36,7 +36,7 @@ typedef struct {
 #define transform_t(_t) transform_tr(_t, QUAT4_IDENTITY)
 // Transform with rotation given in euler angles
 #define transform_t_euler(_t, _pitch, _yaw, _roll) transform_tr(_t, q4euler(_pitch, _yaw, _roll))
-inline Transform 
+static inline Transform 
 transform_tr(Vec3 t, Quat4 r) { 
     Mat4x4 o2w = MAT4X4_IDENTITY;
     o2w = mat4x4_mul(o2w, mat4x4_translate(t));

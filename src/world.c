@@ -262,7 +262,7 @@ get_object(World *world, ObjectHandle h) {
 ObjectHandle
 add_object(World *world, ObjectHandle list_handle, ObjectHandle obj) {
     Object *list = get_object(world, list_handle);
-    assert(list->type = ObjectType_ObjectList);
+    assert(list->type == ObjectType_ObjectList);
  
     add_object_to_list(&list->obj_list, obj);   
     return obj;
@@ -588,6 +588,9 @@ object_bvh_node(World *world, ObjectHandle *objs_init, i64 n) {
     }
     
     u32 axis = bounds3s_longest_axis(main_bounds);
+#if OS_LINUX || OS_MACOS
+#define qsort_s qsort_r
+#endif 
     if (axis == 0) {
         qsort_s(objs, n, sizeof(ObjectHandle), bounds3_compare_x, world);
     } else if (axis == 1) {

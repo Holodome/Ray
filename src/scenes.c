@@ -15,10 +15,10 @@ init_scene2(World *world, Image *image) {
         for (i32 b = -11;
              b < 11;
              b++) {
-            f32 choose_mat = random(&rng);
-            Vec3 center = v3(a + 0.9f * random(&rng),
+            f32 choose_mat = randomu(&rng);
+            Vec3 center = v3(a + 0.9f * randomu(&rng),
                              0.2,
-                             b + 0.9 * random(&rng));
+                             b + 0.9 * randomu(&rng));
 
             if (length(v3sub(center, v3(4, 0.2, 0))) > 0.9) {
                 if (choose_mat < 0.8) {
@@ -97,9 +97,9 @@ init_scene_bigger(World *world, Image *image) {
         } while(length(v3sub(v3(4, 0, 0), p)) < 1 || length(v3sub(v3(-4, 0, 0), p)) < 1 || length(v3sub(v3(0, 0, 0), p)) < 1);
         
         MaterialHandle mat;
-        f32 choose_mat = random(&rng);
+        f32 choose_mat = randomu(&rng);
         if (choose_mat < 0.5) {
-            f32 r = random(&rng);
+            f32 r = randomu(&rng);
             // f32 r =0.1;
             Vec3 d = random_vector(&rng, 0, 1);
             mat = material_plastic(world, r, 1, 1.5, texture_solid(world, d), texture_solid(world, v3s(1)));
@@ -110,7 +110,7 @@ init_scene_bigger(World *world, Image *image) {
         }
         
         ObjectHandle obj;
-        f32 choose_obj = random(&rng);
+        f32 choose_obj = randomu(&rng);
         if (choose_obj < 0.5) {
             obj = object_sphere(world, v3add(p, v3(0, 0.4, 0)), 0.4, mat);
         } else {
@@ -179,26 +179,27 @@ init_cornell_box(World *world, Image *image) {
     // MaterialHandle m1 = material_dielectric(world, 0, 1, 1.5, texture_solid(world, v3s(1)), texture_solid(world, v3(1, 1, 0)));       
     // MaterialHandle m2 = material_dielectric(world, 0, 1, 1.5, texture_solid(world, v3s(1)), texture_solid(world, v3(1, 0, 1)));       
 
-    // MaterialHandle mat = white;
-    // ObjectHandle box1 = object_transform(world, object_box(world, v3(0, 0, 0), v3(1.65 * m, 3.30 * m, 1.65 *m), mat),
-    //     transform_t_euler(v3(2.65*m, 0, 2.95*m), 0, rad(15), 0));
-    // ObjectHandle box2 = object_transform(world, object_box(world, v3(0, 0, 0), v3(1.65*m, 1.65*m, 1.65*m), mat),
-    //     transform_t_euler(v3(1.30*m, 0, 0.65*m), 0, rad(-18), 0));
+    MaterialHandle mat = white;
+    ObjectHandle box1 = object_transform(world, object_box(world, v3(0, 0, 0), v3(1.65 * m, 3.30 * m, 1.65 *m), mat),
+        transform_t_euler(v3(2.65*m, 0, 2.95*m), 0, rad(15), 0));
+    ObjectHandle box2 = object_transform(world, object_box(world, v3(0, 0, 0), v3(1.65*m, 1.65*m, 1.65*m), mat),
+        transform_t_euler(v3(1.30*m, 0, 0.65*m), 0, rad(-18), 0));
     // ObjectList bvh = object_list_init(&world->arena, 2);
     // add_object_to_list(&bvh, box2);
     // add_object_to_list(&bvh, box1);
-    // add_object_to_world(world, object_bvh_node(world, bvh.a, bvh.size));
+    add_object_to_world(world, box1);
+    add_object_to_world(world, box2);
     
     // add_object_to_world(world, object_sphere(world, v3(400,100,280), 100, m1));
     // add_object_to_world(world, object_sphere(world, v3(150, 90, 190), 90, m2));
     // world->backgorund_color = v3s(1);
-    MaterialHandle monk_mot = material_dielectric(world, 0, 1, 1.5, texture_solid(world, v3s(1)), texture_solid(world, v3(0.2, 0.2, 1)));
+    // MaterialHandle monk_mot = material_dielectric(world, 0, 1, 1.5, texture_solid(world, v3s(1)), texture_solid(world, v3(0.2, 0.2, 1)));
     // MaterialHandle monk_mot = material_lambertian(world, texture_solid(world, v3(0.2, 0.2, 1)));
     // MaterialHandle monk_mot = material_lambertian(world, texture_normal(world));
 
     // add_object_to_world(world, object_transform(world, add_poly_sphere(world, 1, 10, normal), transform_t(v3(2.7 * m, 2.7 * m, 4.2 * m))));
-    ObjectHandle monkey = object_triangle_mesh_tt(world, load_obj("model.obj"), monk_mot, transform_tr(v3(2.7* m, 2.7* m, 3.5* m), q4euler(rad(-10), PI, 0)));
-    add_object_to_world(world, monkey);
+    // ObjectHandle monkey = object_triangle_mesh_tt(world, load_obj("model.obj"), monk_mot, transform_tr(v3(2.7* m, 2.7* m, 3.5* m), q4euler(rad(-10), PI, 0)));
+    // add_object_to_world(world, monkey);
     // add_important_object(world, monkey);
 
     // MaterialHandle glass = material_dielectric(world, 1.5f);

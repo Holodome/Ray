@@ -12,14 +12,14 @@ typedef struct {
 
 #define STR(_cs) ((String) { .s = _cs, .l = sizeof(_cs) - 1 })
 
-inline String 
+static inline String 
 string(char *s, u64 l) {
     return (String) {
         .s = s,
         .l = l
     };
 }
-inline String
+static inline String
 string_from_cstring(char *cstring) {
     String result;
     result.s = cstring;
@@ -27,7 +27,7 @@ string_from_cstring(char *cstring) {
     return result;
 }
 
-inline bool
+static inline bool
 string_equals(String a, String b) {
     bool result = a.l == b.l;
     if (result) {
@@ -36,7 +36,7 @@ string_equals(String a, String b) {
     return result;
 }
 
-inline bool
+static inline bool
 string_startswith(String str, String start) {
     bool result = false;
     if (str.l >= start.l) {
@@ -46,7 +46,7 @@ string_startswith(String str, String start) {
     return result;
 }
 
-inline String
+static inline String
 string_advance(String a, u64 count) {
     String result = a;
     result.s += count;
@@ -54,7 +54,7 @@ string_advance(String a, u64 count) {
     return result;
 }
 
-inline String
+static inline String
 string_lstrip(String str) {
     String result = str;
     while (result.l) {
@@ -69,7 +69,7 @@ string_lstrip(String str) {
     return result;
 }
 
-inline String
+static inline String
 string_rstrip(String str) {
     String result = str;
     while (result.l) {
@@ -82,7 +82,7 @@ string_rstrip(String str) {
     return result;
 }
 
-inline String
+static inline String
 string_strip(String str) {
     String result = str;
     result = string_lstrip(result);
@@ -90,13 +90,13 @@ string_strip(String str) {
     return result;
 }
 
-inline char *
+static inline char *
 string_find(String str, char symb) {
     char *result = memchr(str.s, symb, str.l);
     return result;
 }
 
-inline u64 
+static inline u64 
 string_to_buffer(String str, void *buffer, u64 buffer_size) {
     u64 size = str.l;
     if (size > buffer_size) {
@@ -106,7 +106,7 @@ string_to_buffer(String str, void *buffer, u64 buffer_size) {
     return size;
 }
 
-inline String
+static inline String
 substr_till_symb(String str, char symb, bool *reached_bounds) {
     char *end = memchr(str.s, symb, str.l);
     if (!end) {
@@ -120,7 +120,7 @@ substr_till_symb(String str, char symb, bool *reached_bounds) {
     return string(str.s, end - str.s);
 }
 
-inline char *
+static inline char *
 skip_to_next_line(char *cursor) {
     while (*cursor && *cursor != '\n') {
         ++cursor;
@@ -132,7 +132,7 @@ skip_to_next_line(char *cursor) {
     return cursor;
 }
 
-inline char *
+static inline char *
 bool_to_cstring(bool v) {
     return v ? "true" : "false";
 }

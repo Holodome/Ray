@@ -5,7 +5,7 @@
 #if COMPILER_CLANG
 // @NOTE: this is strange error, just ignore it for now
 #pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wstatic-in-inline"
+#pragma clang diagnostic ignored "-Wstatic-in-static inline"
 #include <x86intrin.h>
 #elif COMPILER_MSVC 
 #include <xmmintrin.h>
@@ -13,7 +13,7 @@
 
 #define USE_MATH_H 0
 
-inline f32 
+static inline f32 
 sqrt32(f32 a) {
 #if USE_MATH_H
     return sqrtf(a);
@@ -22,7 +22,7 @@ sqrt32(f32 a) {
 #endif 
 }
 
-inline f32 
+static inline f32 
 rsqrt32(f32 a) {
 #if USE_MATH_H
     return 1.0f / sqrtf(a);
@@ -31,7 +31,7 @@ rsqrt32(f32 a) {
 #endif 
 }
 
-inline f32 
+static inline f32 
 max32(f32 a, f32 b) {
 #if USE_MATH_H
     return fmaxf(a, b);
@@ -40,7 +40,7 @@ max32(f32 a, f32 b) {
 #endif 
 }
 
-inline f32 
+static inline f32 
 min32(f32 a, f32 b) {
 #if USE_MATH_H
     return fminf(a, b);
@@ -49,7 +49,7 @@ min32(f32 a, f32 b) {
 #endif 
 }
 
-inline f32 
+static inline f32 
 abs32(f32 a) {
 #if USE_MATH_H
     return fabsf(a);

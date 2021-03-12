@@ -34,8 +34,8 @@ render_tile(RenderWorkQueue *queue) {
             for (u32 sample_index = 0;
                 sample_index < samples;
                 ++sample_index) {
-                f32 u = ((f32)x + random(&order->entropy)) / (f32)queue->output->w;
-                f32 v = ((f32)y + random(&order->entropy)) / (f32)queue->output->h;
+                f32 u = ((f32)x + randomu(&order->entropy)) / (f32)queue->output->w;
+                f32 v = ((f32)y + randomu(&order->entropy)) / (f32)queue->output->h;
                 Ray ray = camera_make_ray(&queue->world->camera, &order->entropy, u, v);
                 
                 RayCastData data;
@@ -217,7 +217,7 @@ main(int argc, char **argv) {
     // Initialize world
     World world;
     world_init(&world);
-    init_scene_bigger(&world, &output_image);
+    init_cornell_box(&world, &output_image);
     validate_world(&world);
     // Print world information    
     char bytes_buffer[32];
@@ -287,11 +287,13 @@ main(int argc, char **argv) {
     char *out = s.image_filename;
     image_save(&output_image, out);
     
+#if OS_WINDOWS
     if (s.open_image_after_done) {
         char command[32];
         snprintf(command, sizeof(command), "start %s", out);
         system(command);
     }
+#endif // @TODO
     
     printf("Exited successfully\n");
     return 0;

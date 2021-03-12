@@ -44,7 +44,7 @@ typedef struct {
 } HitRecord;
 
 // Sets normal and is_front_face
-inline void hit_set_normal(HitRecord *hrec, Vec3 n, Ray ray);
+static inline void hit_set_normal(HitRecord *hrec, Vec3 n, Ray ray);
 
 typedef struct {
     // Direction of scattered ray
@@ -68,7 +68,7 @@ Vec3 material_emit(World *world, Ray ray, HitRecord hrec, RayCastData data);
 bool object_hit(World *world, Ray ray, ObjectHandle obj_handle, f32 t_min, f32 t_max, HitRecord *hrec, RayCastData data);
 Bounds3 get_object_bounds(World *world, ObjectHandle obj_handle);
 // f32 get_object_pdf_value(World *world, ObjectHandle object_handle, Vec3 orig, Vec3 v, RayCastData data);
-// Returns random point inside object
+// Returns randomu point inside object
 // Vec3 get_object_random(World *world, ObjectHandle object_handle, Vec3 o, RayCastData data, ObjectHandle *a);
 
 #define TRACE_H 1
