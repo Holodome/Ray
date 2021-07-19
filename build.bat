@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 @echo off
 
 if not exist .\build mkdir build 
@@ -34,3 +35,15 @@ if not exist .\data mkdir data
 build\ray.exe -out data\out.png -open -rpp 256
 
 :end
+=======
+@echo off
+
+if not exist .\build mkdir build 
+pushd build 
+
+set "build_options=-Wall -pedantic -Wno-writable-strings -std=c11 -O3 -I../src -D_CRT_SECURE_NO_WARNINGS"
+
+clang -g %build_options% -o ray.exe ../src/ray.c
+
+popd
+>>>>>>> remotes/origin/better_ray

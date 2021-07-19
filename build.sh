@@ -1,6 +1,7 @@
 #!/bin/bash
 
 mkdir -p build
+<<<<<<< HEAD
 pushd ./build 
 
 if [ ! -f ./stb_sprintf.o ];
@@ -29,3 +30,12 @@ RayBuildOptions="$RayCompilerSwitches -lm -pthread -O3 -I../ray -I../thirdparty 
 clang -g $RayBuildOptions -o ray ../ray/ray/ray.c 
 
 popd
+=======
+pushd ./build
+
+build_options="-Wall -pedantic -pthread -Wno-writable-strings -lm -O0 -std=gnu11 -I../src"
+
+clang -g $build_options -o ray ../src/ray.c
+
+popd
+>>>>>>> remotes/origin/better_ray
